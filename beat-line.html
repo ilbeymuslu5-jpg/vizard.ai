@@ -126,7 +126,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v13</div>
+  <div id="ver">v14</div>
   <div id="diag"></div>
 </div>
 
@@ -956,46 +956,13 @@ function draw(t) {
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
 
-    // KARAKTER KÜPÜ: dönen neon telkafes küp (asset setindeki karakter).
-    // Ekran uzayında sözde-3D: her karede Y ekseninde döner, hafif yalpalar.
-    const a = t * 1.6, s = r * 0.95;
-    const ca = Math.cos(a), sa = Math.sin(a);
-    const vts = [];
-    for (let vi = 0; vi < 8; vi++) {
-      const vx = (vi & 1 ? 1 : -1), vy = (vi & 2 ? 1 : -1), vz = (vi & 4 ? 1 : -1);
-      const rx = vx * ca - vz * sa;          // Y ekseni dönüşü
-      const rz = vx * sa + vz * ca;
-      vts.push({
-        x: hp.x + rx * s,
-        y: hp.y + vy * s * 0.78 + rz * s * 0.34,   // izometrik eğim
-        z: rz,
-      });
-    }
-    // Yüzler (arkadan öne sıralı boyama)
-    const FACES = [[0,1,3,2],[4,5,7,6],[0,1,5,4],[2,3,7,6],[0,2,6,4],[1,3,7,5]];
-    FACES.map(f => ({ f, z: (vts[f[0]].z + vts[f[1]].z + vts[f[2]].z + vts[f[3]].z) / 4 }))
-      .sort((p, q) => p.z - q.z)
-      .forEach(({ f }) => {
-        ctx.fillStyle = themeRgba(0.32);
-        ctx.beginPath();
-        ctx.moveTo(vts[f[0]].x, vts[f[0]].y);
-        ctx.lineTo(vts[f[1]].x, vts[f[1]].y);
-        ctx.lineTo(vts[f[3]].x, vts[f[3]].y);
-        ctx.lineTo(vts[f[2]].x, vts[f[2]].y);
-        ctx.closePath();
-        ctx.fill();
-      });
-    // Neon kenarlar
-    const EDGES = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
-    ctx.strokeStyle = '#ffffff';
+    // KARAKTER: parlak yuvarlak top — beyaz çekirdek + tema renkli hale + halka.
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = theme.glow; ctx.shadowBlur = 24;
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)';
     ctx.lineWidth = 2;
-    ctx.shadowColor = theme.glow; ctx.shadowBlur = 16;
-    ctx.beginPath();
-    for (const [e1, e2] of EDGES) {
-      ctx.moveTo(vts[e1].x, vts[e1].y);
-      ctx.lineTo(vts[e2].x, vts[e2].y);
-    }
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 1.55, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.shadowBlur = 0;
 
