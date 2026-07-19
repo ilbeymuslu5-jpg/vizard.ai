@@ -128,6 +128,7 @@ const GAPS = [4, 4, 2, 2, 4, 2, 2, 2, 4, 4, 2, 4, 2, 2, 2, 2];
 // İki gidiş yönü (klasik zigzag): A = +x, B = -z. Çapraz = kamera ekseni.
 const DIR = [ {x:1, z:0}, {x:0, z:-1} ];
 const DIAG = { x: Math.SQRT1_2, z: -Math.SQRT1_2 };
+const PERP = { x: Math.SQRT1_2, z: Math.SQRT1_2 };  // çapraza dik yanal eksen
 
 // Renkler
 const C = {
@@ -199,7 +200,9 @@ const S = {
   shake: 0,
   particles: [],
   schedStep: 0, schedT: 0, schedTimer: 0,
-  genBeat: LEAD_BEATS, genX: 0, genZ: 0, genDir: 1, genT: LEAD_BEATS * BEAT,
+  // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
+  genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * BEAT * SPEED,
+  genDir: 1, genT: LEAD_BEATS * BEAT,
 };
 
 // ------------------------------------------------------ yol üretimi
@@ -238,7 +241,9 @@ const CAM = { back: 6.2, h: 4.6, ahead: 5.2, fl: 0 };
 function setFocalLength() {
   CAM.fl = Math.max(Math.min(W, H) * 1.15, H * 0.68);
 }
-const cam = { x: 0, y: 0, z: 0, fx: 0, fz: 0 };   // fx/fz: yumuşatılmış odak
+const cam = { x: 0, y: 0, z: 0, fx: 0, fz: 0 };   // fx/fz: kamera odağı
+let camA = 0;   // odağın çapraz eksendeki (ileri) konumu — sabit hızla artar
+let camP = 0;   // odağın yanal konumu — topu yumuşakça izler
 // Sabit bakış yönü tabanı (çapraz + aşağı eğim) — her karede aynı.
 let B = null;
 function computeBasis() {
@@ -344,14 +349,16 @@ function reset() {
   S.score = 0; S.combo = 0;
   S.corners.length = 0; S.cornerBeats.clear(); gapIdx = 0;
   S.next = 0; S.pending = false;
-  S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = 0; S.genDir = 1; S.genT = LEAD_BEATS * BEAT;
+  S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * BEAT * SPEED;
+  S.genDir = 1; S.genT = LEAD_BEATS * BEAT;
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0 }];
   S.particles.length = 0; S.shake = 0;
   S.t0 = actx.currentTime + 0.12;
   S.schedStep = 0; S.schedT = S.t0;
   genCorners(20);
-  cam.fx = S.head.x; cam.fz = S.head.z;
+  camA = 0; camP = 0;
+  cam.fx = 0; cam.fz = 0;
   if (S.schedTimer) clearInterval(S.schedTimer);
   S.schedTimer = setInterval(schedule, 30);
   scoreEl.textContent = 'SKOR: 0'; comboEl.textContent = '';
@@ -418,7 +425,7 @@ addEventListener('keydown', e => {
 });
 
 // ------------------------------------------------------ güncelleme
-function update(dt) {
+function update(dt, dtRaw) {
   if (S.mode === 'play') {
     S.song = actx.currentTime - S.t0;
     genCorners(S.song + 20);
@@ -464,9 +471,20 @@ function update(dt) {
   }
   S.shake *= Math.pow(0.001, dt); // hızlı sönüm
 
-  // kamera: topa KİLİTLİ (rigid follow) — top hep aynı ekran noktasında
-  cam.fx = S.head.x;
-  cam.fz = S.head.z;
+  // KAMERA: topa kilitlenmez, haritada dümdüz akar.
+  // İleri (çapraz) eksende hız sabittir ve doğrudan şarkı zamanından
+  // türetilir -> sıfır sarsıntı. Yanal eksende top yumuşak bir yayla
+  // izlenir -> top ekranın orta-altında hafifçe salınır.
+  // Yanal takip GERÇEK geçen süreyle hesaplanır (dtRaw): kare hızı düşse
+  // bile top geride kalmaz. Ek sigorta: top merkezden en fazla 2.1 birim
+  // uzaklaşabilir — asla ekran dışına çıkamaz.
+  const headPerp = (S.head.x + S.head.z) * Math.SQRT1_2;
+  camP += (headPerp - camP) * (1 - Math.exp(-3.0 * dtRaw));
+  const lag = headPerp - camP, MAX_LAG = 2.1;
+  if (Math.abs(lag) > MAX_LAG) camP = headPerp - Math.sign(lag) * MAX_LAG;
+  if (S.mode === 'play') camA = SPEED * Math.SQRT1_2 * S.song;
+  cam.fx = DIAG.x * camA + PERP.x * camP;
+  cam.fz = DIAG.z * camA + PERP.z * camP;
   cam.x = cam.fx - DIAG.x * CAM.back;
   cam.z = cam.fz - DIAG.z * CAM.back;
   cam.y = CAM.h;
@@ -667,9 +685,10 @@ function draw(t) {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const dtRaw = Math.min(0.3, (now - last) / 1000);
+  const dt = Math.min(0.05, dtRaw);
   last = now;
-  if (actx && (S.mode === 'play' || S.mode === 'fall')) update(dt);
+  if (actx && (S.mode === 'play' || S.mode === 'fall')) update(dt, dtRaw);
   else {
     // menüde hafif süzülen kamera
     cam.x = -DIAG.x * CAM.back; cam.z = -DIAG.z * CAM.back; cam.y = CAM.h;
@@ -681,7 +700,8 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Test kancası (#debug ile aç): otomatik oynatma ve durum erişimi.
-if (location.hash === '#debug') window.BL = { S, tap, headAt, BEAT, HIT_WIN };
+if (location.hash === '#debug') window.BL = { S, tap, headAt, BEAT, HIT_WIN,
+  view, proj, cam, CAM, get camA() { return camA; }, get camP() { return camP; } };
 })();
 </script>
 </body>
