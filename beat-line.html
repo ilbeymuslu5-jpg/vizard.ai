@@ -126,7 +126,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v14</div>
+  <div id="ver">v15</div>
   <div id="diag"></div>
 </div>
 
@@ -223,10 +223,10 @@ function updateTheme(dt) {
   theme.glow = 'rgb(' + (theme.cur[0] | 0) + ',' + (theme.cur[1] | 0) + ',' + (theme.cur[2] | 0) + ')';
 }
 
-// ---------- Kusursuz dönüş melodisi: A-minör pentatonik dizi.
-// Her başarılı dönüş bir sonraki notayı çalar; ölünce baştan başlar.
-const MELODY = [440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
-let melodyIdx = 0;
+// Titreşim yardımcıisı (destekleyen cihazlarda — iOS Safari desteklemez).
+function vibrate(ms) {
+  if (navigator.vibrate) navigator.vibrate(ms);
+}
 
 // ------------------------------------------------------ canvas / 9:16 sahne
 // Oyun alanı 9:16'ya sabitlenir: pencere daha genişse yanlarda bant kalır
@@ -348,7 +348,8 @@ const S = {
   fallT: 0, fallVy: 0, fallDir: null,
   shake: 0, lastBeatNo: -999,
   particles: [],
-  schedStep: 0, schedT: 0, schedTimer: 0,
+  schedStep: 0, schedTimer: 0,
+  fallFatal: false, fallKind: null,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
   speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
   genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * BEAT * BASE_SPEED,
@@ -506,16 +507,15 @@ for (let i = 0; i < 16; i++) {
 
 // ------------------------------------------------------ müzik zamanlayıcı
 function schedule() {
+  // Adım zamanları t0 üzerinden hesaplanır: oyun saati (düşüşte) durursa
+  // t0 kayar ve beat ızgarası onunla birlikte kayar -> köşe-vuruş
+  // senkronu her koşulda korunur.
   const ahead = actx.currentTime + 0.15;
-  // Askıdan dönüşte geride kalan adımları çalmadan ileri sar.
-  if (S.schedT < actx.currentTime - 0.5) {
-    const stepDur = BEAT / 2;
-    const skip = Math.ceil((actx.currentTime - S.schedT) / stepDur);
-    S.schedT += skip * stepDur; S.schedStep += skip;
-  }
-  while (S.schedT < ahead) {
+  while (true) {
+    const t = S.t0 + S.schedStep * (BEAT / 2);
+    if (t >= ahead) break;
+    if (t < actx.currentTime - 0.05) { S.schedStep++; continue; } // geciken adımı atla
     const step = S.schedStep;          // 8'lik adımlar (BEAT/2)
-    const t = S.schedT;
     const onBeat = step % 2 === 0;
     const beatNo = step >> 1;
     const stepBeat = step / 2;         // 8'lik çözünürlükte beat no (x.5 dahil)
@@ -532,7 +532,7 @@ function schedule() {
       osc('square', 220, t, 0.12, 0.22);
       osc('sine', 880, t, 0.18, 0.2);
     }
-    S.schedStep++; S.schedT += BEAT / 2;
+    S.schedStep++;
   }
 }
 
@@ -554,7 +554,6 @@ function loseHeart(msg) {
   S.lives--;
   updateHearts();
   S.combo = 0; comboEl.textContent = '';
-  melodyIdx = 0;
   S.shake = 11;
   popupEl.textContent = msg;
   popupEl.className = '';
@@ -575,10 +574,9 @@ function reset() {
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0 }];
   S.particles.length = 0; S.shake = 0; S.lastBeatNo = -999;
-  melodyIdx = 0;
   theme.cur = [...NEON[0]]; theme.tgt = NEON[0]; theme.step = 0;
   S.t0 = actx.currentTime + 0.12;
-  S.schedStep = 0; S.schedT = S.t0;
+  S.schedStep = 0;
   genCorners(20);
   camA = 0; camP = 0;
   cam.fx = 0; cam.fz = 0;
@@ -590,16 +588,23 @@ function reset() {
   rings.length = 0;
 }
 
-function die() {
+// Düşüş başlat. fatal=false ise kalp gider, top düşer ve KALDIĞI YERDEN
+// devam eder (düşüş boyunca oyun saati donar -> senkron bozulmaz).
+// kind: 'miss' (köşe kaçtı) | 'early' (yanlış zamanda dokundu) | null (ölüm).
+function startFall(fatal, kind) {
   S.mode = 'fall';
+  S.fallFatal = fatal;
+  S.fallKind = kind;
   S.fallT = 0; S.fallVy = 1.5;
   S.fallDir = DIR[S.dirIdx];
-  S.shake = 14;
-  melodyIdx = 0;                       // melodi baştan başlar
-  burst(S.head.x, S.head.z, 40, C.accentOrange);
-  osc('sawtooth', 400, actx.currentTime, 0.7, 0.4, 55);
+  S.shake = fatal ? 14 : 11;
+  vibrate(fatal ? [60, 40, 60] : 50);
+  burst(S.head.x, S.head.z, fatal ? 40 : 26, C.accentOrange);
+  osc('sawtooth', 400, actx.currentTime, fatal ? 0.7 : 0.5, 0.4, 55);
   noise(actx.currentTime, 0.4, 0.3, 400);
 }
+
+function die() { startFall(true, null); }
 
 function gameOver() {
   S.mode = 'over';
@@ -639,18 +644,15 @@ function tap() {
     S.combo++;
     S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
     showPopup(kind);
-    // Melodik dizilim: her başarılı dönüş pentatonik dizinin sıradaki notası.
-    const f = MELODY[melodyIdx % MELODY.length];
-    melodyIdx++;
-    if (kind === 'perfect') {
-      osc('sine', f, actx.currentTime, .22, .3);
-      osc('sine', f * 1.5, actx.currentTime + .05, .28, .2);  // beşli süsleme
-    } else {
-      osc('triangle', f, actx.currentTime, .18, .26);
-    }
+    // Doğru basışta ses YOK — sadece beat çalar; geri bildirim titreşimle.
+    vibrate(kind === 'perfect' ? 35 : 20);
   } else if (S.lives > 1) {
-    // Yanlış zamanda dokunuş: kalp harca, dönüş uygulanmaz, yol devam eder.
+    // Yanlış zamanda dokunuş: kalp git, yanlış dönüşle yoldan uç, düş,
+    // sonra kaldığı yerden devam et.
     loseHeart('ERKEN DOKUNDUN!');
+    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.dirIdx = 1 - S.dirIdx;
+    startFall(false, 'early');
   } else {
     // Son kalp: çizgi hemen döner ve yoldan çıkar.
     S.trail.push({ x: S.head.x, z: S.head.z });
@@ -702,14 +704,11 @@ function update(dt, dtRaw) {
         speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
       } else if (S.song > c.t + HIT_WIN) {
         if (S.lives > 1) {
-          // Kalp harca, dönüşü OTOMATİK uygula -> senkron hiç bozulmaz.
+          // Köşe kaçtı: kalp git, top DÜŞSÜN, sonra kaldığı yerden devam.
           loseHeart('CAN GİTTİ!');
-          S.trail.push({ x: c.x, z: c.z });
-          S.dirIdx = c.dirIdx;
-          S.speed = c.spd;
-          S.next++;
+          startFall(false, 'miss');   // dönüş respawn'da uygulanacak
         } else {
-          // Son kalp: düz devam -> yoldan çık -> düş.
+          // Son kalp: düz devam -> yoldan çık -> düş -> oyun biter.
           S.next++;         // izleyen mantık bozulmasın
           die();
         }
@@ -726,7 +725,34 @@ function update(dt, dtRaw) {
     S.head.y += S.fallVy * dt;
     S.head.x += S.fallDir.x * S.speed * 0.45 * dt;
     S.head.z += S.fallDir.z * S.speed * 0.45 * dt;
-    if (S.fallT > 1.0) gameOver();
+    // Oyun saati düşüş boyunca DONUK: t0'ı kaydırarak eşlemeyi koru.
+    // Müzik zamanlayıcısı t0'dan beslendiği için beat ızgarası da
+    // toplamda aynı miktar kayar -> devamda senkron birebir korunur.
+    S.t0 = actx.currentTime - S.song;
+    if (S.fallT > (S.fallFatal ? 1.0 : 0.7)) {
+      if (S.fallFatal) { gameOver(); }
+      else {
+        // KALDIĞI YERDEN DEVAM: baş, donuk şarkı zamanındaki gerçek
+        // ray konumuna geri oturtulur.
+        if (S.fallKind === 'miss') {
+          const c = S.corners[S.next];
+          S.trail.push({ x: c.x, z: c.z });   // kaçan dönüş şimdi uygulanır
+          S.dirIdx = c.dirIdx;
+          S.speed = c.spd;
+          S.next++;
+        } else if (S.fallKind === 'early') {
+          S.trail.pop();                       // yanlış dönüş izini geri al
+        }
+        const h = headAt(S.song);
+        S.head.x = h.x; S.head.z = h.z; S.head.y = 0;
+        S.dirIdx = h.dirIdx;
+        S.fallVy = 0;
+        S.mode = 'play';
+        spawnRing(S.head.x, S.head.z);
+        burst(S.head.x, S.head.z, 14, theme.glow);
+        vibrate(30);
+      }
+    }
   }
 
   // parçacıklar
