@@ -41,7 +41,9 @@
     border-right: 1px solid rgba(84,241,255,.16);
     overflow: hidden;
   }
-  canvas { position: absolute; inset: 0; display: block; }
+  /* DİKKAT: canvas "replaced element" — Safari inset:0 ile esnetmez,
+     kendi piksel boyutunda (DPR kat büyük) kalır. width/height şart! */
+  canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
 
   /* ---------- HUD ---------- */
   #hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; color: #eaf6ff; }
@@ -109,7 +111,7 @@
   <div id="score">SKOR: 0</div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v7</div>
+  <div id="ver">v8</div>
   <div id="diag"></div>
 </div>
 
@@ -383,6 +385,12 @@ for (let i = 0; i < 16; i++) {
 // ------------------------------------------------------ müzik zamanlayıcı
 function schedule() {
   const ahead = actx.currentTime + 0.15;
+  // Askıdan dönüşte geride kalan adımları çalmadan ileri sar.
+  if (S.schedT < actx.currentTime - 0.5) {
+    const stepDur = BEAT / 2;
+    const skip = Math.ceil((actx.currentTime - S.schedT) / stepDur);
+    S.schedT += skip * stepDur; S.schedStep += skip;
+  }
   while (S.schedT < ahead) {
     const step = S.schedStep;          // 8'lik adımlar (BEAT/2)
     const t = S.schedT;
@@ -494,7 +502,14 @@ addEventListener('keydown', e => {
 // ------------------------------------------------------ güncelleme
 function update(dt, dtRaw) {
   if (S.mode === 'play') {
-    S.song = actx.currentTime - S.t0;
+    // Hibrit saat: ses motoru çalışıyorsa örnek-hassas ses saati,
+    // askıdaysa (iOS sessiz mod vb.) kendi saatimizle akmaya devam et.
+    if (actx.state === 'running') {
+      S.song = actx.currentTime - S.t0;
+    } else {
+      S.song += dtRaw;
+      S.t0 = actx.currentTime - S.song;   // ses dönünce sıçrama olmasın
+    }
     genCorners(S.song + 20);
 
     const c = S.corners[S.next];
