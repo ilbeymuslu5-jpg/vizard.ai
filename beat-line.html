@@ -160,9 +160,30 @@ const stage = document.getElementById('stage');
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
+
+// GERÇEK görünür alan: iOS Safari iframe içinde innerHeight'ı şişirebilir
+// ve küçülmede resize olayı göndermeyebilir. Üç kaynağın en küçüğünü al
+// (innerWidth/Height, documentElement.client*, visualViewport) ve boyutu
+// periyodik olarak da kontrol et.
+function viewportSize() {
+  const de = document.documentElement;
+  let w = innerWidth, h = innerHeight;
+  if (de) {
+    if (de.clientWidth)  w = Math.min(w, de.clientWidth);
+    if (de.clientHeight) h = Math.min(h, de.clientHeight);
+  }
+  if (window.visualViewport) {
+    w = Math.min(w, Math.round(visualViewport.width));
+    h = Math.min(h, Math.round(visualViewport.height));
+  }
+  return { w, h };
+}
+let lastVW = 0, lastVH = 0;
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
-  const winW = innerWidth, winH = innerHeight;
+  const vp = viewportSize();
+  lastVW = vp.w; lastVH = vp.h;
+  const winW = vp.w, winH = vp.h;
   const maxW = winH * 9 / 16;
   W = Math.min(winW, Math.round(maxW));
   H = winH;
@@ -174,7 +195,14 @@ function resize() {
   cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 200));
+if (window.visualViewport) visualViewport.addEventListener('resize', resize);
+setInterval(() => {
+  const v = viewportSize();
+  if (v.w !== lastVW || v.h !== lastVH) resize();
+}, 500);
+resize();
 
 // ------------------------------------------------------ ses (WebAudio)
 let actx = null, master = null;
@@ -421,8 +449,9 @@ function showPopup(kind) {
 
 // Dokunuş: sıradaki köşenin zaman penceresiyle karşılaştır.
 function tap() {
+  initAudio();   // iOS: her dokunuşta resume dene (arka plan kesintilerine karşı)
   if (S.mode === 'menu' || S.mode === 'over') {
-    initAudio(); overlay.classList.add('hidden');
+    overlay.classList.add('hidden');
     titleEl.textContent = 'BEAT LINE'; titleEl.classList.remove('dead');
     reset(); return;
   }
