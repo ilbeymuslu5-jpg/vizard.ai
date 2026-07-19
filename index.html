@@ -3,11 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Neon Beat Runner</title>
+<title>Neon ZigZag — Tap the Beat to Turn</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="corner-sq tl"></div>
+  <div class="corner-sq tr"></div>
+  <div id="score">SCORE: 0</div>
+  <div id="lives">LIVES: <span class="hearts"><span class="heart">&#9829;</span><span class="heart">&#9829;</span><span class="heart">&#9829;</span></span></div>
+  <div id="level">LEVEL: 1</div>
+  <div id="progressWrap">
+    <div id="progressBar">
+      <div id="progressFill"></div>
+      <div id="progressNotch"></div>
+    </div>
+    <div id="progressCube"><div class="cube-inner"></div></div>
+  </div>
+  <div id="popup"></div>
+  <div id="levelFlash"></div>
+  <div id="tapHint">
+    <div id="tapCircle">
+      <svg id="handIcon" viewBox="0 0 64 64" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M26 30 V14 a4 4 0 0 1 8 0 v14 m0-6 a4 4 0 0 1 8 0 v8 m0-4 a4 4 0 0 1 8 0 v10 c0 10-6 18-16 18 h-2 c-6 0-9-2-12-7 l-7-11 a4 4 0 0 1 7-5 l4 6 V22"/>
+      </svg>
+    </div>
+    <div id="tapText">TAP THE BEAT TO TURN!</div>
+  </div>
+  <div id="sparkle">&#10022;</div>
+</div>
+
+<div id="overlay">
+  <div id="menuBox">
+    <h1 id="title">NEON&nbsp;ZIGZAG</h1>
+    <p id="subtitle">TAP THE BEAT TO TURN!</p>
+    <p id="bigMsg" class="hidden"></p>
+    <p id="finalScore" class="hidden"></p>
+    <p id="prompt">TAP TO START</p>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
