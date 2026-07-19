@@ -57,6 +57,11 @@
     font-size: clamp(14px, 4.2em, 26px); font-weight: 700; letter-spacing: 1px;
     color: #ffd76e; text-shadow: 0 0 12px rgba(255,200,90,.6);
   }
+  #speed {
+    position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+    font-size: clamp(12px, 3.6em, 20px); font-weight: 700; letter-spacing: 2px;
+    color: rgba(200,240,255,.85); text-shadow: 0 0 10px rgba(120,220,255,.5);
+  }
   #popup {
     position: absolute; top: 20%; left: 50%;
     transform: translateX(-50%);
@@ -109,9 +114,10 @@
 
 <div id="hud">
   <div id="score">SKOR: 0</div>
+  <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v11</div>
+  <div id="ver">v12</div>
   <div id="diag"></div>
 </div>
 
@@ -141,12 +147,13 @@
 // ------------------------------------------------------ sabitler
 const BPM        = 120;
 const BEAT       = 60 / BPM;        // saniye
-// Dinamik hız: her başarılı dönüşte +0.08, tavan 16. Hız yalnızca köşe
+// Dinamik hız: her başarılı dönüşte artar, tavan 17. Hız yalnızca köşe
 // anında değiştiği için her segment SABİT kendi hızıyla koşulur; segment
 // uzunlukları o hızla üretildiğinden beat senkronu asla bozulmaz.
+// Artış belirgin: ~10 dönüşte fark edilir, ~43 dönüşte tavana dayanır.
 const BASE_SPEED = 7.5;
-const MAX_SPEED  = 16;
-const SPEED_INC  = 0.08;
+const MAX_SPEED  = 17;
+const SPEED_INC  = 0.22;
 // k. segmentin hızı (0 = giriş düzlüğü; k dönüş tamamlanmış olur).
 function speedForSeg(k) {
   return Math.min(MAX_SPEED, BASE_SPEED + SPEED_INC * k);
@@ -494,7 +501,8 @@ function schedule() {
 const $ = id => document.getElementById(id);
 const overlay = $('overlay'), titleEl = $('title'), subEl = $('sub'),
       statsEl = $('stats'), goEl = $('go'),
-      scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup');
+      scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
+      speedEl = $('speed');
 
 function reset() {
   S.mode = 'play';
@@ -517,6 +525,7 @@ function reset() {
   if (S.schedTimer) clearInterval(S.schedTimer);
   S.schedTimer = setInterval(schedule, 30);
   scoreEl.textContent = 'SKOR: 0'; comboEl.textContent = '';
+  speedEl.textContent = 'HIZ x1.00';
 }
 
 function die() {
@@ -622,6 +631,7 @@ function update(dt, dtRaw) {
         S.shake = 7;
         scoreEl.textContent = 'SKOR: ' + S.score;
         comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
+        speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
       } else if (S.song > c.t + HIT_WIN) {
         // Köşe kaçırıldı: düz devam -> yoldan çık -> düş.
         S.next++;           // izleyen mantık bozulmasın
