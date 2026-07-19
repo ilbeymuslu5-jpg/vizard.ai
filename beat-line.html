@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>BEAT LINE — Ritimde Dokun, Köşede Dön</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #04060e;
+    font-family: "Bahnschrift", "Segoe UI", "Arial Narrow", Arial, sans-serif;
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  canvas { position: fixed; inset: 0; display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; color: #eaf6ff; }
+  #score {
+    position: absolute; top: 16px; left: 22px;
+    font-size: clamp(20px, 4vw, 34px); font-weight: 700; letter-spacing: 1px;
+    text-shadow: 0 0 14px rgba(90,220,255,.5), 0 2px 4px rgba(0,0,0,.8);
+  }
+  #combo {
+    position: absolute; top: 16px; right: 22px;
+    font-size: clamp(16px, 3vw, 26px); font-weight: 700; letter-spacing: 1px;
+    color: #ffd76e; text-shadow: 0 0 12px rgba(255,200,90,.6);
+  }
+  #popup {
+    position: absolute; top: 22%; left: 50%;
+    transform: translateX(-50%);
+    font-size: clamp(30px, 6vw, 56px); font-weight: 800; font-style: italic;
+    letter-spacing: 2px; opacity: 0; white-space: nowrap;
+  }
+  #popup.perfect { color: #8dff3d; text-shadow: 0 0 18px rgba(120,255,60,.95), 0 0 46px rgba(120,255,60,.5); }
+  #popup.good    { color: #5ce9ff; text-shadow: 0 0 18px rgba(90,230,255,.95), 0 0 46px rgba(90,230,255,.5); }
+  #popup.show { animation: pop .7s ease-out forwards; }
+  @keyframes pop {
+    0% { opacity: 0; transform: translateX(-50%) scale(.5); }
+    14% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+    26% { transform: translateX(-50%) scale(1); }
+    70% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  }
+
+  /* ---------- overlay ekranları ---------- */
+  #overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(8,16,36,.25), rgba(2,5,14,.8));
+    color: #eaf6ff; text-align: center;
+  }
+  #overlay.hidden { display: none; }
+  #title {
+    font-size: clamp(46px, 10vw, 100px); font-weight: 800; font-style: italic;
+    letter-spacing: 6px; color: #6df2ff;
+    text-shadow: 0 0 24px rgba(90,230,255,.9), 0 0 80px rgba(90,230,255,.4);
+  }
+  #title.dead { color: #ff5f7a; text-shadow: 0 0 24px rgba(255,95,122,.9), 0 0 80px rgba(255,95,122,.4); }
+  #sub {
+    margin-top: 14px; font-size: clamp(15px, 3vw, 24px); font-weight: 700;
+    letter-spacing: 2px; color: #cfeeff; opacity: .95; line-height: 1.6;
+  }
+  #stats {
+    margin-top: 10px; font-size: clamp(18px, 3.6vw, 30px); font-weight: 700;
+    letter-spacing: 2px; color: #ffe9a8; text-shadow: 0 0 14px rgba(255,210,110,.6);
+  }
+  #go {
+    margin-top: 40px; font-size: clamp(18px, 3.4vw, 28px); font-weight: 700;
+    letter-spacing: 3px; animation: blink 1.1s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div id="score">SKOR: 0</div>
+  <div id="combo"></div>
+  <div id="popup"></div>
+</div>
+
+<div id="overlay">
+  <div>
+    <h1 id="title">BEAT&nbsp;LINE</h1>
+    <p id="sub">Çizgi ritimle akar, köşeler bas vuruşuna denk gelir.<br>
+    Tam vuruş anında dokun (ya da BOŞLUK) &rarr; 90&deg; dön.<br>
+    Erken, geç ya da boş yere dokunursan yoldan uçarsın!</p>
+    <p id="stats"></p>
+    <p id="go">BAŞLAMAK İÇİN DOKUN</p>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   BEAT LINE — saf Canvas 2D ritim koşusu.
+   Tüm zamanlama WebAudio saatine bağlıdır: köşe pozisyonları beat
+   zamanlarından TÜRETİLİR (mesafe = hız × beat zamanı), bu yüzden
+   çizgi her köşeye tam bas vuruşu anında ulaşır — %100 senkron.
+   ===================================================================== */
+
+// ------------------------------------------------------ sabitler
+const BPM        = 120;
+const BEAT       = 60 / BPM;        // saniye
+const SPEED      = 7;               // dünya birimi / sn
+const PATH_W     = 1.7;             // yol genişliği
+const HALF_W     = PATH_W / 2;
+const LEAD_BEATS = 4;               // ilk köşeden önceki düz giriş
+const HIT_WIN    = 0.16;            // sn — dokunuş kabul penceresi
+const PERF_WIN   = 0.06;            // sn — PERFECT penceresi
+const BLOCK_H    = 3.2;             // platform bloklarının derinliği
+
+// Ritim vuruş dizisi: köşeler arası beat sayıları (döngüyle tekrar eder).
+// Bu dizi hem yolun şeklini hem müzikteki vurgu anlarını belirler.
+const GAPS = [4, 4, 2, 2, 4, 2, 2, 2, 4, 4, 2, 4, 2, 2, 2, 2];
+
+// İki gidiş yönü (klasik zigzag): A = +x, B = -z. Çapraz = kamera ekseni.
+const DIR = [ {x:1, z:0}, {x:0, z:-1} ];
+const DIAG = { x: Math.SQRT1_2, z: -Math.SQRT1_2 };
+
+// Renkler
+const C = {
+  glow:  '#54f1ff', glowDim: 'rgba(84,241,255,.35)',
+  trail: '#d8fdff',
+  side:  '#0c2b46', side2: '#123a5c',
+  top:   '#05080f',
+  accentPink: '#c94dff', accentOrange: '#ffb84d',
+  grid:  'rgba(40,190,220,.34)', grid2: 'rgba(20,90,130,.5)',
+};
+
+// ------------------------------------------------------ canvas
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+// ------------------------------------------------------ ses (WebAudio)
+let actx = null, master = null;
+function initAudio() {
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    master = actx.createGain(); master.gain.value = 0.45;
+    master.connect(actx.destination);
+  }
+  if (actx.state === 'suspended') actx.resume();
+}
+function osc(type, f0, t, dur, vol, f1) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.02);
+}
+function noise(t, dur, vol, hp) {
+  const n = Math.ceil(actx.sampleRate * dur);
+  const buf = actx.createBuffer(1, n, actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const s = actx.createBufferSource(); s.buffer = buf;
+  const f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur);
+}
+const BASSLINE = [55, 55, 65.4, 49]; // A1 A1 C2 G1 — bar başına kök nota
+
+// ------------------------------------------------------ oyun durumu
+const S = {
+  mode: 'menu',            // menu | play | fall | over
+  t0: 0,                   // şarkı başlangıcının actx zamanı
+  song: 0,                 // şarkı zamanı (sn)
+  score: 0, combo: 0, best: +(localStorage.getItem('bl_best') || 0),
+  corners: [],             // { t, beat, x, z, dirIdx } — dirIdx: köşeden SONRAKİ yön
+  cornerBeats: new Set(),  // müzik vurgusu için beat numaraları
+  next: 0,                 // sıradaki köşe indeksi
+  pending: false,          // geçerli dokunuş alındı, köşede dönülecek
+  head: { x: 0, z: 0, y: 0 }, dirIdx: 1, // başlangıç yönü B (-z, ileri)
+  trail: [],               // dönüş noktaları (dünya koordinatı)
+  fallT: 0, fallVy: 0, fallDir: null,
+  shake: 0,
+  particles: [],
+  schedStep: 0, schedT: 0, schedTimer: 0,
+  genBeat: LEAD_BEATS, genX: 0, genZ: 0, genDir: 1, genT: LEAD_BEATS * BEAT,
+};
+
+// ------------------------------------------------------ yol üretimi
+// Köşe zamanları beat ızgarasına kilitli; pozisyon = hız × zaman.
+let gapIdx = 0;
+function genCorners(untilTime) {
+  while (S.genT < untilTime) {
+    S.corners.push({ t: S.genT, beat: S.genBeat, x: S.genX, z: S.genZ, dirIdx: 1 - S.genDir });
+    S.cornerBeats.add(S.genBeat);
+    const gap = GAPS[gapIdx++ % GAPS.length];
+    const len = gap * BEAT * SPEED;
+    // Bir SONRAKİ köşenin konumu: bu köşeden yeni yönde `len` kadar ileri.
+    S.genDir = 1 - S.genDir;
+    S.genX += DIR[S.genDir].x * len;
+    S.genZ += DIR[S.genDir].z * len;
+    S.genBeat += gap;
+    S.genT = S.genBeat * BEAT;
+  }
+}
+
+// Şarkı zamanına göre başın olması gereken yeri köşelerden hesapla.
+function headAt(t) {
+  let px = 0, pz = 0, pt = 0, dirIdx = 1;
+  for (let i = S.next - 1; i >= 0; i--) {   // en son geçilen köşe
+    if (S.corners[i].t <= t) { const c = S.corners[i]; px = c.x; pz = c.z; pt = c.t; dirIdx = c.dirIdx; break; }
+  }
+  const d = SPEED * (t - pt);
+  return { x: px + DIR[dirIdx].x * d, z: pz + DIR[dirIdx].z * d, dirIdx };
+}
+
+// ------------------------------------------------------ kamera & projeksiyon
+// Kamera: başı çaprazdan, yukarıdan ve hafif arkadan takip eder.
+const CAM = { back: 7.2, h: 5.4, ahead: 5.2, fl: 0 };
+const cam = { x: 0, y: 0, z: 0, fx: 0, fz: 0 };   // fx/fz: yumuşatılmış odak
+// Sabit bakış yönü tabanı (çapraz + aşağı eğim) — her karede aynı.
+let B = null;
+function computeBasis() {
+  const f = norm3({ x: DIAG.x * (CAM.back + CAM.ahead), y: -CAM.h, z: DIAG.z * (CAM.back + CAM.ahead) });
+  const r = norm3(cross3(f, { x: 0, y: 1, z: 0 }));
+  const u = cross3(r, f);
+  B = { f, r, u };
+}
+function cross3(a, b) { return { x: a.y*b.z - a.z*b.y, y: a.z*b.x - a.x*b.z, z: a.x*b.y - a.y*b.x }; }
+function norm3(v) { const l = Math.hypot(v.x, v.y, v.z); return { x: v.x/l, y: v.y/l, z: v.z/l }; }
+computeBasis();
+
+const NEAR = 0.4;
+function view(p) {  // dünya -> kamera uzayı
+  const dx = p.x - cam.x, dy = (p.y || 0) - cam.y, dz = p.z - cam.z;
+  return {
+    x: dx * B.r.x + dy * B.r.y + dz * B.r.z,
+    y: dx * B.u.x + dy * B.u.y + dz * B.u.z,
+    z: dx * B.f.x + dy * B.f.y + dz * B.f.z,
+  };
+}
+function proj(v) {  // kamera uzayı -> ekran
+  const s = CAM.fl / v.z;
+  return { x: W / 2 + v.x * s, y: H / 2 - v.y * s };
+}
+// Near düzleminde kırpılmış çizgi çiz (grid ve iz için).
+function line3(p1, p2) {
+  let a = view(p1), b = view(p2);
+  if (a.z < NEAR && b.z < NEAR) return false;
+  if (a.z < NEAR || b.z < NEAR) {
+    const t = (NEAR - a.z) / (b.z - a.z);
+    const m = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: NEAR };
+    if (a.z < NEAR) a = m; else b = m;
+  }
+  const A = proj(a), Bp = proj(b);
+  ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x, Bp.y);
+  return true;
+}
+function quad(pts, fill) {  // 4 köşeli yüzey (tamamı öndeyse)
+  const vs = pts.map(view);
+  if (vs.some(v => v.z < NEAR)) return;
+  const ps = vs.map(proj);
+  ctx.beginPath();
+  ctx.moveTo(ps[0].x, ps[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(ps[i].x, ps[i].y);
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+}
+
+// ------------------------------------------------------ parçacıklar & dekor
+function burst(x, z, n, col) {
+  for (let i = 0; i < n; i++) {
+    S.particles.push({
+      x, z, y: 0.1,
+      vx: (Math.random() - .5) * 5, vy: Math.random() * 3.4, vz: (Math.random() - .5) * 5,
+      life: .5 + Math.random() * .5, col,
+    });
+  }
+}
+// Yol kenarında süzülen minimalist neon elmaslar.
+const floaters = [];
+for (let i = 0; i < 16; i++) {
+  floaters.push({
+    along: Math.random() * 90 - 10, side: (Math.random() < .5 ? -1 : 1) * (6 + Math.random() * 14),
+    y: -2 + Math.random() * 8, size: .3 + Math.random() * .7,
+    rot: Math.random() * Math.PI, spin: (Math.random() - .5) * 1.4,
+    col: [C.glow, C.accentPink, C.accentOrange][i % 3],
+  });
+}
+
+// ------------------------------------------------------ müzik zamanlayıcı
+function schedule() {
+  const ahead = actx.currentTime + 0.15;
+  while (S.schedT < ahead) {
+    const step = S.schedStep;          // 8'lik adımlar (BEAT/2)
+    const t = S.schedT;
+    const onBeat = step % 2 === 0;
+    const beatNo = step >> 1;
+    if (onBeat) {
+      osc('sine', 150, t, 0.15, 0.95, 45);                       // kick
+      const bar = beatNo >> 2;
+      osc('sawtooth', BASSLINE[bar % BASSLINE.length], t, 0.24, 0.15); // bas
+      if (beatNo % 4 === 2) noise(t, 0.14, 0.28, 1500);          // snare
+      if (S.cornerBeats.has(beatNo)) {                           // KÖŞE vurgusu
+        osc('square', 220, t, 0.12, 0.22);
+        osc('sine', 880, t, 0.18, 0.2);
+      }
+    } else {
+      noise(t, 0.04, 0.14, 6500);                                // hi-hat
+    }
+    S.schedStep++; S.schedT += BEAT / 2;
+  }
+}
+
+// ------------------------------------------------------ oyun akışı
+const $ = id => document.getElementById(id);
+const overlay = $('overlay'), titleEl = $('title'), subEl = $('sub'),
+      statsEl = $('stats'), goEl = $('go'),
+      scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup');
+
+function reset() {
+  S.mode = 'play';
+  S.score = 0; S.combo = 0;
+  S.corners.length = 0; S.cornerBeats.clear(); gapIdx = 0;
+  S.next = 0; S.pending = false;
+  S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = 0; S.genDir = 1; S.genT = LEAD_BEATS * BEAT;
+  S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
+  S.trail = [{ x: 0, z: 0 }];
+  S.particles.length = 0; S.shake = 0;
+  S.t0 = actx.currentTime + 0.12;
+  S.schedStep = 0; S.schedT = S.t0;
+  genCorners(20);
+  cam.fx = S.head.x; cam.fz = S.head.z;
+  if (S.schedTimer) clearInterval(S.schedTimer);
+  S.schedTimer = setInterval(schedule, 30);
+  scoreEl.textContent = 'SKOR: 0'; comboEl.textContent = '';
+}
+
+function die() {
+  S.mode = 'fall';
+  S.fallT = 0; S.fallVy = 1.5;
+  S.fallDir = DIR[S.dirIdx];
+  S.shake = 14;
+  burst(S.head.x, S.head.z, 40, C.accentOrange);
+  osc('sawtooth', 400, actx.currentTime, 0.7, 0.4, 55);
+  noise(actx.currentTime, 0.4, 0.3, 400);
+}
+
+function gameOver() {
+  S.mode = 'over';
+  clearInterval(S.schedTimer); S.schedTimer = 0;
+  S.best = Math.max(S.best, S.score);
+  localStorage.setItem('bl_best', S.best);
+  titleEl.textContent = 'OYUN BİTTİ';
+  titleEl.classList.add('dead');
+  subEl.innerHTML = 'Köşeyi kaçırdın — ritmi dinle, bas vuruşunda dokun.';
+  statsEl.textContent = 'SKOR: ' + S.score + '   REKOR: ' + S.best;
+  goEl.textContent = 'TEKRAR DENEMEK İÇİN DOKUN';
+  overlay.classList.remove('hidden');
+}
+
+function showPopup(kind) {
+  popupEl.textContent = kind === 'perfect' ? 'PERFECT!' : 'GOOD!';
+  popupEl.className = '';
+  void popupEl.offsetWidth;
+  popupEl.className = 'show ' + kind;
+}
+
+// Dokunuş: sıradaki köşenin zaman penceresiyle karşılaştır.
+function tap() {
+  if (S.mode === 'menu' || S.mode === 'over') {
+    initAudio(); overlay.classList.add('hidden');
+    titleEl.textContent = 'BEAT LINE'; titleEl.classList.remove('dead');
+    reset(); return;
+  }
+  if (S.mode !== 'play' || S.pending) return;
+  const c = S.corners[S.next];
+  const dt = S.song - c.t;              // -: erken, +: geç
+  if (Math.abs(dt) <= HIT_WIN) {
+    S.pending = true;                   // dönüş tam köşe anında uygulanacak
+    const kind = Math.abs(dt) <= PERF_WIN ? 'perfect' : 'good';
+    S.combo++;
+    S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
+    showPopup(kind);
+    if (kind === 'perfect') { osc('sine', 880, actx.currentTime, .15, .3); osc('sine', 1318, actx.currentTime + .06, .2, .3); }
+    else osc('square', 660, actx.currentTime, .09, .22);
+  } else {
+    // Yanlış zamanda dokunuş: çizgi hemen döner ve yoldan çıkar.
+    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.dirIdx = 1 - S.dirIdx;
+    die();
+  }
+}
+addEventListener('pointerdown', e => { e.preventDefault(); tap(); }, { passive: false });
+addEventListener('keydown', e => {
+  if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) tap();
+});
+
+// ------------------------------------------------------ güncelleme
+function update(dt) {
+  if (S.mode === 'play') {
+    S.song = actx.currentTime - S.t0;
+    genCorners(S.song + 20);
+
+    const c = S.corners[S.next];
+    if (S.song >= c.t) {
+      if (S.pending) {
+        // Tam köşe anında (== bas vuruşu anında) dön.
+        S.trail.push({ x: c.x, z: c.z });
+        S.dirIdx = c.dirIdx;
+        S.next++; S.pending = false;
+        burst(c.x, c.z, 22, C.glow);
+        S.shake = 7;
+        scoreEl.textContent = 'SKOR: ' + S.score;
+        comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
+      } else if (S.song > c.t + HIT_WIN) {
+        // Köşe kaçırıldı: düz devam -> yoldan çık -> düş.
+        S.next++;           // izleyen mantık bozulmasın
+        die();
+      }
+    }
+    if (S.mode === 'play') {
+      const h = headAt(Math.min(S.song, S.pending ? S.corners[S.next].t : S.song));
+      // pending iken köşeyi geçmiş olamayız (yukarıda işlendi); normal akış:
+      S.head.x = h.x; S.head.z = h.z;
+    }
+  } else if (S.mode === 'fall') {
+    S.fallT += dt;
+    S.fallVy -= 14 * dt;
+    S.head.y += S.fallVy * dt;
+    S.head.x += S.fallDir.x * SPEED * 0.45 * dt;
+    S.head.z += S.fallDir.z * SPEED * 0.45 * dt;
+    if (S.fallT > 1.0) gameOver();
+  }
+
+  // parçacıklar
+  for (let i = S.particles.length - 1; i >= 0; i--) {
+    const p = S.particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { S.particles.splice(i, 1); continue; }
+    p.vy -= 6 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+  }
+  S.shake *= Math.pow(0.001, dt); // hızlı sönüm
+
+  // kamera: odak başı yumuşakça izler
+  const k = 1 - Math.pow(0.002, dt);
+  cam.fx += (S.head.x - cam.fx) * k;
+  cam.fz += (S.head.z - cam.fz) * k;
+  cam.x = cam.fx - DIAG.x * CAM.back;
+  cam.z = cam.fz - DIAG.z * CAM.back;
+  cam.y = CAM.h;
+  CAM.fl = Math.min(W, H) * 1.15;
+}
+
+// ------------------------------------------------------ çizim
+function drawGrid() {
+  const cell = 3, n = 26;
+  const cx = Math.round(cam.fx / cell) * cell, cz = Math.round(cam.fz / cell) * cell;
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = -n; i <= n; i++) {
+    line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - n * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + n * cell });
+    line3({ x: cx - n * cell, y: -BLOCK_H, z: cz + i * cell }, { x: cx + n * cell, y: -BLOCK_H, z: cz + i * cell });
+  }
+  ctx.stroke();
+}
+
+function drawFloaters(t) {
+  ctx.lineWidth = 1.5;
+  for (const f of floaters) {
+    // çapraz eksende başın ilerisine geri dönüştür
+    const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
+    if (f.along - headAlong < -14) f.along += 90;
+    const px = DIAG.x * f.along - DIAG.z * f.side;
+    const pz = DIAG.z * f.along + DIAG.x * f.side;
+    const v = view({ x: px, y: f.y, z: pz });
+    if (v.z < NEAR) continue;
+    const p = proj(v);
+    const s = (CAM.fl / v.z) * f.size;
+    const a = f.rot + t * f.spin;
+    ctx.strokeStyle = f.col;
+    ctx.globalAlpha = Math.min(1, 8 / v.z) * .8;
+    ctx.beginPath();
+    for (let i = 0; i <= 4; i++) {
+      const ang = a + i * Math.PI / 2;
+      const x = p.x + Math.cos(ang) * s, y = p.y + Math.sin(ang) * s * .8;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Yolun bir koşusunu (iki köşe arası dikdörtgen blok) çiz.
+function drawRun(x1, z1, x2, z2, dirIdx) {
+  const d = DIR[dirIdx];
+  const px = -d.z, pz = d.x;                    // dik (perp) vektör
+  const ex = d.x * HALF_W, ez = d.z * HALF_W;   // uçlara yarım genişlik uzat
+  const ax = x1 - ex, az = z1 - ez, bx = x2 + ex, bz = z2 + ez;
+  const c1 = { x: ax + px * HALF_W, z: az + pz * HALF_W };
+  const c2 = { x: bx + px * HALF_W, z: bz + pz * HALF_W };
+  const c3 = { x: bx - px * HALF_W, z: bz - pz * HALF_W };
+  const c4 = { x: ax - px * HALF_W, z: az - pz * HALF_W };
+  // Kameraya bakan yan yüzler (+z tarafı ve -x tarafı görünür).
+  const sidePairs = dirIdx === 0 ? [[c1, c2]] : [[c4, c3], [c1, c2]];
+  for (const [p, q] of sidePairs) {
+    quad([
+      { x: p.x, y: 0, z: p.z }, { x: q.x, y: 0, z: q.z },
+      { x: q.x, y: -BLOCK_H, z: q.z }, { x: p.x, y: -BLOCK_H, z: p.z },
+    ], dirIdx === 0 ? C.side : C.side2);
+  }
+  // Üst yüz
+  quad([
+    { x: c1.x, y: 0, z: c1.z }, { x: c2.x, y: 0, z: c2.z },
+    { x: c3.x, y: 0, z: c3.z }, { x: c4.x, y: 0, z: c4.z },
+  ], C.top);
+  // Neon kenarlar: koşu boyunca iki üst kenar (kaydırma hilesi ile
+  // ardışık koşular tek sürekli kontur oluşturur).
+  ctx.strokeStyle = C.glow;
+  ctx.shadowColor = C.glow;
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (const s of [1, -1]) {
+    const shift = s * HALF_W * (dirIdx === 0 ? 1 : -1);
+    line3(
+      { x: x1 + px * s * HALF_W + d.x * shift, y: 0.02, z: z1 + pz * s * HALF_W + d.z * shift },
+      { x: x2 + px * s * HALF_W + d.x * shift, y: 0.02, z: z2 + pz * s * HALF_W + d.z * shift });
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function draw(t) {
+  // arka plan
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#04060e');
+  bg.addColorStop(.55, '#071224');
+  bg.addColorStop(1, '#04060e');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // ekran titremesi
+  ctx.save();
+  if (S.shake > 0.3) ctx.translate((Math.random() - .5) * S.shake, (Math.random() - .5) * S.shake);
+
+  drawGrid();
+  drawFloaters(t);
+
+  // yol koşuları: uzaktan yakına
+  const segs = [];
+  let px = 0, pz = 0, pdir = 1;
+  for (let i = 0; i < S.corners.length; i++) {
+    const c = S.corners[i];
+    segs.push([px, pz, c.x, c.z, pdir]);
+    px = c.x; pz = c.z; pdir = c.dirIdx;
+  }
+  segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir]);
+  const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const sg = segs[i];
+    const far = sg[2] * DIAG.x + sg[3] * DIAG.z;
+    if (far - headAlong < -CAM.back + 1.5) continue;   // kamera arkasında
+    if ((sg[0] * DIAG.x + sg[1] * DIAG.z) - headAlong > 60) continue; // çok uzak
+    drawRun(sg[0], sg[1], sg[2], sg[3], sg[4]);
+  }
+
+  // iz (çizginin kendisi): dönüş noktaları + baş
+  const pts = [...S.trail, { x: S.head.x, z: S.head.z }];
+  ctx.strokeStyle = C.trail;
+  ctx.shadowColor = C.glow; ctx.shadowBlur = 16;
+  ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < pts.length - 1; i++) {
+    line3({ x: pts[i].x, y: 0.12, z: pts[i].z }, { x: pts[i+1].x, y: 0.12, z: pts[i+1].z });
+  }
+  // düşüşte başın dikey çizgisi
+  if (S.mode === 'fall')
+    line3({ x: S.head.x, y: 0.12, z: S.head.z }, { x: S.head.x, y: S.head.y, z: S.head.z });
+  ctx.stroke();
+
+  // baş: beat ile nabız atan parlak kare
+  const hv = view({ x: S.head.x, y: (S.mode === 'fall' ? S.head.y : 0.12), z: S.head.z });
+  if (hv.z > NEAR) {
+    const hp = proj(hv);
+    const beatPulse = 1 + 0.35 * Math.max(0, 1 - ((S.song / BEAT) % 1) * 3);
+    const r = (CAM.fl / hv.z) * 0.16 * beatPulse;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 26;
+    ctx.fillRect(hp.x - r, hp.y - r, r * 2, r * 2);
+  }
+  ctx.shadowBlur = 0;
+
+  // parçacıklar
+  for (const p of S.particles) {
+    const v = view(p);
+    if (v.z < NEAR) continue;
+    const q = proj(v);
+    const r = Math.max(0.6, (CAM.fl / v.z) * 0.045) * (p.life * 2);
+    ctx.globalAlpha = Math.min(1, p.life * 2.2);
+    ctx.fillStyle = p.col;
+    ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+// ------------------------------------------------------ ana döngü
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (actx && (S.mode === 'play' || S.mode === 'fall')) update(dt);
+  else {
+    // menüde hafif süzülen kamera
+    cam.x = -DIAG.x * CAM.back; cam.z = -DIAG.z * CAM.back; cam.y = CAM.h;
+    CAM.fl = Math.min(W, H) * 1.15;
+    if (!S.corners.length) genCorners(20);
+  }
+  draw(now / 1000);
+}
+requestAnimationFrame(frame);
+
+// Test kancası (#debug ile aç): otomatik oynatma ve durum erişimi.
+if (location.hash === '#debug') window.BL = { S, tap, headAt, BEAT, HIT_WIN };
+})();
+</script>
+</body>
+</html>
