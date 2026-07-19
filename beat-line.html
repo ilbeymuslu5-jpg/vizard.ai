@@ -111,7 +111,7 @@
   <div id="score">SKOR: 0</div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v8</div>
+  <div id="ver">v9</div>
   <div id="diag"></div>
 </div>
 
@@ -158,7 +158,7 @@ const DIR = [ {x:1, z:0}, {x:0, z:-1} ];
 const DIAG = { x: Math.SQRT1_2, z: -Math.SQRT1_2 };
 const PERP = { x: Math.SQRT1_2, z: Math.SQRT1_2 };  // çapraza dik yanal eksen
 
-// Renkler
+// Renkler (statik olanlar)
 const C = {
   glow:  '#54f1ff', glowDim: 'rgba(84,241,255,.35)',
   trail: '#d8fdff',
@@ -167,6 +167,41 @@ const C = {
   accentPink: '#c94dff', accentOrange: '#ffb84d',
   grid:  'rgba(40,190,220,.34)', grid2: 'rgba(20,90,130,.5)',
 };
+
+// ---------- Dinamik neon tema: her 15 skorda rastgele yeni renge yumuşak geçiş
+const NEON = [
+  [ 84, 241, 255],   // camgöbeği
+  [109, 255,  63],   // neon yeşil
+  [255, 150,  40],   // neon turuncu
+  [190,  70, 255],   // elektrik moru
+  [255,  80, 190],   // neon pembe
+  [255, 225,  80],   // neon sarı
+  [ 64, 255, 190],   // turkuaz
+];
+const theme = { cur: [...NEON[0]], tgt: NEON[0], step: 0, glow: 'rgb(84,241,255)' };
+function themeRgba(a, mul = 1) {
+  const c = theme.cur;
+  return 'rgba(' + (c[0] * mul | 0) + ',' + (c[1] * mul | 0) + ',' + (c[2] * mul | 0) + ',' + a + ')';
+}
+function updateTheme(dt) {
+  const step = Math.floor(S.score / 15);
+  if (step !== theme.step) {          // 15'in katına ulaşıldı -> yeni hedef renk
+    theme.step = step;
+    if (step > 0) {
+      let n;
+      do { n = NEON[Math.floor(Math.random() * NEON.length)]; } while (n === theme.tgt);
+      theme.tgt = n;
+    } else theme.tgt = NEON[0];
+  }
+  const k = 1 - Math.exp(-2.2 * dt);  // yumuşak geçiş
+  for (let i = 0; i < 3; i++) theme.cur[i] += (theme.tgt[i] - theme.cur[i]) * k;
+  theme.glow = 'rgb(' + (theme.cur[0] | 0) + ',' + (theme.cur[1] | 0) + ',' + (theme.cur[2] | 0) + ')';
+}
+
+// ---------- Kusursuz dönüş melodisi: A-minör pentatonik dizi.
+// Her başarılı dönüş bir sonraki notayı çalar; ölünce baştan başlar.
+const MELODY = [440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
+let melodyIdx = 0;
 
 // ------------------------------------------------------ canvas / 9:16 sahne
 // Oyun alanı 9:16'ya sabitlenir: pencere daha genişse yanlarda bant kalır
@@ -428,6 +463,8 @@ function reset() {
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0 }];
   S.particles.length = 0; S.shake = 0;
+  melodyIdx = 0;
+  theme.cur = [...NEON[0]]; theme.tgt = NEON[0]; theme.step = 0;
   S.t0 = actx.currentTime + 0.12;
   S.schedStep = 0; S.schedT = S.t0;
   genCorners(20);
@@ -443,6 +480,7 @@ function die() {
   S.fallT = 0; S.fallVy = 1.5;
   S.fallDir = DIR[S.dirIdx];
   S.shake = 14;
+  melodyIdx = 0;                       // melodi baştan başlar
   burst(S.head.x, S.head.z, 40, C.accentOrange);
   osc('sawtooth', 400, actx.currentTime, 0.7, 0.4, 55);
   noise(actx.currentTime, 0.4, 0.3, 400);
@@ -485,8 +523,15 @@ function tap() {
     S.combo++;
     S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
     showPopup(kind);
-    if (kind === 'perfect') { osc('sine', 880, actx.currentTime, .15, .3); osc('sine', 1318, actx.currentTime + .06, .2, .3); }
-    else osc('square', 660, actx.currentTime, .09, .22);
+    // Melodik dizilim: her başarılı dönüş pentatonik dizinin sıradaki notası.
+    const f = MELODY[melodyIdx % MELODY.length];
+    melodyIdx++;
+    if (kind === 'perfect') {
+      osc('sine', f, actx.currentTime, .22, .3);
+      osc('sine', f * 1.5, actx.currentTime + .05, .28, .2);  // beşli süsleme
+    } else {
+      osc('triangle', f, actx.currentTime, .18, .26);
+    }
   } else {
     // Yanlış zamanda dokunuş: çizgi hemen döner ve yoldan çıkar.
     S.trail.push({ x: S.head.x, z: S.head.z });
@@ -519,7 +564,7 @@ function update(dt, dtRaw) {
         S.trail.push({ x: c.x, z: c.z });
         S.dirIdx = c.dirIdx;
         S.next++; S.pending = false;
-        burst(c.x, c.z, 22, C.glow);
+        burst(c.x, c.z, 22, theme.glow);
         S.shake = 7;
         scoreEl.textContent = 'SKOR: ' + S.score;
         comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
@@ -574,10 +619,12 @@ function update(dt, dtRaw) {
 }
 
 // ------------------------------------------------------ çizim
-function drawGrid() {
+function drawGrid(pulse) {
   const cell = 3, n = 26;
   const cx = Math.round(cam.fx / cell) * cell, cz = Math.round(cam.fz / cell) * cell;
-  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  // Bas vuruşunda parla, vuruş geçtikçe sönümlen.
+  ctx.strokeStyle = themeRgba(0.26 + 0.42 * pulse, 0.85);
+  ctx.lineWidth = 1 + pulse * 0.9;
   ctx.beginPath();
   for (let i = -n; i <= n; i++) {
     line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - n * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + n * cell });
@@ -637,8 +684,8 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   ], C.top);
   // Neon kenarlar: koşu boyunca iki üst kenar (kaydırma hilesi ile
   // ardışık koşular tek sürekli kontur oluşturur).
-  ctx.strokeStyle = C.glow;
-  ctx.shadowColor = C.glow;
+  ctx.strokeStyle = theme.glow;
+  ctx.shadowColor = theme.glow;
   ctx.shadowBlur = 12;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -669,7 +716,10 @@ function draw(t) {
   ctx.save();
   if (S.shake > 0.3) ctx.translate((Math.random() - .5) * S.shake, (Math.random() - .5) * S.shake);
 
-  drawGrid();
+  // Beat fazı: vuruş anında 1, sonraki vuruşa dek sönümlenir.
+  const tSrc = (S.mode === 'play' || S.mode === 'fall') ? S.song : t;
+  const beatP = Math.max(0, 1 - (((tSrc / BEAT) % 1) + 1) % 1 * 2.2);
+  drawGrid(beatP);
   drawFloaters(t);
 
   // yol koşuları: uzaktan yakına
@@ -693,7 +743,7 @@ function draw(t) {
   // iz (çizginin kendisi): dönüş noktaları + baş
   const pts = [...S.trail, { x: S.head.x, z: S.head.z }];
   ctx.strokeStyle = C.trail;
-  ctx.shadowColor = C.glow; ctx.shadowBlur = 16;
+  ctx.shadowColor = theme.glow; ctx.shadowBlur = 16;
   ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.beginPath();
   for (let i = 0; i < pts.length - 1; i++) {
@@ -713,10 +763,10 @@ function draw(t) {
       const ph = Math.max(0, left) / (BEAT * 2.5);
       const R = HALF_W * (0.55 + ph * 2.6);
       const inWin = Math.abs(left) <= HIT_WIN;
-      ctx.strokeStyle = inWin ? '#ffffff' : C.glow;
+      ctx.strokeStyle = inWin ? '#ffffff' : theme.glow;
       ctx.globalAlpha = inWin ? 1 : 0.75 * (1 - ph * 0.6);
       ctx.lineWidth = inWin ? 4 : 2.5;
-      ctx.shadowColor = C.glow; ctx.shadowBlur = inWin ? 18 : 10;
+      ctx.shadowColor = theme.glow; ctx.shadowBlur = inWin ? 18 : 10;
       ctx.beginPath();
       for (let i = 0; i <= 20; i++) {
         const a = (i / 20) * Math.PI * 2;
@@ -748,13 +798,13 @@ function draw(t) {
     ballScr.x = hp.x; ballScr.y = hp.y;
     const grad = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, r * 2.2);
     grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.35, 'rgba(190,250,255,.85)');
-    grad.addColorStop(0.7, 'rgba(84,241,255,.25)');
-    grad.addColorStop(1, 'rgba(84,241,255,0)');
+    grad.addColorStop(0.35, 'rgba(235,250,255,.85)');
+    grad.addColorStop(0.7, themeRgba(0.25));
+    grad.addColorStop(1, themeRgba(0));
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = C.glow; ctx.shadowBlur = 24;
+    ctx.shadowColor = theme.glow; ctx.shadowBlur = 24;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,.55)';
     ctx.lineWidth = 2;
@@ -780,6 +830,8 @@ function draw(t) {
 // ------------------------------------------------------ ana döngü
 let last = performance.now();
 const diagEl = document.getElementById('diag');
+const diagOn = location.hash === '#debug';
+if (!diagOn) diagEl.style.display = 'none';
 let diagT = 0;
 
 function frame(now) {
@@ -795,14 +847,15 @@ function frame(now) {
       setFocalLength();
       if (!S.corners.length) genCorners(20);
     }
+    updateTheme(dt);
     draw(now / 1000);
   } catch (e) {
     errCount++;
     lastErr = (e && e.message) ? e.message.slice(0, 60) : String(e).slice(0, 60);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
-  // Geçici teşhis paneli (v7): canlı değerler + yakalanan son hata.
-  if (now - diagT > 250) {
+  // Teşhis paneli (yalnızca #debug ile görünür).
+  if (diagOn && now - diagT > 250) {
     diagT = now;
     diagEl.textContent =
       'W:' + W + ' H:' + H + ' dpr:' + DPR +
