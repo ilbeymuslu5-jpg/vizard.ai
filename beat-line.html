@@ -111,7 +111,7 @@
   <div id="score">SKOR: 0</div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v10</div>
+  <div id="ver">v11</div>
   <div id="diag"></div>
 </div>
 
@@ -141,7 +141,16 @@
 // ------------------------------------------------------ sabitler
 const BPM        = 120;
 const BEAT       = 60 / BPM;        // saniye
-const SPEED      = 7;               // dünya birimi / sn
+// Dinamik hız: her başarılı dönüşte +0.08, tavan 16. Hız yalnızca köşe
+// anında değiştiği için her segment SABİT kendi hızıyla koşulur; segment
+// uzunlukları o hızla üretildiğinden beat senkronu asla bozulmaz.
+const BASE_SPEED = 7.5;
+const MAX_SPEED  = 16;
+const SPEED_INC  = 0.08;
+// k. segmentin hızı (0 = giriş düzlüğü; k dönüş tamamlanmış olur).
+function speedForSeg(k) {
+  return Math.min(MAX_SPEED, BASE_SPEED + SPEED_INC * k);
+}
 const PATH_W     = 1.7;             // yol genişliği
 const HALF_W     = PATH_W / 2;
 const LEAD_BEATS = 4;               // ilk köşeden önceki düz giriş
@@ -151,7 +160,7 @@ const BLOCK_H    = 3.2;             // platform bloklarının derinliği
 
 // Ritim vuruş dizisi: köşeler arası beat sayıları (döngüyle tekrar eder).
 // Bu dizi hem yolun şeklini hem müzikteki vurgu anlarını belirler.
-const GAPS = [4, 4, 2, 2, 4, 2, 2, 2, 4, 4, 2, 4, 2, 2, 2, 2];
+const GAPS = [2, 2, 1, 1, 2, 1, 1, 1, 0.5, 0.5, 1, 2, 1, 1, 0.5, 0.5, 2, 1, 1, 2];
 
 // İki gidiş yönü (klasik zigzag): A = +x, B = -z. Çapraz = kamera ekseni.
 const DIR = [ {x:1, z:0}, {x:0, z:-1} ];
@@ -325,7 +334,8 @@ const S = {
   particles: [],
   schedStep: 0, schedT: 0, schedTimer: 0,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
-  genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * BEAT * SPEED,
+  speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
+  genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * BEAT * BASE_SPEED,
   genDir: 1, genT: LEAD_BEATS * BEAT,
 };
 
@@ -334,10 +344,15 @@ const S = {
 let gapIdx = 0;
 function genCorners(untilTime) {
   while (S.genT < untilTime) {
-    S.corners.push({ t: S.genT, beat: S.genBeat, x: S.genX, z: S.genZ, dirIdx: 1 - S.genDir });
+    // Bu köşeden SONRAKİ segment, (köşe sırası + 1) dönüş tamamlanmış
+    // hızla koşulacak — uzunluk o hızla üretilir ki varış tam beat'e otursun.
+    const segIdx = S.corners.length + 1;
+    const spd = speedForSeg(segIdx);
+    S.corners.push({ t: S.genT, beat: S.genBeat, x: S.genX, z: S.genZ,
+                     dirIdx: 1 - S.genDir, spd });
     S.cornerBeats.add(S.genBeat);
     const gap = GAPS[gapIdx++ % GAPS.length];
-    const len = gap * BEAT * SPEED;
+    const len = gap * BEAT * spd;
     // Bir SONRAKİ köşenin konumu: bu köşeden yeni yönde `len` kadar ileri.
     S.genDir = 1 - S.genDir;
     S.genX += DIR[S.genDir].x * len;
@@ -349,11 +364,15 @@ function genCorners(untilTime) {
 
 // Şarkı zamanına göre başın olması gereken yeri köşelerden hesapla.
 function headAt(t) {
-  let px = 0, pz = 0, pt = 0, dirIdx = 1;
+  let px = 0, pz = 0, pt = 0, dirIdx = 1, spd = speedForSeg(0);
   for (let i = S.next - 1; i >= 0; i--) {   // en son geçilen köşe
-    if (S.corners[i].t <= t) { const c = S.corners[i]; px = c.x; pz = c.z; pt = c.t; dirIdx = c.dirIdx; break; }
+    if (S.corners[i].t <= t) {
+      const c = S.corners[i];
+      px = c.x; pz = c.z; pt = c.t; dirIdx = c.dirIdx; spd = c.spd;
+      break;
+    }
   }
-  const d = SPEED * (t - pt);
+  const d = spd * (t - pt);
   return { x: px + DIR[dirIdx].x * d, z: pz + DIR[dirIdx].z * d, dirIdx };
 }
 
@@ -453,17 +472,19 @@ function schedule() {
     const t = S.schedT;
     const onBeat = step % 2 === 0;
     const beatNo = step >> 1;
+    const stepBeat = step / 2;         // 8'lik çözünürlükte beat no (x.5 dahil)
     if (onBeat) {
       kick(t);                                                   // sert kick
       const bar = beatNo >> 2;
       osc('sawtooth', BASSLINE[bar % BASSLINE.length], t, 0.24, 0.15); // bas
       if (beatNo % 4 === 2) snare(t);                            // tok snare
-      if (S.cornerBeats.has(beatNo)) {                           // KÖŞE vurgusu
-        osc('square', 220, t, 0.12, 0.22);
-        osc('sine', 880, t, 0.18, 0.2);
-      }
     } else {
       noise(t, 0.04, 0.14, 6500);                                // hi-hat
+    }
+    // KÖŞE vurgusu: yarım beat'e düşen köşeler dahil (8'lik ızgara).
+    if (S.cornerBeats.has(stepBeat)) {
+      osc('square', 220, t, 0.12, 0.22);
+      osc('sine', 880, t, 0.18, 0.2);
     }
     S.schedStep++; S.schedT += BEAT / 2;
   }
@@ -480,7 +501,8 @@ function reset() {
   S.score = 0; S.combo = 0;
   S.corners.length = 0; S.cornerBeats.clear(); gapIdx = 0;
   S.next = 0; S.pending = false;
-  S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * BEAT * SPEED;
+  S.speed = BASE_SPEED;
+  S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * BEAT * BASE_SPEED;
   S.genDir = 1; S.genT = LEAD_BEATS * BEAT;
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0 }];
@@ -594,6 +616,7 @@ function update(dt, dtRaw) {
         // Tam köşe anında (== bas vuruşu anında) dön.
         S.trail.push({ x: c.x, z: c.z });
         S.dirIdx = c.dirIdx;
+        S.speed = c.spd;               // başarılı dönüş: yeni segmentin hızı
         S.next++; S.pending = false;
         burst(c.x, c.z, 22, theme.glow);
         S.shake = 7;
@@ -614,8 +637,8 @@ function update(dt, dtRaw) {
     S.fallT += dt;
     S.fallVy -= 14 * dt;
     S.head.y += S.fallVy * dt;
-    S.head.x += S.fallDir.x * SPEED * 0.45 * dt;
-    S.head.z += S.fallDir.z * SPEED * 0.45 * dt;
+    S.head.x += S.fallDir.x * S.speed * 0.45 * dt;
+    S.head.z += S.fallDir.z * S.speed * 0.45 * dt;
     if (S.fallT > 1.0) gameOver();
   }
 
@@ -637,10 +660,12 @@ function update(dt, dtRaw) {
   // bile top geride kalmaz. Ek sigorta: top merkezden en fazla 2.1 birim
   // uzaklaşabilir — asla ekran dışına çıkamaz.
   const headPerp = (S.head.x + S.head.z) * Math.SQRT1_2;
-  camP += (headPerp - camP) * (1 - Math.exp(-3.0 * dtRaw));
+  // Yanal takip sertliği hızla ölçeklenir -> gecikme her hızda ~sabit kalır.
+  camP += (headPerp - camP) * (1 - Math.exp(-(3.0 * S.speed / BASE_SPEED) * dtRaw));
   const lag = headPerp - camP, MAX_LAG = 2.1;
   if (Math.abs(lag) > MAX_LAG) camP = headPerp - Math.sign(lag) * MAX_LAG;
-  if (S.mode === 'play') camA = SPEED * Math.SQRT1_2 * S.song;
+  // İleri eksen: topun çapraz izdüşümü (hız değişken olsa da süreklidir).
+  if (S.mode === 'play') camA = S.head.x * DIAG.x + S.head.z * DIAG.z;
   cam.fx = DIAG.x * camA + PERP.x * camP;
   cam.fz = DIAG.z * camA + PERP.z * camP;
   cam.x = cam.fx - DIAG.x * CAM.back;
