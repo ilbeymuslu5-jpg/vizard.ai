@@ -111,7 +111,7 @@
   <div id="score">SKOR: 0</div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v9</div>
+  <div id="ver">v10</div>
   <div id="diag"></div>
 </div>
 
@@ -286,6 +286,28 @@ function noise(t, dur, vol, hp) {
 }
 const BASSLINE = [55, 55, 65.4, 49]; // A1 A1 C2 G1 — bar başına kök nota
 
+// Sert elektronik kick: 350Hz -> 50Hz anlık pitch düşüşü + klik transienti.
+// Klik katmanı, bas frekans üretemeyen telefon hoparlörlerinde bile
+// vuruşun "hissedilmesini" sağlar.
+function kick(t) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(350, t);
+  o.frequency.exponentialRampToValueAtTime(50, t + 0.055);
+  g.gain.setValueAtTime(1.15, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+  o.connect(g).connect(master);
+  o.start(t); o.stop(t + 0.26);
+  noise(t, 0.018, 0.5, 2500);          // klik / attack transienti
+}
+
+// Tok snare: geniş bantlı gövde + tiz cızırtı + kısa ton gövdesi.
+function snare(t) {
+  noise(t, 0.18, 0.55, 900);           // ana gövde (daha dolgun, daha yüksek)
+  noise(t, 0.06, 0.35, 3200);          // tiz patlama
+  osc('triangle', 210, t, 0.09, 0.3, 130); // tonal tok vuruş
+}
+
 // ------------------------------------------------------ oyun durumu
 const S = {
   mode: 'menu',            // menu | play | fall | over
@@ -299,7 +321,7 @@ const S = {
   head: { x: 0, z: 0, y: 0 }, dirIdx: 1, // başlangıç yönü B (-z, ileri)
   trail: [],               // dönüş noktaları (dünya koordinatı)
   fallT: 0, fallVy: 0, fallDir: null,
-  shake: 0,
+  shake: 0, lastBeatNo: -999,
   particles: [],
   schedStep: 0, schedT: 0, schedTimer: 0,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
@@ -432,10 +454,10 @@ function schedule() {
     const onBeat = step % 2 === 0;
     const beatNo = step >> 1;
     if (onBeat) {
-      osc('sine', 150, t, 0.15, 0.95, 45);                       // kick
+      kick(t);                                                   // sert kick
       const bar = beatNo >> 2;
       osc('sawtooth', BASSLINE[bar % BASSLINE.length], t, 0.24, 0.15); // bas
-      if (beatNo % 4 === 2) noise(t, 0.14, 0.28, 1500);          // snare
+      if (beatNo % 4 === 2) snare(t);                            // tok snare
       if (S.cornerBeats.has(beatNo)) {                           // KÖŞE vurgusu
         osc('square', 220, t, 0.12, 0.22);
         osc('sine', 880, t, 0.18, 0.2);
@@ -462,7 +484,7 @@ function reset() {
   S.genDir = 1; S.genT = LEAD_BEATS * BEAT;
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0 }];
-  S.particles.length = 0; S.shake = 0;
+  S.particles.length = 0; S.shake = 0; S.lastBeatNo = -999;
   melodyIdx = 0;
   theme.cur = [...NEON[0]]; theme.tgt = NEON[0]; theme.step = 0;
   S.t0 = actx.currentTime + 0.12;
@@ -556,6 +578,15 @@ function update(dt, dtRaw) {
       S.t0 = actx.currentTime - S.song;   // ses dönünce sıçrama olmasın
     }
     genCorners(S.song + 20);
+
+    // Bas vuruşu anında kamera darbesi: oyun saati beat sınırını geçince
+    // (schedule() 150ms önden ses kuyrukladığı için tetik burada — duyulan
+    // vuruşla birebir eş zamanlı).
+    const beatNo = Math.floor(S.song / BEAT);
+    if (beatNo !== S.lastBeatNo) {
+      S.lastBeatNo = beatNo;
+      if (beatNo >= 0) S.shake = Math.max(S.shake, 4.5);
+    }
 
     const c = S.corners[S.next];
     if (S.song >= c.t) {
@@ -716,9 +747,11 @@ function draw(t) {
   ctx.save();
   if (S.shake > 0.3) ctx.translate((Math.random() - .5) * S.shake, (Math.random() - .5) * S.shake);
 
-  // Beat fazı: vuruş anında 1, sonraki vuruşa dek sönümlenir.
+  // Beat darbesi: vuruş anında 1'e FIRLAR, üssel olarak çok hızlı söner.
+  // (0.003^faz: fazın %25'inde ~%23'e, yarısında ~%5'e düşer — sert punch.)
   const tSrc = (S.mode === 'play' || S.mode === 'fall') ? S.song : t;
-  const beatP = Math.max(0, 1 - (((tSrc / BEAT) % 1) + 1) % 1 * 2.2);
+  const ph = (((tSrc / BEAT) % 1) + 1) % 1;
+  const beatP = Math.pow(0.003, ph);
   drawGrid(beatP);
   drawFloaters(t);
 
@@ -790,7 +823,7 @@ function draw(t) {
     const hp = ok ? proj(hv) : { x: W / 2, y: H * 0.6 };
     hp.x = Math.min(W - 34, Math.max(34, hp.x));
     hp.y = Math.min(H * 0.86, Math.max(H * 0.15, hp.y));
-    const beatPulse = 1 + 0.28 * Math.max(0, 1 - Math.abs((S.song / BEAT) % 1) * 3);
+    const beatPulse = 1 + 0.34 * beatP;   // top da aynı sert darbe eğrisiyle büyür
     let r = Math.max(10, (CAM.fl / Math.max(1.5, ok ? hv.z : 7.4)) * 0.34 * beatPulse);
     if (!isFinite(hp.x) || !isFinite(hp.y) || !isFinite(r)) {
       hp.x = W / 2; hp.y = H * 0.6; r = 22;
