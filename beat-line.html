@@ -138,6 +138,31 @@
     letter-spacing: 2px; color: #8dff3d; text-shadow: 0 0 12px rgba(140, 255, 60, .6);
   }
 
+  /* ---------- parça seçici ---------- */
+  #trackRow {
+    pointer-events: auto;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    width: min(320px, 86%); margin: 18px auto 0;
+  }
+  .tbtn {
+    pointer-events: auto; cursor: pointer;
+    width: 44px; height: 44px; border-radius: 50%;
+    font: inherit; font-size: 26px; font-weight: 800; color: #6df2ff;
+    background: rgba(10, 20, 40, .55);
+    border: 2px solid rgba(109, 242, 255, .5);
+    box-shadow: 0 0 12px rgba(90, 230, 255, .25);
+  }
+  .tbtn:active { transform: scale(.92); }
+  #trackMid { min-width: 170px; }
+  #trackName {
+    font-size: clamp(14px, 4.6em, 22px); font-weight: 800; letter-spacing: 2px;
+    color: #eaf6ff; text-shadow: 0 0 12px rgba(120, 220, 255, .5);
+  }
+  #trackBpm {
+    margin-top: 2px; font-size: clamp(10px, 3.2em, 14px); font-weight: 700;
+    letter-spacing: 2px; color: #9fdcff; opacity: .85;
+  }
+
   /* ---------- BEAT PASS kartı (modern battle-pass görünümü) ---------- */
   #passCard {
     pointer-events: auto;
@@ -206,6 +231,30 @@
   .card .nm { font-size: clamp(11px, 3.4em, 15px); font-weight: 700; letter-spacing: 1px; }
   .card .pr { font-size: clamp(11px, 3.4em, 15px); margin-top: 4px; color: #ffd76e; font-weight: 700; }
   .card.sel .pr { color: #8dff3d; }
+  .card .pr.gem { color: #8be9ff; }
+  .card .pr.kasa { color: #c86bff; }
+
+  /* ---------- kasa kutusu ---------- */
+  #crateBox {
+    width: min(320px, 88%); margin: 14px auto 4px;
+    padding: 10px 12px 14px;
+    background: linear-gradient(160deg, rgba(40, 18, 66, .7), rgba(14, 8, 30, .8));
+    border: 1.5px solid rgba(200, 107, 255, .45); border-radius: 14px;
+    box-shadow: 0 0 20px rgba(200, 107, 255, .18);
+  }
+  #crateBox h3 { margin: 2px 0 6px; color: #d9a8ff; }
+  #crateBox .btn { border-color: rgba(200, 107, 255, .6); color: #e8ccff; margin-top: 6px; }
+  #crateResult {
+    min-height: 22px; margin-top: 10px;
+    font-size: clamp(13px, 4.2em, 19px); font-weight: 800; letter-spacing: 1px;
+  }
+  #crateResult.r-chip { color: #ffd76e; text-shadow: 0 0 10px rgba(255,210,110,.6); }
+  #crateResult.r-gem  { color: #8be9ff; text-shadow: 0 0 10px rgba(139,233,255,.6); }
+  #crateResult.r-item { color: #8dff3d; text-shadow: 0 0 12px rgba(140,255,60,.7); }
+  #buyPrem {
+    display: inline-block; margin-top: 6px; cursor: pointer;
+    color: #ffd76e; text-decoration: underline;
+  }
 </style>
 </head>
 <body>
@@ -219,7 +268,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v20</div>
+  <div id="ver">v21</div>
   <div id="diag"></div>
 </div>
 
@@ -228,6 +277,11 @@
     <h1 id="title">BEAT&nbsp;LINE</h1>
     <p id="stats"></p>
     <p id="earned" class="hidden"></p>
+    <div id="trackRow">
+      <button class="tbtn" id="tPrev">&#8249;</button>
+      <div id="trackMid"><div id="trackName"></div><div id="trackBpm"></div></div>
+      <button class="tbtn" id="tNext">&#8250;</button>
+    </div>
     <div id="passCard">
       <div class="pass-head"><span>&#9889; BEAT PASS</span><span id="passLvl"></span></div>
       <div id="passBar"><div id="passFill"></div></div>
@@ -238,11 +292,18 @@
   </div>
   <div id="shop" class="hidden">
     <h2>MAĞAZA</h2>
-    <div id="chipsRow">&#11041; <span id="chips">0</span> ÇİP</div>
+    <div id="chipsRow">&#11041; <span id="chips">0</span> ÇİP &nbsp;•&nbsp; 💎 <span id="gems">0</span></div>
+    <div id="crateBox">
+      <h3>&#128142; ŞANS KASASI</h3>
+      <button class="btn" id="btnCrate">KASAYI AÇ — 💎 150</button>
+      <div id="crateResult"></div>
+    </div>
     <h3>KOSTÜMLER</h3>
     <div id="skinGrid" class="grid"></div>
     <h3>IŞIKLAR</h3>
     <div id="lightGrid" class="grid"></div>
+    <h3>AKSESUARLAR</h3>
+    <div id="accGrid" class="grid"></div>
     <button class="btn" id="btnBack">&larr; GERİ</button>
   </div>
 </div>
@@ -260,8 +321,9 @@
    ===================================================================== */
 
 // ------------------------------------------------------ sabitler
-const BPM        = 120;
-const BEAT       = 60 / BPM;        // saniye
+// BPM/BEAT artık seçili parçaya göre değişir (applyTrack ayarlar).
+let BPM  = 120;
+let BEAT = 60 / BPM;                // saniye
 // Dinamik hız: her başarılı dönüşte artar, tavan 17. Hız yalnızca köşe
 // anında değiştiği için her segment SABİT kendi hızıyla koşulur; segment
 // uzunlukları o hızla üretildiğinden beat senkronu asla bozulmaz.
@@ -282,9 +344,39 @@ const BLOCK_H    = 3.2;             // platform bloklarının derinliği
 
 // Ritim vuruş dizisi: köşeler arası beat sayıları (döngüyle tekrar eder).
 // Bu dizi hem yolun şeklini hem müzikteki vurgu anlarını belirler.
-// 4+ beat'lik düzlükler HOLD şeridi olur: başında bas, köşede tam ritimde bırak.
-const GAPS = [2, 2, 1, 1, 4, 1, 1, 1, 0.5, 0.5, 1, 2, 6, 1, 0.5, 0.5, 2, 1, 1, 4];
+// ---------- PARÇALAR: her parçanın kendi temposu, ritim dizisi (= harita
+// düzeni), bas hattı, davul stili ve dönüş melodisi vardır. Hepsi bu koda
+// özgü, sentezlenmiş özgün kalıplardır. 4+ beat'lik düzlükler HOLD şeridi.
 const HOLD_MIN_GAP = 4;
+const TRACKS = [
+  { name: 'NEON RUSH', bpm: 120,
+    gaps: [2, 2, 1, 1, 4, 1, 1, 1, 0.5, 0.5, 1, 2, 6, 1, 0.5, 0.5, 2, 1, 1, 4],
+    bass: [55, 55, 65.4, 49],                       // A1 A1 C2 G1
+    melody: [261.63, 293.66, 329.63, 392.0, 440.0], // C maj pentatonik
+    hat: 'norm',  snareBeat: 2, stab: [220, 880] },
+  { name: 'MIDNIGHT DRIVE', bpm: 100,
+    gaps: [4, 2, 2, 4, 1, 1, 2, 6, 2, 1, 1, 2, 4, 2, 2, 2],
+    bass: [43.65, 43.65, 51.91, 58.27],             // F1 F1 G#1 A#1
+    melody: [220, 261.63, 293.66, 329.63, 392.0],   // A min pentatonik
+    hat: 'sparse', snareBeat: 3, stab: [174.6, 698.5] },
+  { name: 'ACID CIRCUIT', bpm: 140,
+    gaps: [1, 1, 2, 1, 1, 0.5, 0.5, 1, 2, 1, 1, 1, 4, 1, 0.5, 0.5, 1, 1, 2, 1],
+    bass: [61.74, 61.74, 73.42, 82.41],             // B1 B1 D2 E2
+    melody: [293.66, 329.63, 369.99, 440.0, 493.88],
+    hat: 'dense', snareBeat: 2, stab: [246.9, 987.8] },
+  { name: 'COSMOS FLOW', bpm: 90,
+    gaps: [4, 4, 2, 6, 2, 2, 4, 2, 1, 1, 4, 2, 2, 4],
+    bass: [49, 49, 58.27, 65.41],                   // G1 G1 A#1 C2
+    melody: [196, 233.08, 261.63, 293.66, 349.23],
+    hat: 'sparse', snareBeat: 2, stab: [196, 784] },
+];
+let TR = TRACKS[0];
+let GAPS = TR.gaps;
+function applyTrack() {
+  TR = TRACKS[save.track % TRACKS.length];
+  BPM = TR.bpm; BEAT = 60 / BPM;
+  GAPS = TR.gaps;
+}
 
 // İki gidiş yönü (klasik zigzag): A = +x, B = -z. Çapraz = kamera ekseni.
 const DIR = [ {x:1, z:0}, {x:0, z:-1} ];
@@ -336,84 +428,195 @@ function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
 
-// Başarılı dönüş melodisi: pentatonik dizi, kombo bozulunca başa döner.
-const MELODY = [261.63, 293.66, 329.63, 392.0, 440.0];
+// Başarılı dönüş melodisi: seçili parçanın dizisi, kombo bozulunca başa döner.
 let melodyIdx = 0;
 
 
-// ---------- Mağaza katalogları: kostümler (top çekirdeği) ve ışıklar
-// (karakterin arkasından çıkan huzme + iz aurası). Fiyat birimi: ÇİP.
+// ---------- Mağaza katalogları. Para birimleri: ÇİP (price), ELMAS (gem).
+// src:'kasa' olan öğeler satın alınamaz, yalnızca kasadan çıkar.
 const SKINS = [
-  { id: 'klasik',    name: 'Klasik',    price: 0,   core: '#ffffff' },
-  { id: 'altin',     name: 'Altın',     price: 120, core: '#ffd76e' },
-  { id: 'lav',       name: 'Lav',       price: 160, core: '#ff7a4d' },
-  { id: 'buz',       name: 'Buz',       price: 160, core: '#bfeaff' },
-  { id: 'zumrut',    name: 'Zümrüt',    price: 200, core: '#7dffb0' },
-  { id: 'gokkusagi', name: 'Gökkuşağı', price: 400, core: 'rainbow' },
+  { id: 'klasik',    name: 'Klasik',     price: 0,   core: '#ffffff' },
+  { id: 'altin',     name: 'Altın',      price: 120, core: '#ffd76e' },
+  { id: 'lav',       name: 'Lav',        price: 160, core: '#ff7a4d' },
+  { id: 'buz',       name: 'Buz',        price: 160, core: '#bfeaff' },
+  { id: 'zumrut',    name: 'Zümrüt',     price: 200, core: '#7dffb0' },
+  { id: 'npembe',    name: 'Neon Pembe', price: 220, core: '#ff7ad0' },
+  { id: 'toksik',    name: 'Toksik',     price: 260, core: '#c8ff3d' },
+  { id: 'okyanus',   name: 'Okyanus',    price: 260, core: '#4da2ff' },
+  { id: 'gece',      name: 'Gece',       price: 300, core: '#39406b' },
+  { id: 'gokkusagi', name: 'Gökkuşağı',  price: 400, core: 'rainbow' },
+  // ELMAS'a özel kostümler (çift renkli çekirdek)
+  { id: 'plazma',    name: 'Plazma',     gem: 250,  core: ['#8be9ff', '#c86bff'] },
+  { id: 'nebula',    name: 'Nebula',     gem: 400,  core: ['#ff7ad0', '#4da2ff'] },
+  { id: 'hologram',  name: 'Hologram',   gem: 600,  core: ['#ffffff', '#7dffb0'] },
+  // Yalnızca KASA'dan
+  { id: 'krom',      name: 'Krom',       src: 'kasa', core: ['#f2f6ff', '#8fa4c8'] },
+  { id: 'inci',      name: 'İnci',       src: 'kasa', core: ['#fff6e8', '#ffc8e8'] },
+  { id: 'volt',      name: 'Volt',       src: 'kasa', core: ['#fdff8a', '#3dffec'] },
 ];
 const LIGHTS = [
-  { id: 'tema',  name: 'Tema İzi',     price: 0,   col: null },  // tema rengini izler
-  { id: 'pembe', name: 'Pembe Kuyruk', price: 100, col: '255,80,190' },
-  { id: 'yesil', name: 'Asit Yeşili',  price: 140, col: '120,255,80' },
-  { id: 'mor',   name: 'Mor Duman',    price: 140, col: '190,90,255' },
-  { id: 'altin', name: 'Altın Şerit',  price: 220, col: '255,210,90' },
-  { id: 'beyaz', name: 'Saf Beyaz',    price: 260, col: '240,250,255' },
+  { id: 'tema',    name: 'Tema İzi',      price: 0,   col: null },
+  { id: 'pembe',   name: 'Pembe Kuyruk',  price: 100, col: '255,80,190' },
+  { id: 'yesil',   name: 'Asit Yeşili',   price: 140, col: '120,255,80' },
+  { id: 'mor',     name: 'Mor Duman',     price: 140, col: '190,90,255' },
+  { id: 'kirmizi', name: 'Kızıl Alev',    price: 180, col: '255,70,70' },
+  { id: 'turkuaz', name: 'Turkuaz Akış',  price: 200, col: '0,255,200' },
+  { id: 'altin',   name: 'Altın Şerit',   price: 220, col: '255,210,90' },
+  { id: 'beyaz',   name: 'Saf Beyaz',     price: 260, col: '240,250,255' },
+  // ELMAS'a özel
+  { id: 'aurora',  name: 'Aurora',        gem: 300,  col: 'aurora' },   // renk döngüsü
+  { id: 'lazer',   name: 'Çift Lazer',    gem: 450,  col: '255,40,120' },
+  // Yalnızca KASA'dan
+  { id: 'gunbat',  name: 'Gün Batımı',    src: 'kasa', col: '255,140,60' },
+  { id: 'buzmavi', name: 'Buz Mavisi',    src: 'kasa', col: '150,220,255' },
 ];
+// AKSESUARLAR: topun etrafında çizilen süsler.
+const ACCS = [
+  { id: 'yok',    name: 'Yok',          price: 0 },
+  { id: 'halka',  name: 'Neon Halka',   gem: 200 },
+  { id: 'uydu',   name: 'İkiz Uydu',    gem: 350 },
+  { id: 'yildiz', name: 'Tepe Yıldızı', gem: 500 },
+  { id: 'taci',   name: 'Neon Taç',     src: 'kasa' },
+  { id: 'elmas',  name: 'Elmas Uydu',   src: 'kasa' },
+];
+// Kasa ödül havuzu için yardımcılar
+const CRATE_COST = 150;   // elmas
+function cratePool(cat, list) {
+  return list.filter(i => i.src === 'kasa').map(i => ({ cat, it: i }));
+}
 
-// Kalıcı kayıt (çipler, sahip olunanlar, seçili öğeler).
+// Kalıcı kayıt (çipler, elmaslar, pass, sahip olunanlar, seçili öğeler).
 const save = (() => {
   let owned;
   try { owned = JSON.parse(localStorage.getItem('bl_owned') || ''); } catch (e) { owned = null; }
   if (!owned || !owned.skins || !owned.lights) owned = { skins: ['klasik'], lights: ['tema'] };
+  if (!owned.acc) owned.acc = ['yok'];
   return {
     chips: +(localStorage.getItem('bl_chips') || 0),
+    gems: +(localStorage.getItem('bl_gems') || 0),
     owned,
     skin: localStorage.getItem('bl_skin') || 'klasik',
     light: localStorage.getItem('bl_light') || 'tema',
+    acc: localStorage.getItem('bl_acc') || 'yok',
+    track: +(localStorage.getItem('bl_track') || 0),
+    xp: +(localStorage.getItem('bl_xp') || 0),
+    premium: localStorage.getItem('bl_prem') === '1',
+    claimedLvl: +(localStorage.getItem('bl_clvl') || 0),
   };
 })();
 function persist() {
   localStorage.setItem('bl_chips', save.chips);
+  localStorage.setItem('bl_gems', save.gems);
   localStorage.setItem('bl_owned', JSON.stringify(save.owned));
   localStorage.setItem('bl_skin', save.skin);
   localStorage.setItem('bl_light', save.light);
+  localStorage.setItem('bl_acc', save.acc);
+  localStorage.setItem('bl_track', save.track);
   localStorage.setItem('bl_xp', save.xp);
-  localStorage.setItem('bl_pass', save.passClaimed);
+  localStorage.setItem('bl_prem', save.premium ? '1' : '0');
+  localStorage.setItem('bl_clvl', save.claimedLvl);
 }
-save.xp = +(localStorage.getItem('bl_xp') || 0);
-save.passClaimed = +(localStorage.getItem('bl_pass') || 0);
 
-// BEAT PASS kademeleri: toplam XP (birikmiş skor) ile otomatik açılır.
-const PASS = [
-  { xp: 500,   type: 'chips', amt: 50,          label: '⬡ 50' },
-  { xp: 1200,  type: 'light', id: 'pembe',      label: 'Pembe Kuyruk Işığı' },
-  { xp: 2200,  type: 'chips', amt: 100,         label: '⬡ 100' },
-  { xp: 3500,  type: 'skin',  id: 'buz',        label: 'Buz Kostümü' },
-  { xp: 5000,  type: 'chips', amt: 150,         label: '⬡ 150' },
-  { xp: 7000,  type: 'light', id: 'mor',        label: 'Mor Duman Işığı' },
-  { xp: 9500,  type: 'chips', amt: 250,         label: '⬡ 250' },
-  { xp: 12500, type: 'skin',  id: 'gokkusagi',  label: 'Gökkuşağı Kostümü' },
+// ---------- BEAT PASS: 100 seviye, seviye başına 250 XP.
+// Ücretsiz pass: seviye başına 20 elmas  -> 100 seviyede toplam 2.000.
+// Premium pass: seviye başına +80 elmas -> 100 seviyede toplam 10.000.
+const PASS_MAX = 100, PASS_XP = 250;
+const GEM_FREE = 20, GEM_PREM = 80;
+const PREMIUM_PRICE = 1500;   // çip
+// Kademe hediyesi kozmetikler (seviyeye ulaşınca otomatik açılır).
+const PASS_MILES = [
+  { lvl: 25,  premium: true,  cat: 'skins',  id: 'plazma', label: 'Plazma Kostümü' },
+  { lvl: 50,  premium: false, cat: 'acc',    id: 'halka',  label: 'Neon Halka' },
+  { lvl: 50,  premium: true,  cat: 'lights', id: 'aurora', label: 'Aurora Işığı' },
+  { lvl: 100, premium: true,  cat: 'skins',  id: 'nebula', label: 'Nebula Kostümü' },
 ];
-// XP eşiği geçilen kademelerin ödüllerini ver; açılanların etiketlerini döndür.
-function claimPassTiers() {
-  const got = [];
-  while (save.passClaimed < PASS.length && save.xp >= PASS[save.passClaimed].xp) {
-    const tier = PASS[save.passClaimed];
-    if (tier.type === 'chips') save.chips += tier.amt;
-    else if (tier.type === 'skin' && !save.owned.skins.includes(tier.id)) save.owned.skins.push(tier.id);
-    else if (tier.type === 'light' && !save.owned.lights.includes(tier.id)) save.owned.lights.push(tier.id);
-    got.push(tier.label);
-    save.passClaimed++;
+function passLevel() { return Math.min(PASS_MAX, Math.floor(save.xp / PASS_XP)); }
+// Yeni seviyelerin ödüllerini ver; kazanım özet listesi döndürür.
+function claimPassLevels() {
+  const lvl = passLevel();
+  if (lvl <= save.claimedLvl) return [];
+  const nLvls = lvl - save.claimedLvl;
+  let gems = nLvls * GEM_FREE + (save.premium ? nLvls * GEM_PREM : 0);
+  const got = ['+' + gems + ' 💎'];
+  save.gems += gems;
+  for (const m of PASS_MILES) {
+    if (m.lvl > save.claimedLvl && m.lvl <= lvl && (!m.premium || save.premium) &&
+        !save.owned[m.cat].includes(m.id)) {
+      save.owned[m.cat].push(m.id);
+      got.push(m.label);
+    }
   }
+  save.claimedLvl = lvl;
   return got;
 }
-function skinCore(t) {
+// Premium satın alma: geçmiş seviyelerin premium elmasları geriye dönük verilir.
+function buyPremium() {
+  if (save.premium || save.chips < PREMIUM_PRICE) return false;
+  save.chips -= PREMIUM_PRICE;
+  save.premium = true;
+  save.gems += save.claimedLvl * GEM_PREM;
+  for (const m of PASS_MILES) {
+    if (m.premium && m.lvl <= save.claimedLvl && !save.owned[m.cat].includes(m.id))
+      save.owned[m.cat].push(m.id);
+  }
+  persist();
+  return true;
+}
+
+// ---------- KASA: elmasla açılır, rastgele ödül verir.
+function openCrate() {
+  if (save.gems < CRATE_COST) return null;
+  save.gems -= CRATE_COST;
+  const r = Math.random();
+  let result;
+  if (r < 0.40) {
+    const amt = 100 + Math.floor(Math.random() * 201);
+    save.chips += amt;
+    result = { label: '⬡ ' + amt + ' ÇİP', cls: 'r-chip' };
+  } else if (r < 0.60) {
+    const amt = 40 + Math.floor(Math.random() * 61);
+    save.gems += amt;
+    result = { label: '💎 ' + amt + ' ELMAS', cls: 'r-gem' };
+  } else {
+    const pool = r < 0.85
+      ? [...cratePool('skins', SKINS), ...cratePool('lights', LIGHTS)]
+      : cratePool('acc', ACCS);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (save.owned[pick.cat].includes(pick.it.id)) {
+      save.chips += 250;   // kopya -> çipe çevrilir
+      result = { label: pick.it.name + ' (KOPYA) → ⬡ 250', cls: 'r-chip' };
+    } else {
+      save.owned[pick.cat].push(pick.it.id);
+      result = { label: '✨ ' + pick.it.name + ' AÇILDI!', cls: 'r-item' };
+    }
+  }
+  persist();
+  return result;
+}
+// Kostüm çekirdeği: düz renk, gökkuşağı döngüsü veya çift renkli gradyan.
+function skinCore(t, hp, r) {
   const s = SKINS.find(x => x.id === save.skin) || SKINS[0];
-  return s.core === 'rainbow' ? 'hsl(' + (((t * 90) % 360) | 0) + ',100%,72%)' : s.core;
+  if (s.core === 'rainbow') return 'hsl(' + (((t * 90) % 360) | 0) + ',100%,72%)';
+  if (Array.isArray(s.core)) {
+    const g = ctx.createRadialGradient(hp.x - r * 0.4, hp.y - r * 0.4, 0, hp.x, hp.y, r * 1.15);
+    g.addColorStop(0, s.core[0]);
+    g.addColorStop(1, s.core[1]);
+    return g;
+  }
+  return s.core;
 }
 function lightCol(alpha) {
   const L = LIGHTS.find(x => x.id === save.light) || LIGHTS[0];
-  return L.col ? 'rgba(' + L.col + ',' + alpha + ')' : themeRgba(alpha);
+  if (!L.col) return themeRgba(alpha);
+  if (L.col === 'aurora')   // renk döngülü özel ışık
+    return 'hsla(' + ((performance.now() / 18) % 360 | 0) + ',100%,68%,' + alpha + ')';
+  return 'rgba(' + L.col + ',' + alpha + ')';
+}
+// Kart önizleme rengi (mağaza)
+function swatchCol(it) {
+  if (!it.col) return '84,241,255';
+  if (it.col === 'aurora') return '120,255,200';
+  return it.col;
 }
 
 // ------------------------------------------------------ canvas / 9:16 sahne
@@ -497,7 +700,7 @@ function noise(t, dur, vol, hp) {
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur);
 }
-const BASSLINE = [55, 55, 65.4, 49]; // A1 A1 C2 G1 — bar başına kök nota
+// Bas hattı ve davul stili artık seçili parçadan (TR) okunur.
 
 // Sert elektronik kick: 350Hz -> 50Hz anlık pitch düşüşü + klik transienti.
 // Klik katmanı, bas frekans üretemeyen telefon hoparlörlerinde bile
@@ -774,6 +977,58 @@ for (let i = 0; i < 20; i++) {
   });
 }
 
+// Seçili AKSESUARI topun etrafına çiz (ekran uzayında, ucuz primitifler).
+function drawAccessory(hp, r, t) {
+  const id = save.acc;
+  if (id === 'yok') return;
+  if (id === 'halka') {                       // dönen neon halka
+    ctx.strokeStyle = lightCol(0.8);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(hp.x, hp.y, r * 2.0, r * 0.72, Math.sin(t * 1.4) * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (id === 'uydu') {                 // iki yörünge uydusu
+    for (let k = 0; k < 2; k++) {
+      const a = t * 2.6 + k * Math.PI;
+      ctx.fillStyle = k ? '#ff7ad0' : '#7de8ff';
+      ctx.beginPath();
+      ctx.arc(hp.x + Math.cos(a) * r * 2.0, hp.y + Math.sin(a) * r * 0.75, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (id === 'yildiz') {               // tepede süzülen yıldız
+    const y = hp.y - r * 2.3 + Math.sin(t * 3) * r * 0.18;
+    ctx.fillStyle = '#ffe98a';
+    ctx.beginPath();
+    for (let k = 0; k < 8; k++) {
+      const a = k * Math.PI / 4 - Math.PI / 2;
+      const rr = (k % 2 === 0 ? 0.55 : 0.22) * r;
+      const x = hp.x + Math.cos(a) * rr, yy = y + Math.sin(a) * rr;
+      k ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
+    }
+    ctx.closePath(); ctx.fill();
+  } else if (id === 'taci') {                 // üç sivri neon taç
+    ctx.fillStyle = '#ffd76e';
+    for (let k = -1; k <= 1; k++) {
+      const bx = hp.x + k * r * 0.62, by = hp.y - r * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(bx - r * 0.26, by);
+      ctx.lineTo(bx + r * 0.26, by);
+      ctx.lineTo(bx, by - r * (k === 0 ? 0.85 : 0.6));
+      ctx.closePath(); ctx.fill();
+    }
+  } else if (id === 'elmas') {                // yörüngede dönen elmas
+    const a = t * 2.2;
+    const x = hp.x + Math.cos(a) * r * 2.1, y = hp.y + Math.sin(a) * r * 0.8;
+    ctx.fillStyle = '#8be9ff';
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 0.34);
+    ctx.lineTo(x + r * 0.26, y);
+    ctx.lineTo(x, y + r * 0.34);
+    ctx.lineTo(x - r * 0.26, y);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
 // 8 köşeli neon küp (telkafes, Y ekseninde döner).
 function drawNeonCube(wx, wy, wz, s, a, col) {
   const ca = Math.cos(a), sa = Math.sin(a);
@@ -850,15 +1105,17 @@ function schedule() {
     if (onBeat) {
       kick(t);                                                   // sert kick
       const bar = beatNo >> 2;
-      osc('sawtooth', BASSLINE[bar % BASSLINE.length], t, 0.24, 0.15); // bas
-      if (beatNo % 4 === 2) snare(t);                            // tok snare
+      osc('sawtooth', TR.bass[bar % TR.bass.length], t, 0.24, 0.15); // bas
+      if (beatNo % 4 === TR.snareBeat) snare(t);                 // tok snare
+      if (TR.hat === 'dense') noise(t, 0.03, 0.07, 7500);        // ekstra tık
     } else {
-      noise(t, 0.04, 0.14, 6500);                                // hi-hat
+      // hi-hat yoğunluğu parçaya göre
+      if (TR.hat !== 'sparse' || beatNo % 2 === 0) noise(t, 0.04, 0.14, 6500);
     }
     // KÖŞE vurgusu: yarım beat'e düşen köşeler dahil (8'lik ızgara).
     if (S.cornerBeats.has(stepBeat)) {
-      osc('square', 220, t, 0.12, 0.22);
-      osc('sine', 880, t, 0.18, 0.2);
+      osc('square', TR.stab[0], t, 0.12, 0.22);
+      osc('sine', TR.stab[1], t, 0.18, 0.2);
     }
     S.schedStep++;
   }
@@ -871,8 +1128,9 @@ const overlay = $('overlay'), titleEl = $('title'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
       menuScr = $('menuScr'), shopScr = $('shop'), chipsEl = $('chips'),
-      skinGrid = $('skinGrid'), lightGrid = $('lightGrid'),
-      btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack');
+      skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
+      btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
+      btnCrate = $('btnCrate'), crateResult = $('crateResult');
 const heartEls = livesEl.querySelectorAll('span');
 
 function updateHearts() {
@@ -896,8 +1154,12 @@ function loseHeart(msg) {
 
 function reset() {
   S.mode = 'play';
+  applyTrack();   // seçili parçanın temposu, ritmi ve sesleri
   S.score = 0; S.combo = 0;
-  S.corners.length = 0; S.cornerBeats.clear(); gapIdx = 0;
+  S.corners.length = 0; S.cornerBeats.clear();
+  // Harita her oyunda ritim dizisinin rastgele bir noktasından başlar ->
+  // aynı parçada bile her koşu farklı dizilir.
+  gapIdx = Math.floor(Math.random() * GAPS.length);
   S.next = 0; S.pending = false;
   S.speed = BASE_SPEED;
   S.holding = false;
@@ -946,29 +1208,42 @@ function showMenu() {
   titleEl.textContent = 'BEAT LINE';
   titleEl.classList.remove('dead');
   earnedEl.classList.add('hidden');
-  statsEl.textContent = 'REKOR: ' + S.best + '   ⬡ ' + save.chips + ' ÇİP';
+  statsEl.textContent = 'REKOR: ' + S.best + '  •  ⬡ ' + save.chips + '  •  💎 ' + save.gems;
   btnPlay.innerHTML = '&#9654; OYNA';
   renderPass();
+  renderTrack();
   menuScr.classList.remove('hidden');
   shopScr.classList.add('hidden');
   overlay.classList.remove('hidden');
 }
 
-// BEAT PASS kartını güncelle: seviye, ilerleme çubuğu, sıradaki ödül.
+function renderTrack() {
+  const T = TRACKS[save.track % TRACKS.length];
+  $('trackName').textContent = '♪ ' + T.name;
+  $('trackBpm').textContent = T.bpm + ' BPM';
+}
+
+// BEAT PASS kartı: 100 seviye, ücretsiz/premium durumu, premium satın alma.
 function renderPass() {
-  const lvl = save.passClaimed;
-  $('passLvl').textContent = 'SEVİYE ' + lvl + '/' + PASS.length;
-  if (lvl >= PASS.length) {
-    $('passFill').style.width = '100%';
-    $('passNext').textContent = 'Tüm ödüller açıldı!';
-    return;
-  }
-  const prev = lvl > 0 ? PASS[lvl - 1].xp : 0;
-  const next = PASS[lvl];
-  const p = Math.min(1, (save.xp - prev) / (next.xp - prev));
-  $('passFill').style.width = (p * 100).toFixed(1) + '%';
-  $('passNext').textContent = 'Sonraki ödül: ' + next.label + '  •  ' +
-    Math.max(0, next.xp - save.xp) + ' XP kaldı';
+  const lvl = passLevel();
+  $('passLvl').textContent = 'SEVİYE ' + lvl + '/' + PASS_MAX +
+    (save.premium ? ' ★' : '');
+  const p = lvl >= PASS_MAX ? 1 : (save.xp - lvl * PASS_XP) / PASS_XP;
+  $('passFill').style.width = (Math.min(1, p) * 100).toFixed(1) + '%';
+  const perLvl = GEM_FREE + (save.premium ? GEM_PREM : 0);
+  $('passNext').innerHTML = lvl >= PASS_MAX
+    ? 'Tüm seviyeler tamamlandı!'
+    : 'Seviye başına 💎 ' + perLvl + '  •  sonrakine ' +
+      (PASS_XP - (save.xp - lvl * PASS_XP)) + ' XP' +
+      (save.premium ? '' :
+        '<br><span id="buyPrem">★ PREMIUM PASS AL — ⬡ ' + PREMIUM_PRICE +
+        ' (seviye başına 💎 ' + (GEM_FREE + GEM_PREM) + ')</span>');
+  const bp = $('buyPrem');
+  if (bp) bp.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    if (buyPremium()) { vibrate(40); showMenu(); }
+    else { bp.style.color = '#ff5f7a'; setTimeout(renderPass, 300); }
+  });
 }
 
 function showShop() {
@@ -980,36 +1255,63 @@ function showShop() {
 
 function renderShop() {
   chipsEl.textContent = save.chips;
-  skinGrid.innerHTML = ''; lightGrid.innerHTML = '';
+  $('gems').textContent = save.gems;
+  skinGrid.innerHTML = ''; lightGrid.innerHTML = ''; accGrid.innerHTML = '';
   for (const it of SKINS) skinGrid.appendChild(shopCard(it, 'skins'));
   for (const it of LIGHTS) lightGrid.appendChild(shopCard(it, 'lights'));
+  for (const it of ACCS) accGrid.appendChild(shopCard(it, 'acc'));
+}
+
+function selOf(cat) { return cat === 'skins' ? save.skin : cat === 'lights' ? save.light : save.acc; }
+function setSel(cat, id) {
+  if (cat === 'skins') save.skin = id;
+  else if (cat === 'lights') save.light = id;
+  else save.acc = id;
 }
 
 function shopCard(it, cat) {
   const owned = save.owned[cat].includes(it.id);
-  const selId = cat === 'skins' ? save.skin : save.light;
+  const selId = selOf(cat);
   const d = document.createElement('div');
   d.className = 'card' + (selId === it.id ? ' sel' : '');
-  const sw = cat === 'skins'
-    ? '<div class="sw" style="background:' +
-      (it.core === 'rainbow'
-        ? 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red);color:#fff'
-        : it.core + ';color:' + it.core) + '"></div>'
-    : '<div class="swl" style="background:rgba(' + (it.col || '84,241,255') +
-      ',.95);box-shadow:0 0 12px rgba(' + (it.col || '84,241,255') + ',.9)"></div>';
+  let sw;
+  if (cat === 'skins') {
+    const bg = it.core === 'rainbow'
+      ? 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red)'
+      : Array.isArray(it.core)
+        ? 'linear-gradient(135deg,' + it.core[0] + ',' + it.core[1] + ')'
+        : it.core;
+    const glow = Array.isArray(it.core) ? it.core[0] : (it.core === 'rainbow' ? '#fff' : it.core);
+    sw = '<div class="sw" style="background:' + bg + ';color:' + glow + '"></div>';
+  } else if (cat === 'lights') {
+    const c = swatchCol(it);
+    sw = '<div class="swl" style="background:rgba(' + c + ',.95);box-shadow:0 0 12px rgba(' + c + ',.9)"></div>';
+  } else {
+    const icons = { yok: '&#8709;', halka: '&#9678;', uydu: '&#9737;', yildiz: '&#9733;', taci: '&#9819;', elmas: '&#128142;' };
+    sw = '<div class="sw" style="background:#101a30;color:#8be9ff;display:flex;align-items:center;justify-content:center;font-size:20px">' + (icons[it.id] || '?') + '</div>';
+  }
+  const priceHtml = owned
+    ? (selId === it.id ? 'SEÇİLİ' : 'SEÇ')
+    : it.src === 'kasa' ? '<span class="kasa">KASADAN</span>'
+    : it.gem ? '<span class="gem">💎 ' + it.gem + '</span>'
+    : '⬡ ' + it.price;
   d.innerHTML = sw + '<div class="nm">' + it.name + '</div>' +
-    '<div class="pr">' + (owned ? (selId === it.id ? 'SEÇİLİ' : 'SEÇ') : '⬡ ' + it.price) + '</div>';
+    '<div class="pr">' + priceHtml + '</div>';
   d.addEventListener('pointerdown', e => {
     e.stopPropagation();
     if (owned) {
-      if (cat === 'skins') save.skin = it.id; else save.light = it.id;
-    } else if (save.chips >= it.price) {
-      save.chips -= it.price;
+      setSel(cat, it.id);
+    } else if (it.src === 'kasa') {
+      d.style.borderColor = '#c86bff';       // yalnızca kasadan çıkar
+      setTimeout(renderShop, 300);
+      return;
+    } else if (it.gem ? save.gems >= it.gem : save.chips >= it.price) {
+      if (it.gem) save.gems -= it.gem; else save.chips -= it.price;
       save.owned[cat].push(it.id);
-      if (cat === 'skins') save.skin = it.id; else save.light = it.id;
+      setSel(cat, it.id);
       vibrate(25);
     } else {
-      d.style.borderColor = '#ff5f7a';       // yetersiz çip
+      d.style.borderColor = '#ff5f7a';       // yetersiz bakiye
       setTimeout(renderShop, 260);
       return;
     }
@@ -1026,16 +1328,17 @@ function gameOver() {
   // Para: dönüş başına kazanılan çipler (PERFECT 3, GOOD 2).
   save.chips += S.runChips;
   save.xp += S.score;
-  const passRewards = claimPassTiers();
+  const passRewards = claimPassLevels();
   persist();
   titleEl.textContent = 'OYUN BİTTİ';
   titleEl.classList.add('dead');
   statsEl.textContent = 'SKOR: ' + S.score + '   REKOR: ' + S.best;
   earnedEl.innerHTML = '+' + S.runChips + ' ⬡ ÇİP' +
-    (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') + ' AÇILDI!' : '');
+    (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') : '');
   earnedEl.classList.remove('hidden');
   btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
   renderPass();
+  renderTrack();
   menuScr.classList.remove('hidden');
   shopScr.classList.add('hidden');
   overlay.classList.remove('hidden');
@@ -1066,7 +1369,7 @@ function turnSuccess(dt) {
   runChipsEl.textContent = '⬡ ' + S.runChips;
   showPopup(kind);
   // Melodik dönüş: pentatonik dizinin sıradaki notası (PERFECT'te oktav süsü).
-  const f = MELODY[melodyIdx % MELODY.length];
+  const f = TR.melody[melodyIdx % TR.melody.length];
   melodyIdx++;
   osc('sine', f, actx.currentTime, 0.22, 0.26);
   if (kind === 'perfect') osc('sine', f * 2, actx.currentTime + 0.04, 0.18, 0.12);
@@ -1155,6 +1458,33 @@ addEventListener('keyup', e => {
 btnPlay.addEventListener('pointerdown', e => { e.stopPropagation(); startGame(); });
 btnShop.addEventListener('pointerdown', e => { e.stopPropagation(); showShop(); });
 btnBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
+btnCrate.addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  const res = openCrate();
+  if (!res) {
+    crateResult.className = '';
+    crateResult.textContent = 'Yetersiz elmas! (💎 ' + CRATE_COST + ' gerekli)';
+    crateResult.style.color = '#ff5f7a';
+    return;
+  }
+  crateResult.style.color = '';
+  crateResult.className = res.cls;
+  crateResult.textContent = res.label;
+  vibrate([30, 40, 30]);
+  chipsEl.textContent = save.chips;
+  $('gems').textContent = save.gems;
+  renderShop();
+});
+$('tPrev').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  save.track = (save.track + TRACKS.length - 1) % TRACKS.length;
+  persist(); renderTrack();
+});
+$('tNext').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  save.track = (save.track + 1) % TRACKS.length;
+  persist(); renderTrack();
+});
 
 // ------------------------------------------------------ güncelleme
 function update(dt, dtRaw) {
@@ -1547,12 +1877,13 @@ function draw(t) {
     }
 
     // KARAKTER: parlak yuvarlak top — kostüm renginde çekirdek + hale + halka.
-    ctx.fillStyle = skinCore(t);
+    ctx.fillStyle = skinCore(t, hp, r);
     ctx.shadowColor = theme.glow; ctx.shadowBlur = 24;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,.55)';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 1.55, 0, Math.PI * 2); ctx.stroke();
+    drawAccessory(hp, r, t);
   }
   ctx.shadowBlur = 0;
 
