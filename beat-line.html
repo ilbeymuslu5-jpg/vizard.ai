@@ -126,7 +126,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v15</div>
+  <div id="ver">v16</div>
   <div id="diag"></div>
 </div>
 
@@ -188,7 +188,7 @@ const C = {
   glow:  '#54f1ff', glowDim: 'rgba(84,241,255,.35)',
   trail: '#d8fdff',
   side:  '#0c2b46', side2: '#123a5c',
-  top:   '#05080f',
+  top:   '#0a0c12',
   accentPink: '#c94dff', accentOrange: '#ffb84d',
   grid:  'rgba(40,190,220,.34)', grid2: 'rgba(20,90,130,.5)',
 };
@@ -464,6 +464,38 @@ function burst(x, z, n, col) {
     });
   }
 }
+// Çizim döngüsü paylaşımlıları: ok akış ofseti, beat darbesi, beat kenarı.
+let flowOff = 0, curBeatP = 0, prevBeatPh = 0;
+
+// Ritim vuruşunda rastgele parlayıp sönen zemin hücreleri.
+const gridFlash = [];
+function spawnGridFlashes() {
+  const cell = 3;
+  const cx = Math.round(cam.fx / cell) * cell, cz = Math.round(cam.fz / cell) * cell;
+  for (let n = 0; n < 6; n++) {
+    gridFlash.push({
+      x: cx + (Math.floor(Math.random() * 25) - 12) * cell,
+      z: cz + (Math.floor(Math.random() * 25) - 12) * cell,
+      life: 0.5 + Math.random() * 0.35,
+    });
+  }
+  while (gridFlash.length > 26) gridFlash.shift();
+}
+function drawGridFlashes(dt) {
+  const cell = 3, y = -BLOCK_H + 0.02;
+  for (let i = gridFlash.length - 1; i >= 0; i--) {
+    const f = gridFlash[i];
+    f.life -= dt;
+    if (f.life <= 0) { gridFlash.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.min(0.45, f.life * 0.8);
+    quad([
+      { x: f.x, y, z: f.z }, { x: f.x + cell, y, z: f.z },
+      { x: f.x + cell, y, z: f.z + cell }, { x: f.x, y, z: f.z + cell },
+    ], theme.glow);
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Dönüş anında köşeden yayılan neon efekt halkaları.
 const rings = [];
 function spawnRing(x, z) {
@@ -494,15 +526,82 @@ function drawRings(dt) {
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;
 }
 
-// Yol kenarında süzülen minimalist neon elmaslar.
+// Boşlukta asılı siberpunk nesneler: low-poly piramitler, neon küpler ve
+// dikey ışık sütunları. Gerçek 3B konumda dururlar; çizgi ilerledikçe
+// perspektif sayesinde yanından geriye doğru paralaksla akarlar.
+const FLOAT_COLS = [null, '#ff4fd8', '#ffb84d', '#c94dff']; // null -> tema rengi
 const floaters = [];
-for (let i = 0; i < 16; i++) {
+for (let i = 0; i < 20; i++) {
+  const type = i % 3;   // 0 piramit, 1 küp, 2 ışık sütunu
   floaters.push({
-    along: Math.random() * 90 - 10, side: (Math.random() < .5 ? -1 : 1) * (6 + Math.random() * 14),
-    y: -2 + Math.random() * 8, size: .3 + Math.random() * .7,
-    rot: Math.random() * Math.PI, spin: (Math.random() - .5) * 1.4,
-    col: [C.glow, C.accentPink, C.accentOrange][i % 3],
+    type,
+    along: Math.random() * 100 - 10,
+    side: (Math.random() < .5 ? -1 : 1) * (6 + Math.random() * 26),
+    y: type === 2 ? 0 : -1 + Math.random() * 9,
+    size: type === 2 ? 6 + Math.random() * 9 : .55 + Math.random() * 1.1,
+    rot: Math.random() * Math.PI * 2,
+    spin: (Math.random() - .5) * 1.2,
+    colIdx: i % 4,
   });
+}
+
+// 8 köşeli neon küp (telkafes, Y ekseninde döner).
+function drawNeonCube(wx, wy, wz, s, a, col) {
+  const ca = Math.cos(a), sa = Math.sin(a);
+  const P = [];
+  for (let vi = 0; vi < 8; vi++) {
+    const vx = (vi & 1 ? 1 : -1) * s, vy = (vi & 2 ? 1 : -1) * s, vz = (vi & 4 ? 1 : -1) * s;
+    const v = view({ x: wx + vx * ca - vz * sa, y: wy + vy, z: wz + vx * sa + vz * ca });
+    if (v.z < NEAR) return;
+    P.push(proj(v));
+  }
+  ctx.globalAlpha = Math.min(1, 26 / view({ x: wx, y: wy, z: wz }).z) * .85;
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (const [e1, e2] of [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]]) {
+    ctx.moveTo(P[e1].x, P[e1].y); ctx.lineTo(P[e2].x, P[e2].y);
+  }
+  ctx.stroke();
+}
+
+// Low-poly piramit (3 taban köşesi + tepe).
+function drawPyramid(wx, wy, wz, s, a, col) {
+  const P = [];
+  for (let k = 0; k < 3; k++) {
+    const ang = a + k * (Math.PI * 2 / 3);
+    const v = view({ x: wx + Math.cos(ang) * s, y: wy, z: wz + Math.sin(ang) * s });
+    if (v.z < NEAR) return;
+    P.push(proj(v));
+  }
+  const apexV = view({ x: wx, y: wy + s * 1.5, z: wz });
+  if (apexV.z < NEAR) return;
+  const A = proj(apexV);
+  ctx.globalAlpha = Math.min(1, 26 / apexV.z) * .85;
+  ctx.fillStyle = 'rgba(10,16,30,.55)';
+  ctx.beginPath();
+  ctx.moveTo(P[0].x, P[0].y); ctx.lineTo(P[1].x, P[1].y); ctx.lineTo(P[2].x, P[2].y);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let k = 0; k < 3; k++) {
+    const n = (k + 1) % 3;
+    ctx.moveTo(P[k].x, P[k].y); ctx.lineTo(P[n].x, P[n].y);   // taban
+    ctx.moveTo(P[k].x, P[k].y); ctx.lineTo(A.x, A.y);         // tepeye
+  }
+  ctx.stroke();
+}
+
+// Zeminden yükselen dikey ışık sütunu (beat ile nabız atar).
+function drawPillar(wx, wz, h, col) {
+  const b = { x: wx, y: -BLOCK_H, z: wz }, tp = { x: wx, y: -BLOCK_H + h, z: wz };
+  const inten = 0.55 + 0.45 * curBeatP;
+  ctx.strokeStyle = col;
+  ctx.globalAlpha = 0.12 * inten;
+  ctx.lineWidth = 9;
+  ctx.beginPath(); if (!line3(b, tp)) { ctx.globalAlpha = 1; return; } ctx.stroke();
+  ctx.globalAlpha = 0.6 * inten;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); line3(b, tp); ctx.stroke();
 }
 
 // ------------------------------------------------------ müzik zamanlayıcı
@@ -803,27 +902,17 @@ function drawGrid(pulse) {
 }
 
 function drawFloaters(t) {
-  ctx.lineWidth = 1.5;
+  const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
   for (const f of floaters) {
-    // çapraz eksende başın ilerisine geri dönüştür
-    const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
-    if (f.along - headAlong < -14) f.along += 90;
-    const px = DIAG.x * f.along - DIAG.z * f.side;
-    const pz = DIAG.z * f.along + DIAG.x * f.side;
-    const v = view({ x: px, y: f.y, z: pz });
-    if (v.z < NEAR) continue;
-    const p = proj(v);
-    const s = (CAM.fl / v.z) * f.size;
+    // Geride kalan nesneyi ileriye taşı -> sonsuz paralaks akışı.
+    if (f.along - headAlong < -16) f.along += 110;
+    const wx = DIAG.x * f.along - DIAG.z * f.side;
+    const wz = DIAG.z * f.along + DIAG.x * f.side;
+    const col = f.colIdx === 0 ? theme.glow : FLOAT_COLS[f.colIdx];
     const a = f.rot + t * f.spin;
-    ctx.strokeStyle = f.col;
-    ctx.globalAlpha = Math.min(1, 8 / v.z) * .8;
-    ctx.beginPath();
-    for (let i = 0; i <= 4; i++) {
-      const ang = a + i * Math.PI / 2;
-      const x = p.x + Math.cos(ang) * s, y = p.y + Math.sin(ang) * s * .8;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    }
-    ctx.stroke();
+    if (f.type === 2) drawPillar(wx, wz, f.size, col);
+    else if (f.type === 1) drawNeonCube(wx, f.y, wz, f.size, a, col);
+    else drawPyramid(wx, f.y, wz, f.size, a, col);
   }
   ctx.globalAlpha = 1;
 }
@@ -846,17 +935,33 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
       { x: q.x, y: -BLOCK_H, z: q.z }, { x: p.x, y: -BLOCK_H, z: p.z },
     ], dirIdx === 0 ? C.side : C.side2);
   }
-  // Üst yüz
+  // Üst yüz: koyu siber gri/siyah
   quad([
     { x: c1.x, y: 0, z: c1.z }, { x: c2.x, y: 0, z: c2.z },
     { x: c3.x, y: 0, z: c3.z }, { x: c4.x, y: 0, z: c4.z },
   ], C.top);
+
+  // Yol ortasında İLERİ AKAN şeffaf neon oklar (chevron animasyonu).
+  const AGAP = 2.4;
+  const runLen = (x2 - x1) * d.x + (z2 - z1) * d.z;
+  ctx.strokeStyle = themeRgba(0.34);
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  for (let s0 = AGAP - (flowOff % AGAP); s0 < runLen; s0 += AGAP) {
+    const axc = x1 + d.x * s0, azc = z1 + d.z * s0;
+    line3({ x: axc - d.x * 0.45 + px * 0.30, y: 0.03, z: azc - d.z * 0.45 + pz * 0.30 },
+          { x: axc, y: 0.03, z: azc });
+    line3({ x: axc, y: 0.03, z: azc },
+          { x: axc - d.x * 0.45 - px * 0.30, y: 0.03, z: azc - d.z * 0.45 - pz * 0.30 });
+  }
+  ctx.stroke();
+
   // Neon kenarlar: koşu boyunca iki üst kenar (kaydırma hilesi ile
-  // ardışık koşular tek sürekli kontur oluşturur).
+  // ardışık koşular tek sürekli kontur oluşturur). Kalın ve yoğun parlama.
   ctx.strokeStyle = theme.glow;
   ctx.shadowColor = theme.glow;
-  ctx.shadowBlur = 12;
-  ctx.lineWidth = 2.5;
+  ctx.shadowBlur = 24;
+  ctx.lineWidth = 3.4;
   ctx.beginPath();
   for (const s of [1, -1]) {
     const shift = s * HALF_W * (dirIdx === 0 ? 1 : -1);
@@ -890,7 +995,12 @@ function draw(t) {
   const tSrc = (S.mode === 'play' || S.mode === 'fall') ? S.song : t;
   const ph = (((tSrc / BEAT) % 1) + 1) % 1;
   const beatP = Math.pow(0.003, ph);
+  curBeatP = beatP;
+  flowOff = t * (2.2 + S.speed * 0.35);      // yol oklarının akış ofseti
+  if (ph < prevBeatPh) spawnGridFlashes();   // yeni vuruş -> zemin hücreleri
+  prevBeatPh = ph;
   drawGrid(beatP);
+  drawGridFlashes(1 / 60);
   drawFloaters(t);
 
   // yol koşuları: uzaktan yakına
