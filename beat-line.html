@@ -219,7 +219,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v19</div>
+  <div id="ver">v20</div>
   <div id="diag"></div>
 </div>
 
@@ -340,9 +340,6 @@ function vibrate(ms) {
 const MELODY = [261.63, 293.66, 329.63, 392.0, 440.0];
 let melodyIdx = 0;
 
-// Dinamik kamera yatması: dönüş yönüne ~4° yatar, düzlükte dikleşir.
-let camRoll = 0, rollT = 0;
-const ROLL_MAX = 6 * Math.PI / 180;   // yumuşatma sonrası görünür tepe ~4°
 
 // ---------- Mağaza katalogları: kostümler (top çekirdeği) ve ışıklar
 // (karakterin arkasından çıkan huzme + iz aurası). Fiyat birimi: ÇİP.
@@ -904,7 +901,6 @@ function reset() {
   S.next = 0; S.pending = false;
   S.speed = BASE_SPEED;
   S.holding = false;
-  camRoll = 0; rollT = 0;
   melodyIdx = 0;
   S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * BEAT * BASE_SPEED;
   S.genDir = 1; S.genT = LEAD_BEATS * BEAT; S.genPrevGap = 0;
@@ -1074,7 +1070,7 @@ function turnSuccess(dt) {
   melodyIdx++;
   osc('sine', f, actx.currentTime, 0.22, 0.26);
   if (kind === 'perfect') osc('sine', f * 2, actx.currentTime + 0.04, 0.18, 0.12);
-  vibrate(kind === 'perfect' ? 35 : 20);
+  vibrate(kind === 'perfect' ? 45 : 28);   // dönüş geri bildirimi: titreşim
 }
 
 function tap() {
@@ -1200,8 +1196,6 @@ function update(dt, dtRaw) {
         S.trail.push({ x: c.x, z: c.z });
         S.dirIdx = c.dirIdx;
         S.speed = c.spd;               // başarılı dönüş: yeni segmentin hızı
-        // Kamera dönülen yöne yatar (A=+x sağ, B=-z sol), düzlükte dikleşir.
-        rollT = (c.dirIdx === 0 ? 1 : -1) * ROLL_MAX;
         S.next++; S.pending = false;
         burst(c.x, c.z, 22, theme.glow);
         spawnRing(c.x, c.z);           // köşeden yayılan efekt halkası
@@ -1262,10 +1256,6 @@ function update(dt, dtRaw) {
       }
     }
   }
-
-  // Kamera yatması: hedefe yumuşak yaklaş, hedef üssel olarak dikleşir.
-  rollT *= Math.exp(-2.0 * dt);
-  camRoll += (rollT - camRoll) * (1 - Math.exp(-9 * dt));
 
   // parçacıklar
   for (let i = S.particles.length - 1; i >= 0; i--) {
@@ -1390,13 +1380,8 @@ function draw(t) {
   bg.addColorStop(1, '#04060e');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-  // kamera yatması + ekran titremesi
+  // ekran titremesi
   ctx.save();
-  if (Math.abs(camRoll) > 0.0005) {
-    ctx.translate(W / 2, H * 0.5);
-    ctx.rotate(camRoll);
-    ctx.translate(-W / 2, -H * 0.5);
-  }
   if (S.shake > 0.3) ctx.translate((Math.random() - .5) * S.shake, (Math.random() - .5) * S.shake);
 
   // Beat darbesi: vuruş anında 1'e FIRLAR, üssel olarak çok hızlı söner.
@@ -1630,8 +1615,7 @@ showMenu();   // açılışta ana menü
 
 // Test kancası (#debug ile aç): otomatik oynatma ve durum erişimi.
 if (location.hash === '#debug') window.BL = { S, tap, release, headAt, BEAT, HIT_WIN,
-  view, proj, cam, CAM, get camA() { return camA; }, get camP() { return camP; },
-  get camRoll() { return camRoll; } };
+  view, proj, cam, CAM, get camA() { return camA; }, get camP() { return camP; } };
 })();
 </script>
 </body>
