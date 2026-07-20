@@ -69,6 +69,11 @@
   #lives .h1 { color: #43e8ff; text-shadow: 0 0 10px rgba(67,232,255,.9); }
   #lives .h2 { color: #ff4fd8; text-shadow: 0 0 10px rgba(255,79,216,.9); }
   #lives .lost { color: #3a4254; text-shadow: none; }
+  #runChips {
+    position: absolute; top: clamp(72px, 18em, 96px); left: 18px;
+    font-size: clamp(13px, 4.2em, 21px); font-weight: 700; letter-spacing: 2px;
+    color: #ffd76e; text-shadow: 0 0 10px rgba(255, 210, 110, .6);
+  }
   #popup {
     position: absolute; top: 20%; left: 50%;
     transform: translateX(-50%);
@@ -133,6 +138,38 @@
     letter-spacing: 2px; color: #8dff3d; text-shadow: 0 0 12px rgba(140, 255, 60, .6);
   }
 
+  /* ---------- BEAT PASS kartı (modern battle-pass görünümü) ---------- */
+  #passCard {
+    pointer-events: auto;
+    width: min(320px, 86%); margin: 20px auto 4px;
+    padding: 13px 15px 15px;
+    background: linear-gradient(160deg, rgba(20, 34, 66, .75), rgba(8, 14, 30, .8));
+    border: 1.5px solid rgba(109, 242, 255, .35); border-radius: 14px;
+    box-shadow: 0 0 22px rgba(90, 230, 255, .14), inset 0 0 18px rgba(90, 230, 255, .05);
+    text-align: left;
+  }
+  .pass-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: clamp(13px, 4.2em, 19px); font-weight: 800;
+    letter-spacing: 2px; color: #ffd76e;
+    text-shadow: 0 0 10px rgba(255, 210, 110, .5);
+  }
+  .pass-head #passLvl { color: #9fdcff; font-size: clamp(11px, 3.6em, 16px); }
+  #passBar {
+    margin-top: 10px; height: 10px; border-radius: 5px;
+    background: rgba(255, 255, 255, .08); overflow: hidden;
+  }
+  #passFill {
+    height: 100%; width: 0%; border-radius: 5px;
+    background: linear-gradient(90deg, #6df2ff, #ffd76e);
+    box-shadow: 0 0 10px rgba(120, 230, 255, .8);
+    transition: width .4s ease;
+  }
+  #passNext {
+    margin-top: 8px; font-size: clamp(11px, 3.5em, 15px); font-weight: 700;
+    letter-spacing: 1px; color: #cfeeff; opacity: .9;
+  }
+
   /* ---------- mağaza ---------- */
   #shop {
     position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
@@ -178,21 +215,24 @@
 <div id="hud">
   <div id="score">SKOR: 0</div>
   <div id="lives">CAN: <span class="h1">&#9829;</span><span class="h2">&#9829;</span><span class="h1">&#9829;</span></div>
+  <div id="runChips">&#11041; 0</div>
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v17</div>
+  <div id="ver">v18</div>
   <div id="diag"></div>
 </div>
 
 <div id="overlay">
   <div id="menuScr">
     <h1 id="title">BEAT&nbsp;LINE</h1>
-    <p id="sub">Çizgi ritimle akar, köşeler bas vuruşuna denk gelir.<br>
-    Tam vuruş anında dokun (ya da BOŞLUK) &rarr; 90&deg; dön.<br>
-    Erken, geç ya da boş yere dokunursan yoldan uçarsın!</p>
     <p id="stats"></p>
     <p id="earned" class="hidden"></p>
+    <div id="passCard">
+      <div class="pass-head"><span>&#9889; BEAT PASS</span><span id="passLvl"></span></div>
+      <div id="passBar"><div id="passFill"></div></div>
+      <div id="passNext"></div>
+    </div>
     <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
     <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
   </div>
@@ -330,6 +370,35 @@ function persist() {
   localStorage.setItem('bl_owned', JSON.stringify(save.owned));
   localStorage.setItem('bl_skin', save.skin);
   localStorage.setItem('bl_light', save.light);
+  localStorage.setItem('bl_xp', save.xp);
+  localStorage.setItem('bl_pass', save.passClaimed);
+}
+save.xp = +(localStorage.getItem('bl_xp') || 0);
+save.passClaimed = +(localStorage.getItem('bl_pass') || 0);
+
+// BEAT PASS kademeleri: toplam XP (birikmiş skor) ile otomatik açılır.
+const PASS = [
+  { xp: 500,   type: 'chips', amt: 50,          label: '⬡ 50' },
+  { xp: 1200,  type: 'light', id: 'pembe',      label: 'Pembe Kuyruk Işığı' },
+  { xp: 2200,  type: 'chips', amt: 100,         label: '⬡ 100' },
+  { xp: 3500,  type: 'skin',  id: 'buz',        label: 'Buz Kostümü' },
+  { xp: 5000,  type: 'chips', amt: 150,         label: '⬡ 150' },
+  { xp: 7000,  type: 'light', id: 'mor',        label: 'Mor Duman Işığı' },
+  { xp: 9500,  type: 'chips', amt: 250,         label: '⬡ 250' },
+  { xp: 12500, type: 'skin',  id: 'gokkusagi',  label: 'Gökkuşağı Kostümü' },
+];
+// XP eşiği geçilen kademelerin ödüllerini ver; açılanların etiketlerini döndür.
+function claimPassTiers() {
+  const got = [];
+  while (save.passClaimed < PASS.length && save.xp >= PASS[save.passClaimed].xp) {
+    const tier = PASS[save.passClaimed];
+    if (tier.type === 'chips') save.chips += tier.amt;
+    else if (tier.type === 'skin' && !save.owned.skins.includes(tier.id)) save.owned.skins.push(tier.id);
+    else if (tier.type === 'light' && !save.owned.lights.includes(tier.id)) save.owned.lights.push(tier.id);
+    got.push(tier.label);
+    save.passClaimed++;
+  }
+  return got;
 }
 function skinCore(t) {
   const s = SKINS.find(x => x.id === save.skin) || SKINS[0];
@@ -450,7 +519,8 @@ const S = {
   mode: 'menu',            // menu | play | fall | over
   t0: 0,                   // şarkı başlangıcının actx zamanı
   song: 0,                 // şarkı zamanı (sn)
-  score: 0, combo: 0, lives: 3, best: +(localStorage.getItem('bl_best') || 0),
+  score: 0, combo: 0, lives: 3, runChips: 0,
+  best: +(localStorage.getItem('bl_best') || 0),
   corners: [],             // { t, beat, x, z, dirIdx } — dirIdx: köşeden SONRAKİ yön
   cornerBeats: new Set(),  // müzik vurgusu için beat numaraları
   next: 0,                 // sıradaki köşe indeksi
@@ -576,8 +646,8 @@ function burst(x, z, n, col) {
     });
   }
 }
-// Çizim döngüsü paylaşımlıları: ok akış ofseti, beat darbesi, beat kenarı.
-let flowOff = 0, curBeatP = 0, prevBeatPh = 0;
+// Çizim döngüsü paylaşımlıları: beat darbesi ve beat kenarı algısı.
+let curBeatP = 0, prevBeatPh = 0;
 
 // Ritim vuruşunda rastgele parlayıp sönen zemin hücreleri.
 const gridFlash = [];
@@ -636,6 +706,37 @@ function drawRings(dt) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+}
+
+// Koridoru iki yandan saran NEON DUVARLAR: yatay ışık şeritleri + dikey
+// direkler. Kamerayla birlikte akar; haritayı Tron kanyonu gibi çerçeveler.
+function drawWalls() {
+  const a0 = camA - 12, a1 = camA + 70;
+  for (const s of [-1, 1]) {
+    const wp = camP + s * 17;
+    const bx = PERP.x * wp, bz = PERP.z * wp;
+    // yatay neon şeritler (alt: parlak tema, orta: soluk, üst: pembe aksan)
+    const strips = [
+      [0.35, themeRgba(0.55), 2.6],
+      [2.4,  themeRgba(0.26), 1.5],
+      [5.0,  'rgba(255,80,190,.5)', 2.2],
+    ];
+    for (const [h, col, lw] of strips) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw;
+      ctx.beginPath();
+      line3({ x: DIAG.x * a0 + bx, y: -BLOCK_H + h, z: DIAG.z * a0 + bz },
+            { x: DIAG.x * a1 + bx, y: -BLOCK_H + h, z: DIAG.z * a1 + bz });
+      ctx.stroke();
+    }
+    // dikey direkler
+    ctx.strokeStyle = themeRgba(0.2); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let a = Math.ceil(a0 / 6) * 6; a < a1; a += 6) {
+      line3({ x: DIAG.x * a + bx, y: -BLOCK_H, z: DIAG.z * a + bz },
+            { x: DIAG.x * a + bx, y: -BLOCK_H + 5.0, z: DIAG.z * a + bz });
+    }
+    ctx.stroke();
+  }
 }
 
 // Boşlukta asılı siberpunk nesneler: low-poly piramitler, neon küpler ve
@@ -749,8 +850,8 @@ function schedule() {
 
 // ------------------------------------------------------ oyun akışı
 const $ = id => document.getElementById(id);
-const overlay = $('overlay'), titleEl = $('title'), subEl = $('sub'),
-      statsEl = $('stats'), earnedEl = $('earned'),
+const overlay = $('overlay'), titleEl = $('title'),
+      statsEl = $('stats'), earnedEl = $('earned'), runChipsEl = $('runChips'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
       menuScr = $('menuScr'), shopScr = $('shop'), chipsEl = $('chips'),
@@ -798,6 +899,7 @@ function reset() {
   S.schedTimer = setInterval(schedule, 30);
   scoreEl.textContent = 'SKOR: 0'; comboEl.textContent = '';
   speedEl.textContent = 'HIZ x1.00';
+  S.runChips = 0; runChipsEl.textContent = '⬡ 0';
   S.lives = 3; updateHearts();
   rings.length = 0;
 }
@@ -824,13 +926,30 @@ function die() { startFall(true, null); }
 function showMenu() {
   titleEl.textContent = 'BEAT LINE';
   titleEl.classList.remove('dead');
-  subEl.classList.remove('hidden');
   earnedEl.classList.add('hidden');
   statsEl.textContent = 'REKOR: ' + S.best + '   ⬡ ' + save.chips + ' ÇİP';
   btnPlay.innerHTML = '&#9654; OYNA';
+  renderPass();
   menuScr.classList.remove('hidden');
   shopScr.classList.add('hidden');
   overlay.classList.remove('hidden');
+}
+
+// BEAT PASS kartını güncelle: seviye, ilerleme çubuğu, sıradaki ödül.
+function renderPass() {
+  const lvl = save.passClaimed;
+  $('passLvl').textContent = 'SEVİYE ' + lvl + '/' + PASS.length;
+  if (lvl >= PASS.length) {
+    $('passFill').style.width = '100%';
+    $('passNext').textContent = 'Tüm ödüller açıldı!';
+    return;
+  }
+  const prev = lvl > 0 ? PASS[lvl - 1].xp : 0;
+  const next = PASS[lvl];
+  const p = Math.min(1, (save.xp - prev) / (next.xp - prev));
+  $('passFill').style.width = (p * 100).toFixed(1) + '%';
+  $('passNext').textContent = 'Sonraki ödül: ' + next.label + '  •  ' +
+    Math.max(0, next.xp - save.xp) + ' XP kaldı';
 }
 
 function showShop() {
@@ -885,15 +1004,19 @@ function gameOver() {
   clearInterval(S.schedTimer); S.schedTimer = 0;
   S.best = Math.max(S.best, S.score);
   localStorage.setItem('bl_best', S.best);
-  const earned = Math.floor(S.score / 5);
-  save.chips += earned; persist();
+  // Para: dönüş başına kazanılan çipler (PERFECT 3, GOOD 2).
+  save.chips += S.runChips;
+  save.xp += S.score;
+  const passRewards = claimPassTiers();
+  persist();
   titleEl.textContent = 'OYUN BİTTİ';
   titleEl.classList.add('dead');
-  subEl.classList.add('hidden');
   statsEl.textContent = 'SKOR: ' + S.score + '   REKOR: ' + S.best;
-  earnedEl.textContent = '+' + earned + ' ⬡ ÇİP KAZANDIN';
+  earnedEl.innerHTML = '+' + S.runChips + ' ⬡ ÇİP' +
+    (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') + ' AÇILDI!' : '');
   earnedEl.classList.remove('hidden');
   btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
+  renderPass();
   menuScr.classList.remove('hidden');
   shopScr.classList.add('hidden');
   overlay.classList.remove('hidden');
@@ -924,6 +1047,8 @@ function tap() {
     S.lastKind = kind;
     S.combo++;
     S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
+    S.runChips += kind === 'perfect' ? 3 : 2;   // para: PERFECT 3, GOOD 2
+    runChipsEl.textContent = '⬡ ' + S.runChips;
     showPopup(kind);
     // Doğru basışta ses YOK — sadece beat çalar; geri bildirim titreşimle.
     vibrate(kind === 'perfect' ? 35 : 20);
@@ -1120,9 +1245,13 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   const c2 = { x: bx + px * HALF_W, z: bz + pz * HALF_W };
   const c3 = { x: bx - px * HALF_W, z: bz - pz * HALF_W };
   const c4 = { x: ax - px * HALF_W, z: az - pz * HALF_W };
-  // Kameraya bakan yan yüzler (+z tarafı ve -x tarafı görünür).
-  const sidePairs = dirIdx === 0 ? [[c1, c2]] : [[c4, c3], [c1, c2]];
-  for (const [p, q] of sidePairs) {
+  // TÜM yan yüzler + uç kapaklar: yol tamamen OPAK, köşelerden ve
+  // uçlardan arkası asla görünmez.
+  const sideFaces = [
+    [c1, c2], [c4, c3],   // iki uzun kenar
+    [c1, c4], [c2, c3],   // uç kapaklar
+  ];
+  for (const [p, q] of sideFaces) {
     quad([
       { x: p.x, y: 0, z: p.z }, { x: q.x, y: 0, z: q.z },
       { x: q.x, y: -BLOCK_H, z: q.z }, { x: p.x, y: -BLOCK_H, z: p.z },
@@ -1133,21 +1262,6 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
     { x: c1.x, y: 0, z: c1.z }, { x: c2.x, y: 0, z: c2.z },
     { x: c3.x, y: 0, z: c3.z }, { x: c4.x, y: 0, z: c4.z },
   ], C.top);
-
-  // Yol ortasında İLERİ AKAN şeffaf neon oklar (chevron animasyonu).
-  const AGAP = 2.4;
-  const runLen = (x2 - x1) * d.x + (z2 - z1) * d.z;
-  ctx.strokeStyle = themeRgba(0.34);
-  ctx.lineWidth = 2.4;
-  ctx.beginPath();
-  for (let s0 = AGAP - (flowOff % AGAP); s0 < runLen; s0 += AGAP) {
-    const axc = x1 + d.x * s0, azc = z1 + d.z * s0;
-    line3({ x: axc - d.x * 0.45 + px * 0.30, y: 0.03, z: azc - d.z * 0.45 + pz * 0.30 },
-          { x: axc, y: 0.03, z: azc });
-    line3({ x: axc, y: 0.03, z: azc },
-          { x: axc - d.x * 0.45 - px * 0.30, y: 0.03, z: azc - d.z * 0.45 - pz * 0.30 });
-  }
-  ctx.stroke();
 
   // Neon kenarlar: koşu boyunca iki üst kenar (kaydırma hilesi ile
   // ardışık koşular tek sürekli kontur oluşturur). Kalın ve yoğun parlama.
@@ -1189,11 +1303,11 @@ function draw(t) {
   const ph = (((tSrc / BEAT) % 1) + 1) % 1;
   const beatP = Math.pow(0.003, ph);
   curBeatP = beatP;
-  flowOff = t * (2.2 + S.speed * 0.35);      // yol oklarının akış ofseti
   if (ph < prevBeatPh) spawnGridFlashes();   // yeni vuruş -> zemin hücreleri
   prevBeatPh = ph;
   drawGrid(beatP);
   drawGridFlashes(1 / 60);
+  drawWalls();
   drawFloaters(t);
 
   // yol koşuları: uzaktan yakına
