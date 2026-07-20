@@ -94,7 +94,7 @@
     background: radial-gradient(ellipse at center, rgba(8,16,36,.25), rgba(2,5,14,.8));
     color: #eaf6ff; text-align: center;
   }
-  #overlay.hidden { display: none; }
+  .hidden { display: none !important; }
   #title {
     font-size: clamp(40px, 15em, 100px); font-weight: 800; font-style: italic;
     letter-spacing: 6px; color: #6df2ff;
@@ -109,11 +109,66 @@
     margin-top: 10px; font-size: clamp(16px, 5.4em, 30px); font-weight: 700;
     letter-spacing: 2px; color: #ffe9a8; text-shadow: 0 0 14px rgba(255,210,110,.6);
   }
-  #go {
-    margin-top: 40px; font-size: clamp(16px, 5em, 28px); font-weight: 700;
-    letter-spacing: 3px; animation: blink 1.1s ease-in-out infinite;
-  }
   @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* ---------- menü butonları ---------- */
+  .btn {
+    pointer-events: auto; display: block;
+    width: min(270px, 74%); margin: 14px auto 0;
+    padding: 13px 20px;
+    font: inherit; font-size: clamp(15px, 4.8em, 24px); font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: #eaf6ff; background: rgba(10, 20, 40, .55);
+    border: 2px solid rgba(109, 242, 255, .55); border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 0 14px rgba(90, 230, 255, .22), inset 0 0 10px rgba(90, 230, 255, .1);
+  }
+  .btn:active { transform: scale(.96); }
+  .btn.primary {
+    border-color: #6df2ff; color: #6df2ff;
+    box-shadow: 0 0 22px rgba(90, 230, 255, .5), inset 0 0 12px rgba(90, 230, 255, .2);
+  }
+  #earned {
+    margin-top: 12px; font-size: clamp(15px, 4.6em, 24px); font-weight: 700;
+    letter-spacing: 2px; color: #8dff3d; text-shadow: 0 0 12px rgba(140, 255, 60, .6);
+  }
+
+  /* ---------- mağaza ---------- */
+  #shop {
+    position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
+    padding: 18px 12px 30px; text-align: center;
+  }
+  #shop h2 {
+    font-size: clamp(26px, 9em, 46px); font-weight: 800; font-style: italic;
+    letter-spacing: 5px; color: #6df2ff;
+    text-shadow: 0 0 18px rgba(90, 230, 255, .8);
+  }
+  #chipsRow {
+    margin: 8px 0 2px; font-size: clamp(15px, 4.8em, 24px); font-weight: 700;
+    letter-spacing: 2px; color: #ffd76e; text-shadow: 0 0 12px rgba(255, 210, 110, .6);
+  }
+  #shop h3 {
+    margin: 16px 0 8px; font-size: clamp(13px, 4.2em, 20px); font-weight: 700;
+    letter-spacing: 4px; color: #9fdcff;
+  }
+  .grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .card {
+    pointer-events: auto; cursor: pointer;
+    width: 29%; min-width: 92px; padding: 10px 6px;
+    background: rgba(8, 16, 32, .6);
+    border: 2px solid rgba(120, 200, 255, .3); border-radius: 10px;
+    color: #eaf6ff;
+  }
+  .card:active { transform: scale(.95); }
+  .card.sel { border-color: #8dff3d; box-shadow: 0 0 12px rgba(140, 255, 60, .35); }
+  .card .sw {
+    width: 36px; height: 36px; border-radius: 50%; margin: 0 auto 6px;
+    box-shadow: 0 0 14px currentColor;
+  }
+  .card .swl { width: 82%; height: 9px; border-radius: 4px; margin: 12px auto 13px; }
+  .card .nm { font-size: clamp(11px, 3.4em, 15px); font-weight: 700; letter-spacing: 1px; }
+  .card .pr { font-size: clamp(11px, 3.4em, 15px); margin-top: 4px; color: #ffd76e; font-weight: 700; }
+  .card.sel .pr { color: #8dff3d; }
 </style>
 </head>
 <body>
@@ -126,18 +181,29 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v16</div>
+  <div id="ver">v17</div>
   <div id="diag"></div>
 </div>
 
 <div id="overlay">
-  <div>
+  <div id="menuScr">
     <h1 id="title">BEAT&nbsp;LINE</h1>
     <p id="sub">Çizgi ritimle akar, köşeler bas vuruşuna denk gelir.<br>
     Tam vuruş anında dokun (ya da BOŞLUK) &rarr; 90&deg; dön.<br>
     Erken, geç ya da boş yere dokunursan yoldan uçarsın!</p>
     <p id="stats"></p>
-    <p id="go">BAŞLAMAK İÇİN DOKUN</p>
+    <p id="earned" class="hidden"></p>
+    <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
+    <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
+  </div>
+  <div id="shop" class="hidden">
+    <h2>MAĞAZA</h2>
+    <div id="chipsRow">&#11041; <span id="chips">0</span> ÇİP</div>
+    <h3>KOSTÜMLER</h3>
+    <div id="skinGrid" class="grid"></div>
+    <h3>IŞIKLAR</h3>
+    <div id="lightGrid" class="grid"></div>
+    <button class="btn" id="btnBack">&larr; GERİ</button>
   </div>
 </div>
 </div>
@@ -226,6 +292,52 @@ function updateTheme(dt) {
 // Titreşim yardımcıisı (destekleyen cihazlarda — iOS Safari desteklemez).
 function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+// ---------- Mağaza katalogları: kostümler (top çekirdeği) ve ışıklar
+// (karakterin arkasından çıkan huzme + iz aurası). Fiyat birimi: ÇİP.
+const SKINS = [
+  { id: 'klasik',    name: 'Klasik',    price: 0,   core: '#ffffff' },
+  { id: 'altin',     name: 'Altın',     price: 120, core: '#ffd76e' },
+  { id: 'lav',       name: 'Lav',       price: 160, core: '#ff7a4d' },
+  { id: 'buz',       name: 'Buz',       price: 160, core: '#bfeaff' },
+  { id: 'zumrut',    name: 'Zümrüt',    price: 200, core: '#7dffb0' },
+  { id: 'gokkusagi', name: 'Gökkuşağı', price: 400, core: 'rainbow' },
+];
+const LIGHTS = [
+  { id: 'tema',  name: 'Tema İzi',     price: 0,   col: null },  // tema rengini izler
+  { id: 'pembe', name: 'Pembe Kuyruk', price: 100, col: '255,80,190' },
+  { id: 'yesil', name: 'Asit Yeşili',  price: 140, col: '120,255,80' },
+  { id: 'mor',   name: 'Mor Duman',    price: 140, col: '190,90,255' },
+  { id: 'altin', name: 'Altın Şerit',  price: 220, col: '255,210,90' },
+  { id: 'beyaz', name: 'Saf Beyaz',    price: 260, col: '240,250,255' },
+];
+
+// Kalıcı kayıt (çipler, sahip olunanlar, seçili öğeler).
+const save = (() => {
+  let owned;
+  try { owned = JSON.parse(localStorage.getItem('bl_owned') || ''); } catch (e) { owned = null; }
+  if (!owned || !owned.skins || !owned.lights) owned = { skins: ['klasik'], lights: ['tema'] };
+  return {
+    chips: +(localStorage.getItem('bl_chips') || 0),
+    owned,
+    skin: localStorage.getItem('bl_skin') || 'klasik',
+    light: localStorage.getItem('bl_light') || 'tema',
+  };
+})();
+function persist() {
+  localStorage.setItem('bl_chips', save.chips);
+  localStorage.setItem('bl_owned', JSON.stringify(save.owned));
+  localStorage.setItem('bl_skin', save.skin);
+  localStorage.setItem('bl_light', save.light);
+}
+function skinCore(t) {
+  const s = SKINS.find(x => x.id === save.skin) || SKINS[0];
+  return s.core === 'rainbow' ? 'hsl(' + (((t * 90) % 360) | 0) + ',100%,72%)' : s.core;
+}
+function lightCol(alpha) {
+  const L = LIGHTS.find(x => x.id === save.light) || LIGHTS[0];
+  return L.col ? 'rgba(' + L.col + ',' + alpha + ')' : themeRgba(alpha);
 }
 
 // ------------------------------------------------------ canvas / 9:16 sahne
@@ -638,9 +750,12 @@ function schedule() {
 // ------------------------------------------------------ oyun akışı
 const $ = id => document.getElementById(id);
 const overlay = $('overlay'), titleEl = $('title'), subEl = $('sub'),
-      statsEl = $('stats'), goEl = $('go'),
+      statsEl = $('stats'), earnedEl = $('earned'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
-      speedEl = $('speed'), livesEl = $('lives');
+      speedEl = $('speed'), livesEl = $('lives'),
+      menuScr = $('menuScr'), shopScr = $('shop'), chipsEl = $('chips'),
+      skinGrid = $('skinGrid'), lightGrid = $('lightGrid'),
+      btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack');
 const heartEls = livesEl.querySelectorAll('span');
 
 function updateHearts() {
@@ -705,17 +820,89 @@ function startFall(fatal, kind) {
 
 function die() { startFall(true, null); }
 
+// ---------- ekran akışı: ana menü / mağaza / oyun sonu
+function showMenu() {
+  titleEl.textContent = 'BEAT LINE';
+  titleEl.classList.remove('dead');
+  subEl.classList.remove('hidden');
+  earnedEl.classList.add('hidden');
+  statsEl.textContent = 'REKOR: ' + S.best + '   ⬡ ' + save.chips + ' ÇİP';
+  btnPlay.innerHTML = '&#9654; OYNA';
+  menuScr.classList.remove('hidden');
+  shopScr.classList.add('hidden');
+  overlay.classList.remove('hidden');
+}
+
+function showShop() {
+  renderShop();
+  menuScr.classList.add('hidden');
+  shopScr.classList.remove('hidden');
+  overlay.classList.remove('hidden');
+}
+
+function renderShop() {
+  chipsEl.textContent = save.chips;
+  skinGrid.innerHTML = ''; lightGrid.innerHTML = '';
+  for (const it of SKINS) skinGrid.appendChild(shopCard(it, 'skins'));
+  for (const it of LIGHTS) lightGrid.appendChild(shopCard(it, 'lights'));
+}
+
+function shopCard(it, cat) {
+  const owned = save.owned[cat].includes(it.id);
+  const selId = cat === 'skins' ? save.skin : save.light;
+  const d = document.createElement('div');
+  d.className = 'card' + (selId === it.id ? ' sel' : '');
+  const sw = cat === 'skins'
+    ? '<div class="sw" style="background:' +
+      (it.core === 'rainbow'
+        ? 'conic-gradient(red,yellow,lime,cyan,blue,magenta,red);color:#fff'
+        : it.core + ';color:' + it.core) + '"></div>'
+    : '<div class="swl" style="background:rgba(' + (it.col || '84,241,255') +
+      ',.95);box-shadow:0 0 12px rgba(' + (it.col || '84,241,255') + ',.9)"></div>';
+  d.innerHTML = sw + '<div class="nm">' + it.name + '</div>' +
+    '<div class="pr">' + (owned ? (selId === it.id ? 'SEÇİLİ' : 'SEÇ') : '⬡ ' + it.price) + '</div>';
+  d.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    if (owned) {
+      if (cat === 'skins') save.skin = it.id; else save.light = it.id;
+    } else if (save.chips >= it.price) {
+      save.chips -= it.price;
+      save.owned[cat].push(it.id);
+      if (cat === 'skins') save.skin = it.id; else save.light = it.id;
+      vibrate(25);
+    } else {
+      d.style.borderColor = '#ff5f7a';       // yetersiz çip
+      setTimeout(renderShop, 260);
+      return;
+    }
+    persist(); renderShop();
+  });
+  return d;
+}
+
 function gameOver() {
   S.mode = 'over';
   clearInterval(S.schedTimer); S.schedTimer = 0;
   S.best = Math.max(S.best, S.score);
   localStorage.setItem('bl_best', S.best);
+  const earned = Math.floor(S.score / 5);
+  save.chips += earned; persist();
   titleEl.textContent = 'OYUN BİTTİ';
   titleEl.classList.add('dead');
-  subEl.innerHTML = 'Köşeyi kaçırdın — ritmi dinle, bas vuruşunda dokun.';
+  subEl.classList.add('hidden');
   statsEl.textContent = 'SKOR: ' + S.score + '   REKOR: ' + S.best;
-  goEl.textContent = 'TEKRAR DENEMEK İÇİN DOKUN';
+  earnedEl.textContent = '+' + earned + ' ⬡ ÇİP KAZANDIN';
+  earnedEl.classList.remove('hidden');
+  btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
+  menuScr.classList.remove('hidden');
+  shopScr.classList.add('hidden');
   overlay.classList.remove('hidden');
+}
+
+function startGame() {
+  initAudio();
+  overlay.classList.add('hidden');
+  reset();
 }
 
 function showPopup(kind) {
@@ -727,13 +914,8 @@ function showPopup(kind) {
 
 // Dokunuş: sıradaki köşenin zaman penceresiyle karşılaştır.
 function tap() {
-  initAudio();   // iOS: her dokunuşta resume dene (arka plan kesintilerine karşı)
-  if (S.mode === 'menu' || S.mode === 'over') {
-    overlay.classList.add('hidden');
-    titleEl.textContent = 'BEAT LINE'; titleEl.classList.remove('dead');
-    reset(); return;
-  }
   if (S.mode !== 'play' || S.pending) return;
+  initAudio();   // iOS: her dokunuşta resume dene (arka plan kesintilerine karşı)
   const c = S.corners[S.next];
   const dt = S.song - c.t;              // -: erken, +: geç
   if (Math.abs(dt) <= HIT_WIN) {
@@ -759,10 +941,21 @@ function tap() {
     die();
   }
 }
-addEventListener('pointerdown', e => { e.preventDefault(); tap(); }, { passive: false });
+// Oyun içi dokunuş: yalnızca oyun modunda; menü/mağaza butonları kendi
+// olaylarını yönetir.
+addEventListener('pointerdown', e => {
+  if (S.mode !== 'play') return;
+  e.preventDefault();
+  tap();
+}, { passive: false });
 addEventListener('keydown', e => {
-  if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) tap();
+  if ((e.code !== 'Space' && e.code !== 'Enter') || e.repeat) return;
+  if (S.mode === 'play') tap();
+  else if ((S.mode === 'menu' || S.mode === 'over') && shopScr.classList.contains('hidden')) startGame();
 });
+btnPlay.addEventListener('pointerdown', e => { e.stopPropagation(); startGame(); });
+btnShop.addEventListener('pointerdown', e => { e.stopPropagation(); showShop(); });
+btnBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
 
 // ------------------------------------------------------ güncelleme
 function update(dt, dtRaw) {
@@ -1027,8 +1220,8 @@ function draw(t) {
   // İki geçiş: geniş pembe aura + parlak çekirdek (asset setindeki kuyruk).
   const pts = [...S.trail, { x: S.head.x, z: S.head.z }];
   for (const pass of [0, 1]) {
-    ctx.strokeStyle = pass === 0 ? 'rgba(255,80,190,.30)' : C.trail;
-    ctx.shadowColor = pass === 0 ? 'rgba(255,80,190,.9)' : theme.glow;
+    ctx.strokeStyle = pass === 0 ? lightCol(0.30) : C.trail;
+    ctx.shadowColor = pass === 0 ? lightCol(0.9) : theme.glow;
     ctx.shadowBlur = pass === 0 ? 18 : 16;
     ctx.lineWidth = pass === 0 ? 10 : 5;
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -1092,8 +1285,24 @@ function draw(t) {
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
 
-    // KARAKTER: parlak yuvarlak top — beyaz çekirdek + tema renkli hale + halka.
-    ctx.fillStyle = '#ffffff';
+    // KARAKTERİN ARKASINDAN ÇIKAN IŞIK: seçili ışık renginde, geriye doğru
+    // sönümlenen huzme (mağazadan değiştirilebilir).
+    const bd = DIR[S.dirIdx];
+    const tailLen = 1.5 + S.speed * 0.12;
+    const tv = view({ x: S.head.x - bd.x * tailLen, y: 0.16, z: S.head.z - bd.z * tailLen });
+    if (tv.z > NEAR) {
+      const tp = proj(tv);
+      const lg = ctx.createLinearGradient(hp.x, hp.y, tp.x, tp.y);
+      lg.addColorStop(0, lightCol(0.8));
+      lg.addColorStop(1, lightCol(0));
+      ctx.strokeStyle = lg;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = r * 1.5;
+      ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
+    }
+
+    // KARAKTER: parlak yuvarlak top — kostüm renginde çekirdek + hale + halka.
+    ctx.fillStyle = skinCore(t);
     ctx.shadowColor = theme.glow; ctx.shadowBlur = 24;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,.55)';
@@ -1156,6 +1365,8 @@ function frame(now) {
   }
 }
 requestAnimationFrame(frame);
+
+showMenu();   // açılışta ana menü
 
 // Test kancası (#debug ile aç): otomatik oynatma ve durum erişimi.
 if (location.hash === '#debug') window.BL = { S, tap, headAt, BEAT, HIT_WIN,
