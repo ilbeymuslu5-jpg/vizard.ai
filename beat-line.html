@@ -163,11 +163,29 @@
     letter-spacing: 2px; color: #9fdcff; opacity: .85;
   }
 
-  /* ---------- BEAT PASS kartı (modern battle-pass görünümü) ---------- */
-  #passCard {
+  /* ---------- menüdeki BEAT PASS mini rozeti ---------- */
+  #passMiniLvl {
+    font-size: .78em; font-weight: 700; color: #9fdcff; letter-spacing: 1px;
+  }
+
+  /* ---------- BEAT PASS ekranı (ayrı, tam ekran bölüm) ---------- */
+  #passScr {
+    position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
+    padding: 18px 12px 30px; text-align: center;
+  }
+  #passScr h2 {
+    font-size: clamp(26px, 9em, 46px); font-weight: 800; font-style: italic;
+    letter-spacing: 5px; color: #ffd76e;
+    text-shadow: 0 0 18px rgba(255, 210, 110, .8);
+  }
+  #passCurRow {
+    margin: 8px 0 14px; font-size: clamp(14px, 4.4em, 22px); font-weight: 700;
+    letter-spacing: 2px; color: #eaf6ff;
+  }
+  #passStatusCard {
     pointer-events: auto;
-    width: min(320px, 86%); margin: 20px auto 4px;
-    padding: 13px 15px 15px;
+    width: min(340px, 92%); margin: 0 auto 16px;
+    padding: 14px 16px 16px;
     background: linear-gradient(160deg, rgba(20, 34, 66, .75), rgba(8, 14, 30, .8));
     border: 1.5px solid rgba(109, 242, 255, .35); border-radius: 14px;
     box-shadow: 0 0 22px rgba(90, 230, 255, .14), inset 0 0 18px rgba(90, 230, 255, .05);
@@ -179,21 +197,57 @@
     letter-spacing: 2px; color: #ffd76e;
     text-shadow: 0 0 10px rgba(255, 210, 110, .5);
   }
-  .pass-head #passLvl { color: #9fdcff; font-size: clamp(11px, 3.6em, 16px); }
-  #passBar {
-    margin-top: 10px; height: 10px; border-radius: 5px;
+  #passBigBar {
+    margin-top: 10px; height: 12px; border-radius: 6px;
     background: rgba(255, 255, 255, .08); overflow: hidden;
   }
-  #passFill {
-    height: 100%; width: 0%; border-radius: 5px;
+  #passBigFill {
+    height: 100%; width: 0%; border-radius: 6px;
     background: linear-gradient(90deg, #6df2ff, #ffd76e);
     box-shadow: 0 0 10px rgba(120, 230, 255, .8);
     transition: width .4s ease;
   }
-  #passNext {
+  #passBigNext {
     margin-top: 8px; font-size: clamp(11px, 3.5em, 15px); font-weight: 700;
     letter-spacing: 1px; color: #cfeeff; opacity: .9;
   }
+  #premBox { margin-top: 12px; }
+  #premBox .btn { width: 100%; margin: 0; }
+  .premActive {
+    font-size: clamp(12px, 3.8em, 16px); font-weight: 800; letter-spacing: 1px;
+    color: #8dff3d; text-shadow: 0 0 10px rgba(140, 255, 60, .6);
+  }
+  .premHint {
+    margin-top: 8px; font-size: clamp(10px, 3.2em, 13px); font-weight: 600;
+    color: #9fdcff; opacity: .85; line-height: 1.5;
+  }
+  #passScr h3 {
+    margin: 18px 0 10px; font-size: clamp(13px, 4.2em, 20px); font-weight: 700;
+    letter-spacing: 4px; color: #9fdcff;
+  }
+  .mile {
+    pointer-events: auto;
+    width: 29%; min-width: 132px; padding: 10px 8px;
+    background: rgba(8, 16, 32, .6);
+    border: 2px solid rgba(120, 200, 255, .25); border-radius: 10px;
+    color: #eaf6ff;
+  }
+  .mile.prem { border-color: rgba(255, 210, 110, .4); }
+  .mile.unlocked { border-color: #8dff3d; box-shadow: 0 0 12px rgba(140, 255, 60, .3); }
+  .mile-badge {
+    font-size: clamp(9px, 2.8em, 11px); font-weight: 800; letter-spacing: 1px; opacity: .8;
+  }
+  .mile.prem .mile-badge { color: #ffd76e; }
+  .mile-lvl {
+    margin-top: 4px; font-size: clamp(13px, 4em, 18px); font-weight: 800; color: #6df2ff;
+  }
+  .mile-name {
+    margin-top: 3px; font-size: clamp(11px, 3.4em, 14px); font-weight: 700;
+  }
+  .mile-status {
+    margin-top: 6px; font-size: clamp(10px, 3.2em, 13px); font-weight: 700; color: #ffd76e;
+  }
+  .mile.unlocked .mile-status { color: #8dff3d; }
 
   /* ---------- mağaza ---------- */
   #shop {
@@ -251,10 +305,6 @@
   #crateResult.r-chip { color: #ffd76e; text-shadow: 0 0 10px rgba(255,210,110,.6); }
   #crateResult.r-gem  { color: #8be9ff; text-shadow: 0 0 10px rgba(139,233,255,.6); }
   #crateResult.r-item { color: #8dff3d; text-shadow: 0 0 12px rgba(140,255,60,.7); }
-  #buyPrem {
-    display: inline-block; margin-top: 6px; cursor: pointer;
-    color: #ffd76e; text-decoration: underline;
-  }
 </style>
 </head>
 <body>
@@ -268,7 +318,7 @@
   <div id="speed"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v21</div>
+  <div id="ver">v22</div>
   <div id="diag"></div>
 </div>
 
@@ -282,13 +332,22 @@
       <div id="trackMid"><div id="trackName"></div><div id="trackBpm"></div></div>
       <button class="tbtn" id="tNext">&#8250;</button>
     </div>
-    <div id="passCard">
-      <div class="pass-head"><span>&#9889; BEAT PASS</span><span id="passLvl"></span></div>
-      <div id="passBar"><div id="passFill"></div></div>
-      <div id="passNext"></div>
-    </div>
     <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
+    <button class="btn" id="btnPass">&#9889; BEAT PASS <span id="passMiniLvl"></span></button>
     <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
+  </div>
+  <div id="passScr" class="hidden">
+    <h2>BEAT PASS</h2>
+    <div id="passCurRow">&#11041; <span id="passChips">0</span> ÇİP &nbsp;•&nbsp; 💎 <span id="passGems">0</span></div>
+    <div id="passStatusCard">
+      <div class="pass-head"><span id="passBigLvl"></span></div>
+      <div id="passBigBar"><div id="passBigFill"></div></div>
+      <div id="passBigNext"></div>
+      <div id="premBox"></div>
+    </div>
+    <h3>ÖDÜL YOL HARİTASI</h3>
+    <div id="milesTrack" class="grid"></div>
+    <button class="btn" id="btnPassBack">&larr; GERİ</button>
   </div>
   <div id="shop" class="hidden">
     <h2>MAĞAZA</h2>
@@ -1127,10 +1186,16 @@ const overlay = $('overlay'), titleEl = $('title'),
       statsEl = $('stats'), earnedEl = $('earned'), runChipsEl = $('runChips'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
-      menuScr = $('menuScr'), shopScr = $('shop'), chipsEl = $('chips'),
+      menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), chipsEl = $('chips'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
+      btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
       btnCrate = $('btnCrate'), crateResult = $('crateResult');
+// Üç ana menü ekranından yalnızca birini gösterir, diğerlerini gizler.
+function showScreen(scr) {
+  for (const s of [menuScr, shopScr, passScr]) s.classList.toggle('hidden', s !== scr);
+  overlay.classList.remove('hidden');
+}
 const heartEls = livesEl.querySelectorAll('span');
 
 function updateHearts() {
@@ -1203,18 +1268,16 @@ function startFall(fatal, kind) {
 
 function die() { startFall(true, null); }
 
-// ---------- ekran akışı: ana menü / mağaza / oyun sonu
+// ---------- ekran akışı: ana menü / mağaza / BEAT PASS / oyun sonu
 function showMenu() {
   titleEl.textContent = 'BEAT LINE';
   titleEl.classList.remove('dead');
   earnedEl.classList.add('hidden');
   statsEl.textContent = 'REKOR: ' + S.best + '  •  ⬡ ' + save.chips + '  •  💎 ' + save.gems;
   btnPlay.innerHTML = '&#9654; OYNA';
-  renderPass();
+  renderPassMini();
   renderTrack();
-  menuScr.classList.remove('hidden');
-  shopScr.classList.add('hidden');
-  overlay.classList.remove('hidden');
+  showScreen(menuScr);
 }
 
 function renderTrack() {
@@ -1223,34 +1286,81 @@ function renderTrack() {
   $('trackBpm').textContent = T.bpm + ' BPM';
 }
 
-// BEAT PASS kartı: 100 seviye, ücretsiz/premium durumu, premium satın alma.
-function renderPass() {
+// Ana menüdeki küçük rozet: "(SEVİYE x/100)" — detay için ayrı BEAT PASS
+// ekranına gidilir.
+function renderPassMini() {
   const lvl = passLevel();
-  $('passLvl').textContent = 'SEVİYE ' + lvl + '/' + PASS_MAX +
-    (save.premium ? ' ★' : '');
-  const p = lvl >= PASS_MAX ? 1 : (save.xp - lvl * PASS_XP) / PASS_XP;
-  $('passFill').style.width = (Math.min(1, p) * 100).toFixed(1) + '%';
-  const perLvl = GEM_FREE + (save.premium ? GEM_PREM : 0);
-  $('passNext').innerHTML = lvl >= PASS_MAX
-    ? 'Tüm seviyeler tamamlandı!'
-    : 'Seviye başına 💎 ' + perLvl + '  •  sonrakine ' +
-      (PASS_XP - (save.xp - lvl * PASS_XP)) + ' XP' +
-      (save.premium ? '' :
-        '<br><span id="buyPrem">★ PREMIUM PASS AL — ⬡ ' + PREMIUM_PRICE +
-        ' (seviye başına 💎 ' + (GEM_FREE + GEM_PREM) + ')</span>');
-  const bp = $('buyPrem');
-  if (bp) bp.addEventListener('pointerdown', e => {
-    e.stopPropagation();
-    if (buyPremium()) { vibrate(40); showMenu(); }
-    else { bp.style.color = '#ff5f7a'; setTimeout(renderPass, 300); }
-  });
+  $('passMiniLvl').textContent = '(' + lvl + '/' + PASS_MAX + (save.premium ? ' ★' : '') + ')';
 }
 
 function showShop() {
   renderShop();
-  menuScr.classList.add('hidden');
-  shopScr.classList.remove('hidden');
-  overlay.classList.remove('hidden');
+  showScreen(shopScr);
+}
+
+// ---------- BEAT PASS: ayrı, tam ekran bölüm ---------
+function showPass() {
+  renderPassScreen();
+  showScreen(passScr);
+}
+
+function renderPassScreen() {
+  $('passChips').textContent = save.chips;
+  $('passGems').textContent = save.gems;
+
+  const lvl = passLevel();
+  $('passBigLvl').textContent = 'SEVİYE ' + lvl + '/' + PASS_MAX +
+    (save.premium ? ' ★ PREMIUM' : '');
+  const p = lvl >= PASS_MAX ? 1 : (save.xp - lvl * PASS_XP) / PASS_XP;
+  $('passBigFill').style.width = (Math.min(1, p) * 100).toFixed(1) + '%';
+  const perLvl = GEM_FREE + (save.premium ? GEM_PREM : 0);
+  $('passBigNext').textContent = lvl >= PASS_MAX
+    ? 'Tüm seviyeler tamamlandı!'
+    : 'Seviye başına 💎 ' + perLvl + '  •  sonraki seviyeye ' +
+      (PASS_XP - (save.xp - lvl * PASS_XP)) + ' XP kaldı';
+
+  const premBox = $('premBox');
+  if (save.premium) {
+    premBox.innerHTML = '<div class="premActive">★ PREMIUM PASS AKTİF — seviye başına +💎 ' +
+      GEM_PREM + ' ekstra</div>';
+  } else {
+    premBox.innerHTML = '<button class="btn primary" id="buyPremBtn">★ PREMIUM PASS AL — ⬡ ' +
+      PREMIUM_PRICE + '</button>' +
+      '<div class="premHint">Seviye başına 💎 ' + GEM_FREE + ' yerine 💎 ' +
+      (GEM_FREE + GEM_PREM) + ' kazan. Geçmiş seviyelerinin elmasları ve ödülleri geri verilir.</div>';
+    $('buyPremBtn').addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      if (buyPremium()) { vibrate(40); renderPassScreen(); }
+      else {
+        const b = $('buyPremBtn');
+        b.style.borderColor = '#ff5f7a'; b.style.color = '#ff5f7a';
+        setTimeout(renderPassScreen, 300);
+      }
+    });
+  }
+
+  // Ödül yol haritası: her kademe için GERÇEK sahiplik kontrol edilir
+  // (save.owned) — sadece seviye/premium şartını sağlamak yetmez, ödül
+  // fiilen claimPassLevels() ile verilmiş olmalı.
+  const track = $('milesTrack');
+  track.innerHTML = '';
+  for (const m of PASS_MILES) {
+    const reached = lvl >= m.lvl;
+    const owned = save.owned[m.cat].includes(m.id);
+    const needsPremium = m.premium && !save.premium;
+    const el = document.createElement('div');
+    el.className = 'mile' + (owned ? ' unlocked' : '') + (m.premium ? ' prem' : '');
+    const status = owned ? 'AÇILDI'
+      : needsPremium && reached ? 'PREMIUM GEREKİR'
+      : reached ? 'OYNA VE AL'      // seviye tamam, bir sonraki oyun sonunda verilir
+      : 'SEVİYE ' + m.lvl;
+    el.innerHTML =
+      '<div class="mile-badge">' + (m.premium ? '★ PREMIUM' : 'ÜCRETSİZ') + '</div>' +
+      '<div class="mile-lvl">SEVİYE ' + m.lvl + '</div>' +
+      '<div class="mile-name">' + m.label + '</div>' +
+      '<div class="mile-status">' + status + '</div>';
+    track.appendChild(el);
+  }
 }
 
 function renderShop() {
@@ -1337,11 +1447,9 @@ function gameOver() {
     (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') : '');
   earnedEl.classList.remove('hidden');
   btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
-  renderPass();
+  renderPassMini();
   renderTrack();
-  menuScr.classList.remove('hidden');
-  shopScr.classList.add('hidden');
-  overlay.classList.remove('hidden');
+  showScreen(menuScr);
 }
 
 function startGame() {
@@ -1450,7 +1558,7 @@ addEventListener('pointercancel', () => { if (S.holding) release(); });
 addEventListener('keydown', e => {
   if ((e.code !== 'Space' && e.code !== 'Enter') || e.repeat) return;
   if (S.mode === 'play') tap();
-  else if ((S.mode === 'menu' || S.mode === 'over') && shopScr.classList.contains('hidden')) startGame();
+  else if ((S.mode === 'menu' || S.mode === 'over') && menuScr.classList.contains('hidden') === false) startGame();
 });
 addEventListener('keyup', e => {
   if ((e.code === 'Space' || e.code === 'Enter') && S.holding) release();
@@ -1458,6 +1566,8 @@ addEventListener('keyup', e => {
 btnPlay.addEventListener('pointerdown', e => { e.stopPropagation(); startGame(); });
 btnShop.addEventListener('pointerdown', e => { e.stopPropagation(); showShop(); });
 btnBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
+btnPass.addEventListener('pointerdown', e => { e.stopPropagation(); showPass(); });
+btnPassBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
 btnCrate.addEventListener('pointerdown', e => {
   e.stopPropagation();
   const res = openCrate();
