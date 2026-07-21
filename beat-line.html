@@ -349,7 +349,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v30</div>
+  <div id="ver">v31</div>
   <div id="diag"></div>
 </div>
 
@@ -2178,17 +2178,18 @@ function draw(t) {
   }
 
   // ELMAS YOLU: yan yolun eğrisi + toplanmamış elmaslar + kaydırma ipucu.
-  for (let i = Math.max(1, S.next); i < Math.min(S.next + 3, S.corners.length); i++) {
+  // Önden fark edilebilsin diye geniş bir bakış mesafesinde ve hep parlak
+  // çizilir — oyuncu bölgeye ulaşmadan önce yolu ve yönünü görebilmeli.
+  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
     const c = S.corners[i];
     if (!c.gemPath) continue;
     const gp = c.gemPath;
     const p = S.corners[i - 1];
     const hd = DIR[p.dirIdx];
     const gpx = -hd.z, gpz = hd.x;
-    const active = i === S.next;
     // Yan yolun eğrisi: merkez hattan ayrılıp köşede tekrar birleşir.
-    ctx.strokeStyle = active ? '#8be9ff' : 'rgba(139,233,255,.4)';
-    ctx.shadowColor = '#8be9ff'; ctx.shadowBlur = active ? 14 : 6;
+    ctx.strokeStyle = '#8be9ff';
+    ctx.shadowColor = '#8be9ff'; ctx.shadowBlur = 14;
     ctx.lineWidth = 3;
     ctx.setLineDash([6, 6]);
     ctx.beginPath();
@@ -2227,8 +2228,9 @@ function draw(t) {
       ctx.shadowBlur = 0;
     }
 
-    // Kaydırma ipucu: bölgedeyken, henüz o tarafa geçilmemişse.
-    if (active && S.lane !== gp.side && S.song >= gp.zoneStart && S.song <= gp.zoneEnd) {
+    // Kaydırma ipucu: bölgeye varmadan ÖNCE de gösterilir (erken uyarı),
+    // henüz o tarafa geçilmemiş ve elmaslar toplanmamışsa.
+    if (S.lane !== gp.side && !gp.gems.every(g => g.got)) {
       const midX = p.x + hd.x * p.spd * 0.5 * (c.t - p.t);
       const midZ = p.z + hd.z * p.spd * 0.5 * (c.t - p.t);
       const hv = view({ x: midX, y: 0.7, z: midZ });
