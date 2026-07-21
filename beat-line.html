@@ -343,7 +343,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v28</div>
+  <div id="ver">v29</div>
   <div id="diag"></div>
 </div>
 
@@ -458,6 +458,8 @@ const BLOCK_H    = 3.2;             // platform bloklarının derinliği
 // gerektirir — hareketliliği artırır. offset: şarkının ritim girişinin
 // dosya içindeki saniyesi (buffer bu noktadan S.song=0'a hizalanır).
 const HOLD_MIN_GAP = 4;
+const OBSTACLE_GAP  = 2;     // bu uzunluktaki düzlüklerin ortasına engel konur
+const DOUBLE_TAP_CHIP_BONUS = 2;
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
     gaps: [1, 1, 0.5, 0.5, 1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 1, 4, 1,
@@ -927,6 +929,13 @@ function genCorners(untilTime) {
       const holdStart = S.genT - (S.genPrevGap - 1) * S.genPrevBeatSec;
       corner.hold = { start: holdStart };
       scheduleStab(holdStart);   // basış vurgusu
+    } else if (S.genPrevGap === OBSTACLE_GAP && S.corners.length) {
+      // Düzlüğün tam ortasında ENGEL: çift dokunuşla aşılır.
+      const prev = S.corners[S.corners.length - 1];
+      const obT = S.genT - (S.genPrevGap / 2) * S.genPrevBeatSec;
+      corner.obstacle = { t: obT, taps: 0, done: false,
+                           x: (prev.x + corner.x) / 2, z: (prev.z + corner.z) / 2 };
+      scheduleStab(obT);   // engel vurgusu
     }
     S.corners.push(corner);
     scheduleStab(S.genT);        // köşe vurgusu
@@ -1702,6 +1711,30 @@ function tap() {
       return;
     }
   }
+  // ENGEL: düzlüğün ortasında, aynı vuruş penceresinde İKİ dokunuşla aşılır.
+  if (c.obstacle && !c.obstacle.done) {
+    const odt = S.song - c.obstacle.t;
+    if (Math.abs(odt) <= HIT_WIN) {
+      c.obstacle.taps++;
+      if (c.obstacle.taps >= 2) {
+        c.obstacle.done = true;
+        S.runChips += DOUBLE_TAP_CHIP_BONUS;
+        runChipsEl.textContent = '⬡ ' + S.runChips;
+        popupEl.textContent = 'AŞILDI!';
+        popupEl.className = '';
+        void popupEl.offsetWidth;
+        popupEl.className = 'show perfect';
+        vibrate([15, 10, 15]);
+      } else {
+        popupEl.textContent = 'YİNE DOKUN!';
+        popupEl.className = '';
+        void popupEl.offsetWidth;
+        popupEl.className = 'show good';
+        vibrate(15);
+      }
+      return;
+    }
+  }
   const dt = S.song - c.t;              // -: erken, +: geç
   if (Math.abs(dt) <= HIT_WIN) {
     turnSuccess(dt);
@@ -1709,6 +1742,7 @@ function tap() {
     // Yanlış zamanda dokunuş: yanlış dönüşle yoldan uç, düş, kaldığı
     // yerden devam et (ya da son canda direkt biter).
     if (c.hold) c.holdDone = true;      // şerit hakkı yandı, köşe normale döner
+    if (c.obstacle) c.obstacle.done = true;   // engel hakkı yandı
     wrongTurnFail('ERKEN DOKUNDUN!', 'early');
   }
 }
@@ -1803,6 +1837,17 @@ function update(dt, dtRaw) {
       if (S.lives > 1) {
         loseHeart('ŞERİDİ KAÇIRDIN!');
         startFall(false, 'hold');
+      } else {
+        S.next++;
+        die();
+      }
+    }
+    // ENGELE çarpıldı mı? (çift dokunuş tamamlanmadan vuruş penceresi geçti)
+    if (c.obstacle && !c.obstacle.done && S.song > c.obstacle.t + HIT_WIN) {
+      c.obstacle.done = true;
+      if (S.lives > 1) {
+        loseHeart('ENGELE ÇARPTIN!');
+        startFall(false, 'obstacle');
       } else {
         S.next++;
         die();
@@ -2086,6 +2131,62 @@ function draw(t) {
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
+    }
+  }
+
+  // ENGEL: düzlüğün ortasında yolu kapatan bariyer, çift dokunuşla aşılır.
+  for (let i = Math.max(1, S.next); i < Math.min(S.next + 3, S.corners.length); i++) {
+    const c = S.corners[i];
+    if (!c.obstacle || c.obstacle.done) continue;
+    const p = S.corners[i - 1];
+    const od = DIR[p.dirIdx];
+    const opx = -od.z, opz = od.x;   // dik (perp) vektör
+    const ox = c.obstacle.x, oz = c.obstacle.z;
+    const left = c.obstacle.t - S.song;
+    const inWin = Math.abs(left) <= HIT_WIN;
+    const halfTapped = c.obstacle.taps >= 1;
+    const barCol = halfTapped ? '#8dff3d' : (inWin ? '#ffffff' : '#ff5f7a');
+    ctx.strokeStyle = barCol;
+    ctx.shadowColor = '#ff5f7a'; ctx.shadowBlur = halfTapped ? 10 : 16;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    line3({ x: ox + opx * HALF_W, y: 0.32, z: oz + opz * HALF_W },
+          { x: ox - opx * HALF_W, y: 0.32, z: oz - opz * HALF_W });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Vuruşa senkron daralan halka: hold/köşe halkalarıyla aynı dil.
+    const bs = p.beatSec;
+    if (left < bs * 2.5) {
+      const ph2 = Math.max(0, left) / (bs * 2.5);
+      const R = HALF_W * (0.55 + ph2 * 2.6);
+      ctx.strokeStyle = inWin ? '#ffffff' : '#ff5f7a';
+      ctx.globalAlpha = inWin ? 1 : 0.7;
+      ctx.lineWidth = inWin ? 4 : 2.5;
+      ctx.beginPath();
+      let st = false;
+      for (let k = 0; k <= 20; k++) {
+        const a = (k / 20) * Math.PI * 2;
+        const v = view({ x: ox + Math.cos(a) * R, y: 0.06, z: oz + Math.sin(a) * R });
+        if (v.z < NEAR) continue;
+        const q = proj(v);
+        st ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+        st = true;
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // "2x DOKUN" ipucu: bariyerin üstünde.
+    const cv = view({ x: ox, y: 0.8, z: oz });
+    if (cv.z > NEAR) {
+      const cp = proj(cv);
+      ctx.fillStyle = halfTapped ? '#8dff3d' : '#ff5f7a';
+      ctx.font = '700 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 8;
+      ctx.fillText(halfTapped ? 'BİR DAHA!' : '2x DOKUN', cp.x, cp.y - 18);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'start';
     }
   }
 
