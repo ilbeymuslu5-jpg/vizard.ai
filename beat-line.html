@@ -302,7 +302,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v25</div>
+  <div id="ver">v26</div>
   <div id="diag"></div>
 </div>
 
@@ -399,6 +399,11 @@ const BLOCK_H    = 3.2;             // platform bloklarının derinliği
 // gerektirir — hareketliliği artırır. offset: şarkının ritim girişinin
 // dosya içindeki saniyesi (buffer bu noktadan S.song=0'a hizalanır).
 const HOLD_MIN_GAP = 4;
+// SWIPE köşeleri: tam 2 beat'lik orta-uzunlukta düzlüklerde, köşeye
+// dokunmak yerine yönü tutan bir SÜRÜKLEME (swipe) gerekir — yolun
+// tamamında dikkati canlı tutan üçüncü bir jest (tap / hold / swipe).
+const SWIPE_GAP = 2;
+const SWIPE_MIN_PX = 40;   // yön sayılması için asgari yatay sürükleme (CSS px)
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
     gaps: [1, 1, 0.5, 0.5, 1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 1, 4, 1,
@@ -831,6 +836,7 @@ const S = {
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
   speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
   holding: false,          // hold şeridinde parmak basılı mı
+  swipeArm: null,          // { idx, dt } — swipe köşesinde zamanlama tuttu, yön bekleniyor
   genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * beatSecForSeg(0) * BASE_SPEED,
   genDir: 1, genT: LEAD_BEATS * beatSecForSeg(0),
   genPrevGap: 0, genPrevBeatSec: beatSecForSeg(0),
@@ -855,6 +861,11 @@ function genCorners(untilTime) {
       const holdStart = S.genT - (S.genPrevGap - 1) * S.genPrevBeatSec;
       corner.hold = { start: holdStart };
       scheduleStab(holdStart);   // basış vurgusu
+    } else if (S.genPrevGap === SWIPE_GAP) {
+      // Orta uzunlukta düzlük -> SWIPE köşesi: dokunuş yerine köşenin
+      // döneceği yönde (dirIdx) bir sürükleme gerekir.
+      corner.swipe = true;
+      corner.swipeDir = corner.dirIdx;
     }
     S.corners.push(corner);
     scheduleStab(S.genT);        // köşe vurgusu
@@ -1272,7 +1283,7 @@ function reset() {
   gapIdx = Math.floor(Math.random() * GAPS.length);
   S.next = 0; S.pending = false;
   S.speed = BASE_SPEED;
-  S.holding = false;
+  S.holding = false; S.swipeArm = null;
   melodyIdx = 0;
   const bs0 = beatSecForSeg(0);
   S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * bs0 * BASE_SPEED;
@@ -1301,7 +1312,7 @@ function reset() {
 // kind: 'miss' (köşe kaçtı) | 'early' (yanlış zamanda dokundu) | null (ölüm).
 function startFall(fatal, kind) {
   S.mode = 'fall';
-  S.holding = false;
+  S.holding = false; S.swipeArm = null;
   S.fallFatal = fatal;
   S.fallKind = kind;
   S.fallT = 0; S.fallVy = 1.5;
@@ -1525,8 +1536,24 @@ function turnSuccess(dt) {
   vibrate(kind === 'perfect' ? 45 : 28);   // dönüş geri bildirimi: titreşim
 }
 
+// Ortak "yanlış dönüş" başarısızlık yolu: tap/release/swipe'ın hepsi
+// buradan geçer. Can kaldıysa kalp gider, top DÜŞER, kaldığı yerden devam
+// eder; son canda direkt oyun biter.
+function wrongTurnFail(msg, fallKind) {
+  if (S.lives > 1) {
+    loseHeart(msg);
+    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.dirIdx = 1 - S.dirIdx;
+    startFall(false, fallKind);
+  } else {
+    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.dirIdx = 1 - S.dirIdx;
+    die();
+  }
+}
+
 function tap() {
-  if (S.mode !== 'play' || S.pending || S.holding) return;
+  if (S.mode !== 'play' || S.pending || S.holding || S.swipeArm) return;
   initAudio();   // iOS: her dokunuşta resume dene (arka plan kesintilerine karşı)
   const c = S.corners[S.next];
   // HOLD şeridi: önce şerit başındaki basış anı değerlendirilir.
@@ -1542,22 +1569,28 @@ function tap() {
       return;
     }
   }
+  // SWIPE köşesi: zamanlama burada (dokunuş anında) değerlendirilir; yön
+  // kontrolü parmak kalkınca (pointerup/klavye) yapılır — bkz. resolveSwipe.
+  if (c.swipe && !c.swipeDone) {
+    const sdt = S.song - c.t;
+    if (Math.abs(sdt) <= HIT_WIN) {
+      S.swipeArm = { idx: S.next, dt: sdt };
+      popupEl.textContent = 'KAYDIR!';
+      popupEl.className = '';
+      void popupEl.offsetWidth;
+      popupEl.className = 'show good';
+      return;
+    }
+  }
   const dt = S.song - c.t;              // -: erken, +: geç
   if (Math.abs(dt) <= HIT_WIN) {
     turnSuccess(dt);
-  } else if (S.lives > 1) {
-    // Yanlış zamanda dokunuş: kalp git, yanlış dönüşle yoldan uç, düş,
-    // sonra kaldığı yerden devam et.
-    if (c.hold) c.holdDone = true;      // şerit hakkı yandı, köşe normale döner
-    loseHeart('ERKEN DOKUNDUN!');
-    S.trail.push({ x: S.head.x, z: S.head.z });
-    S.dirIdx = 1 - S.dirIdx;
-    startFall(false, 'early');
   } else {
-    // Son kalp: çizgi hemen döner ve yoldan çıkar.
-    S.trail.push({ x: S.head.x, z: S.head.z });
-    S.dirIdx = 1 - S.dirIdx;
-    die();
+    // Yanlış zamanda dokunuş: yanlış dönüşle yoldan uç, düş, kaldığı
+    // yerden devam et (ya da son canda direkt biter).
+    if (c.hold) c.holdDone = true;      // şerit hakkı yandı, köşe normale döner
+    if (c.swipe) c.swipeDone = true;    // swipe hakkı yandı, köşe normale döner
+    wrongTurnFail('ERKEN DOKUNDUN!', 'early');
   }
 }
 
@@ -1572,32 +1605,59 @@ function release() {
     S.runChips += 1;                    // hold bonusu
     runChipsEl.textContent = '⬡ ' + S.runChips;
   } else if (dt < -HIT_WIN) {
-    if (S.lives > 1) {
-      loseHeart('ERKEN BIRAKTIN!');
-      startFall(false, 'hold');         // düş, kaldığı yerden devam
-    } else {
-      S.trail.push({ x: S.head.x, z: S.head.z });
-      S.dirIdx = 1 - S.dirIdx;
-      die();
-    }
+    wrongTurnFail('ERKEN BIRAKTIN!', 'hold');
   }
   // Geç bırakma: köşe kaçırma dalı zaten işler (miss).
 }
+
+// SWIPE yönü çözümü: parmak kalkarken (ya da ok tuşuyla) çağrılır.
+// gotDir: 0 = sağa, 1 = sola, -1 = yetersiz/yönsüz sürükleme (düz tık gibi).
+function resolveSwipe(gotDir) {
+  const arm = S.swipeArm;
+  S.swipeArm = null;
+  if (!arm || arm.idx !== S.next) return;   // bu arada köşe zaten değişmiş
+  const c = S.corners[arm.idx];
+  if (c.swipeDone) return;
+  c.swipeDone = true;
+  if (gotDir === c.swipeDir) {
+    turnSuccess(arm.dt);
+    S.runChips += 1;                    // swipe bonusu (hold ile aynı)
+    runChipsEl.textContent = '⬡ ' + S.runChips;
+  } else {
+    wrongTurnFail(gotDir === -1 ? 'KAYDIRMADIN!' : 'YANLIŞ YÖN!', 'early');
+  }
+}
 // Oyun içi dokunuş: yalnızca oyun modunda; menü/mağaza butonları kendi
-// olaylarını yönetir.
+// olaylarını yönetir. SWIPE için parmağın iniş noktası burada tutulur.
+let ptrStartX = 0, ptrStartY = 0;
 addEventListener('pointerdown', e => {
   if (S.mode !== 'play') return;
   e.preventDefault();
+  ptrStartX = e.clientX; ptrStartY = e.clientY;
   tap();
 }, { passive: false });
 addEventListener('pointerup', e => {
-  if (S.mode !== 'play' || !S.holding) return;
+  if (S.mode !== 'play') return;
   e.preventDefault();
-  release();
+  if (S.holding) { release(); return; }
+  if (S.swipeArm) {
+    const dx = e.clientX - ptrStartX;
+    const gotDir = dx > SWIPE_MIN_PX ? 0 : (dx < -SWIPE_MIN_PX ? 1 : -1);
+    resolveSwipe(gotDir);
+  }
 }, { passive: false });
-addEventListener('pointercancel', () => { if (S.holding) release(); });
+addEventListener('pointercancel', () => {
+  if (S.holding) release();
+  S.swipeArm = null;   // sistem kesintisi: cezasız iptal
+});
 addEventListener('keydown', e => {
-  if ((e.code !== 'Space' && e.code !== 'Enter') || e.repeat) return;
+  if (e.repeat) return;
+  // Klavyede swipe: bekleyen bir swipeArm varken Sol/Sağ ok yönü onaylar.
+  if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && S.mode === 'play' && S.swipeArm) {
+    resolveSwipe(e.code === 'ArrowRight' ? 0 : 1);
+    return;
+  }
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
   if (S.mode === 'play') tap();
   else if ((S.mode === 'menu' || S.mode === 'over') && menuScr.classList.contains('hidden') === false) startGame();
 });
@@ -1978,6 +2038,28 @@ function draw(t) {
       }
       ctx.stroke();
       ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+      // SWIPE köşesi: halkanın üstünde, dönülecek yönü gösteren, hafifçe
+      // o yöne doğru sallanan bir ok — "dokunma, kaydır" ipucu.
+      if (c.swipe && !c.swipeDone) {
+        const cv = view({ x: c.x, y: 0.55, z: c.z });
+        if (cv.z > NEAR) {
+          const cp = proj(cv);
+          const dirSign = c.swipeDir === 0 ? 1 : -1;   // 0=sağ, 1=sol
+          const wag = dirSign * 10 * (0.6 + 0.4 * Math.sin(t * 5));
+          const ax = cp.x + wag, s = 15;
+          ctx.fillStyle = inWin ? '#ffffff' : '#ffb84d';
+          ctx.shadowColor = '#ffb84d'; ctx.shadowBlur = 10;
+          ctx.beginPath();
+          if (dirSign > 0) {
+            ctx.moveTo(ax - s * 0.6, cp.y - s); ctx.lineTo(ax + s * 0.7, cp.y); ctx.lineTo(ax - s * 0.6, cp.y + s);
+          } else {
+            ctx.moveTo(ax + s * 0.6, cp.y - s); ctx.lineTo(ax - s * 0.7, cp.y); ctx.lineTo(ax + s * 0.6, cp.y + s);
+          }
+          ctx.closePath(); ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
     }
   }
 
@@ -2090,7 +2172,7 @@ showMenu();   // açılışta ana menü
 
 // Test kancası (#debug ile aç): otomatik oynatma ve durum erişimi.
 // BEAT/BPM/TR parçaya göre değiştiği için canlı getter olarak dışa aktarılır.
-if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
+if (location.hash === '#debug') window.BL = { S, tap, release, resolveSwipe, headAt, HIT_WIN,
   view, proj, cam, CAM, TRACKS, AUDIO_BUFFERS, beatPhaseAt, currentEffBpm,
   get camA() { return camA; }, get camP() { return camP; },
   get TR() { return TR; },
