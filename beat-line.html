@@ -288,6 +288,47 @@
   #crateResult.r-chip { color: #ffd76e; text-shadow: 0 0 10px rgba(255,210,110,.6); }
   #crateResult.r-gem  { color: #8be9ff; text-shadow: 0 0 10px rgba(139,233,255,.6); }
   #crateResult.r-item { color: #8dff3d; text-shadow: 0 0 12px rgba(140,255,60,.7); }
+
+  /* ---------- düşünce sonrası: reklamla devam et ---------- */
+  #reviveOverlay, #adOverlay {
+    position: absolute; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(2, 5, 14, .72); pointer-events: auto; text-align: center;
+  }
+  #reviveBox, #adBox {
+    width: min(320px, 84%); padding: 22px 20px;
+    background: linear-gradient(160deg, rgba(20, 34, 66, .9), rgba(8, 14, 30, .92));
+    border: 1.5px solid rgba(255, 184, 77, .5); border-radius: 16px;
+    box-shadow: 0 0 30px rgba(255, 184, 77, .2);
+  }
+  #reviveBox h2 {
+    font-size: clamp(24px, 8em, 40px); font-weight: 800; font-style: italic;
+    letter-spacing: 4px; color: #ff5f7a;
+    text-shadow: 0 0 18px rgba(255, 95, 122, .8);
+  }
+  #reviveScoreTxt {
+    margin: 8px 0 4px; font-size: clamp(14px, 4.4em, 20px); font-weight: 700;
+    letter-spacing: 1px; color: #ffe9a8;
+  }
+  #reviveTimerBar {
+    width: 100%; height: 6px; margin-top: 16px; border-radius: 4px;
+    background: rgba(255,255,255,.12); overflow: hidden;
+  }
+  #reviveTimerFill {
+    height: 100%; width: 100%; background: #ffb84d;
+    box-shadow: 0 0 10px rgba(255,184,77,.8);
+  }
+  #adLabel {
+    font-size: clamp(14px, 4.6em, 20px); font-weight: 800; letter-spacing: 2px;
+    color: #6df2ff; text-shadow: 0 0 12px rgba(90,230,255,.7);
+  }
+  #adCountdown {
+    margin: 14px 0; font-size: clamp(40px, 14em, 64px); font-weight: 800;
+    color: #eaf6ff;
+  }
+  #adHint {
+    font-size: clamp(12px, 3.8em, 16px); color: #9fdcff; letter-spacing: 1px;
+  }
 </style>
 </head>
 <body>
@@ -302,8 +343,26 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v27</div>
+  <div id="ver">v28</div>
   <div id="diag"></div>
+</div>
+
+<div id="reviveOverlay" class="hidden">
+  <div id="reviveBox">
+    <h2>DÜŞTÜN!</h2>
+    <p id="reviveScoreTxt"></p>
+    <button class="btn primary" id="btnRevive">&#128250; REKLAM İZLE — DEVAM ET</button>
+    <button class="btn" id="btnReviveSkip">BİTİR</button>
+    <div id="reviveTimerBar"><div id="reviveTimerFill"></div></div>
+  </div>
+</div>
+
+<div id="adOverlay" class="hidden">
+  <div id="adBox">
+    <div id="adLabel">REKLAM OYNATILIYOR</div>
+    <div id="adCountdown">5</div>
+    <div id="adHint">Ödülünüzü almak için bekleyin…</div>
+  </div>
 </div>
 
 <div id="overlay">
@@ -573,7 +632,8 @@ function persist() {
 // Premium pass: seviye başına +80 elmas -> 100 seviyede toplam 10.000.
 const PASS_MAX = 100, PASS_XP = 250;
 const GEM_FREE = 20, GEM_PREM = 80;
-const PREMIUM_PRICE = 1500;   // çip
+const PREMIUM_SKU = 'beatline_premium_pass';
+const PREMIUM_PRICE_DISPLAY = '109,99₺';
 // Kademe hediyesi kozmetikler (seviyeye ulaşınca otomatik açılır).
 const PASS_MILES = [
   { lvl: 25,  premium: true,  cat: 'skins',  id: 'plazma', label: 'Plazma Kostümü' },
@@ -600,10 +660,12 @@ function claimPassLevels() {
   save.claimedLvl = lvl;
   return got;
 }
-// Premium satın alma: geçmiş seviyelerin premium elmasları geriye dönük verilir.
-function buyPremium() {
-  if (save.premium || save.chips < PREMIUM_PRICE) return false;
-  save.chips -= PREMIUM_PRICE;
+// Premium satın alma: gerçek para (109,99₺). Native sarmalayıcı (Capacitor/
+// Cordova + Google Play Billing) window.BL_iap.purchase(sku, onOk, onFail)
+// köprüsünü sağlarsa onu kullanır; tarayıcı/test ortamında onay penceresiyle
+// simüle edilir. Onaylanınca geçmiş seviyelerin premium elmasları ve
+// ödülleri geriye dönük verilir.
+function grantPremium() {
   save.premium = true;
   save.gems += save.claimedLvl * GEM_PREM;
   for (const m of PASS_MILES) {
@@ -611,7 +673,17 @@ function buyPremium() {
       save.owned[m.cat].push(m.id);
   }
   persist();
-  return true;
+}
+function buyPremium(onDone) {
+  if (save.premium) { onDone(false); return; }
+  const onOk = () => { grantPremium(); onDone(true); };
+  const onFail = () => onDone(false);
+  if (window.BL_iap && typeof window.BL_iap.purchase === 'function') {
+    window.BL_iap.purchase(PREMIUM_SKU, onOk, onFail);
+  } else {
+    if (confirm('PREMIUM PASS — ' + PREMIUM_PRICE_DISPLAY + '\n\nSatın almayı onaylıyor musunuz?')) onOk();
+    else onFail();
+  }
 }
 
 // ---------- KASA: elmasla açılır, rastgele ödül verir.
@@ -1234,7 +1306,10 @@ const overlay = $('overlay'), titleEl = $('title'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
       btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
-      btnCrate = $('btnCrate'), crateResult = $('crateResult');
+      btnCrate = $('btnCrate'), crateResult = $('crateResult'),
+      reviveOverlay = $('reviveOverlay'), reviveScoreTxt = $('reviveScoreTxt'),
+      btnRevive = $('btnRevive'), btnReviveSkip = $('btnReviveSkip'), reviveTimerFill = $('reviveTimerFill'),
+      adOverlay = $('adOverlay'), adCountdown = $('adCountdown');
 // Üç ana menü ekranından yalnızca birini gösterir, diğerlerini gizler.
 function showScreen(scr) {
   for (const s of [menuScr, shopScr, passScr]) s.classList.toggle('hidden', s !== scr);
@@ -1293,6 +1368,7 @@ function reset() {
   speedEl.textContent = 'HIZ x1.00';
   S.runChips = 0; runChipsEl.textContent = '⬡ 0';
   S.lives = 3; updateHearts();
+  S.revivesUsed = false;
   rings.length = 0;
 }
 
@@ -1366,18 +1442,19 @@ function renderPassScreen() {
     premBox.innerHTML = '<div class="premActive">★ PREMIUM PASS AKTİF — seviye başına +💎 ' +
       GEM_PREM + ' ekstra</div>';
   } else {
-    premBox.innerHTML = '<button class="btn primary" id="buyPremBtn">★ PREMIUM PASS AL — ⬡ ' +
-      PREMIUM_PRICE + '</button>' +
+    premBox.innerHTML = '<button class="btn primary" id="buyPremBtn">★ PREMIUM PASS AL — ' +
+      PREMIUM_PRICE_DISPLAY + '</button>' +
       '<div class="premHint">Seviye başına 💎 ' + GEM_FREE + ' yerine 💎 ' +
       (GEM_FREE + GEM_PREM) + ' kazan. Geçmiş seviyelerinin elmasları ve ödülleri geri verilir.</div>';
     $('buyPremBtn').addEventListener('pointerdown', e => {
       e.stopPropagation();
-      if (buyPremium()) { vibrate(40); renderPassScreen(); }
-      else {
-        const b = $('buyPremBtn');
-        b.style.borderColor = '#ff5f7a'; b.style.color = '#ff5f7a';
-        setTimeout(renderPassScreen, 300);
-      }
+      buyPremium(ok => {
+        if (ok) { vibrate(40); renderPassScreen(); }
+        else {
+          const b = $('buyPremBtn');
+          if (b) { b.style.borderColor = '#ff5f7a'; b.style.color = '#ff5f7a'; setTimeout(renderPassScreen, 300); }
+        }
+      });
     });
   }
 
@@ -1471,6 +1548,73 @@ function shopCard(it, cat) {
   });
   return d;
 }
+
+// Reklam izleyip kaldığın yerden devam etme: her koşuda bir kez sunulur.
+const REVIVE_WAIT_S = 6;   // teklif ekranında karar için süre
+const AD_SIM_SECONDS = 4;  // native reklam köprüsü yoksa simülasyon süresi
+
+// Ödüllü reklam oynatma köprüsü: native sarmalayıcı (Capacitor/Cordova +
+// AdMob) window.BL_ads.showRewarded(onReward, onFail) sağlarsa onu kullanır;
+// tarayıcı/test ortamında sayaçlı bir simülasyon oynatılır.
+function playRewardedAd(onReward, onFail) {
+  if (window.BL_ads && typeof window.BL_ads.showRewarded === 'function') {
+    window.BL_ads.showRewarded(onReward, onFail || (() => {}));
+    return;
+  }
+  adOverlay.classList.remove('hidden');
+  let n = AD_SIM_SECONDS;
+  adCountdown.textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n <= 0) {
+      clearInterval(iv);
+      adOverlay.classList.add('hidden');
+      onReward();
+    } else {
+      adCountdown.textContent = n;
+    }
+  }, 1000);
+}
+
+function offerRevive() {
+  S.mode = 'reviveWait';
+  reviveScoreTxt.textContent = 'SKOR: ' + S.score;
+  reviveOverlay.classList.remove('hidden');
+  reviveTimerFill.style.transition = 'none';
+  reviveTimerFill.style.width = '100%';
+  void reviveTimerFill.offsetWidth;
+  reviveTimerFill.style.transition = 'width ' + REVIVE_WAIT_S + 's linear';
+  reviveTimerFill.style.width = '0%';
+  S.reviveTimeout = setTimeout(declineRevive, REVIVE_WAIT_S * 1000);
+}
+function declineRevive() {
+  clearTimeout(S.reviveTimeout);
+  reviveOverlay.classList.add('hidden');
+  gameOver();
+}
+function acceptRevive() {
+  clearTimeout(S.reviveTimeout);
+  reviveOverlay.classList.add('hidden');
+  playRewardedAd(grantRevive, gameOver);
+}
+// Reklam ödülü: kaldığı yerden (donuk şarkı zamanındaki gerçek ray
+// konumundan) devam eder — kalıcı düşüş yolunun aynısı, ölüm hariç.
+function grantRevive() {
+  S.revivesUsed = true;
+  S.lives = 1; updateHearts();
+  S.combo = 0; comboEl.textContent = '';
+  const h = headAt(S.song);
+  S.head.x = h.x; S.head.z = h.z; S.head.y = 0;
+  S.dirIdx = h.dirIdx;
+  S.fallVy = 0;
+  S.mode = 'play';
+  resumeMusicAudio();
+  spawnRing(S.head.x, S.head.z);
+  burst(S.head.x, S.head.z, 20, theme.glow);
+  vibrate([20, 30, 20]);
+}
+btnRevive.addEventListener('pointerdown', e => { e.stopPropagation(); acceptRevive(); });
+btnReviveSkip.addEventListener('pointerdown', e => { e.stopPropagation(); declineRevive(); });
 
 function gameOver() {
   S.mode = 'over';
@@ -1706,7 +1850,10 @@ function update(dt, dtRaw) {
     // toplamda aynı miktar kayar -> devamda senkron birebir korunur.
     S.t0 = actx.currentTime - S.song;
     if (S.fallT > (S.fallFatal ? 1.0 : 0.7)) {
-      if (S.fallFatal) { gameOver(); }
+      if (S.fallFatal) {
+        if (!S.revivesUsed) offerRevive();
+        else gameOver();
+      }
       else {
         // KALDIĞI YERDEN DEVAM: baş, donuk şarkı zamanındaki gerçek
         // ray konumuna geri oturtulur.
@@ -1730,6 +1877,10 @@ function update(dt, dtRaw) {
         vibrate(30);
       }
     }
+  } else if (S.mode === 'reviveWait') {
+    // Reklam teklif ekranı: oyun saati donuk kalır (top olduğu yerde durur),
+    // devam edince senkron kaymasın diye t0 her karede yeniden hizalanır.
+    S.t0 = actx.currentTime - S.song;
   }
 
   // parçacıklar
@@ -1861,7 +2012,7 @@ function draw(t) {
 
   // Beat darbesi: vuruş anında 1'e FIRLAR, üssel olarak çok hızlı söner.
   // (0.003^faz: fazın %25'inde ~%23'e, yarısında ~%5'e düşer — sert punch.)
-  const inGame = S.mode === 'play' || S.mode === 'fall';
+  const inGame = S.mode === 'play' || S.mode === 'fall' || S.mode === 'reviveWait';
   const tSrc = inGame ? S.song : t;
   const ph = (((beatPhaseAt(tSrc, inGame)) % 1) + 1) % 1;
   const beatP = Math.pow(0.003, ph);
@@ -1952,7 +2103,7 @@ function draw(t) {
       line3({ x: pts[i].x, y: 0.12, z: pts[i].z }, { x: pts[i+1].x, y: 0.12, z: pts[i+1].z });
     }
     // düşüşte başın dikey çizgisi
-    if (S.mode === 'fall')
+    if (S.mode === 'fall' || S.mode === 'reviveWait')
       line3({ x: S.head.x, y: 0.12, z: S.head.z }, { x: S.head.x, y: S.head.y, z: S.head.z });
     ctx.stroke();
   }
@@ -1989,7 +2140,7 @@ function draw(t) {
   // GARANTİ: projeksiyon ne derse desin top ekran içine kenetlenir —
   // herhangi bir platform/viewport tuhaflığında bile daima görünür.
   {
-    const hv = view({ x: S.head.x, y: (S.mode === 'fall' ? S.head.y : 0.16), z: S.head.z });
+    const hv = view({ x: S.head.x, y: ((S.mode === 'fall' || S.mode === 'reviveWait') ? S.head.y : 0.16), z: S.head.z });
     const ok = hv.z > NEAR;
     const hp = ok ? proj(hv) : { x: W / 2, y: H * 0.6 };
     hp.x = Math.min(W - 34, Math.max(34, hp.x));
@@ -2063,7 +2214,7 @@ function frame(now) {
   const dt = Math.min(0.05, dtRaw);
   last = now;
   try {
-    if (actx && (S.mode === 'play' || S.mode === 'fall')) update(dt, dtRaw);
+    if (actx && (S.mode === 'play' || S.mode === 'fall' || S.mode === 'reviveWait')) update(dt, dtRaw);
     else {
       // menüde hafif süzülen kamera
       cam.x = -DIAG.x * CAM.back; cam.z = -DIAG.z * CAM.back; cam.y = CAM.h;
@@ -2096,6 +2247,7 @@ showMenu();   // açılışta ana menü
 // BEAT/BPM/TR parçaya göre değiştiği için canlı getter olarak dışa aktarılır.
 if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   view, proj, cam, CAM, TRACKS, AUDIO_BUFFERS, beatPhaseAt, currentEffBpm,
+  acceptRevive, declineRevive, buyPremium, save,
   get camA() { return camA; }, get camP() { return camP; },
   get TR() { return TR; },
   get musicSrc() { return musicSrc; },
