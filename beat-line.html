@@ -334,6 +334,117 @@
   #adHint {
     font-size: clamp(12px, 3.8em, 16px); color: #9fdcff; letter-spacing: 1px;
   }
+
+  /* ---------- yardım (?) düğmesi + NASIL OYNANIR ekranı ---------- */
+  #btnHelp {
+    position: absolute; top: 14px; right: 14px; z-index: 25;
+    width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(10,20,40,.6); border: 2px solid rgba(109,242,255,.55);
+    box-shadow: 0 0 14px rgba(90,230,255,.3);
+    color: #6df2ff; font-size: 19px; font-weight: 800; font-family: inherit;
+    cursor: pointer; pointer-events: auto;
+  }
+  #btnHelp:active { transform: scale(.94); }
+  #howScr {
+    position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
+    padding: 18px 12px 30px; text-align: center;
+  }
+  #howScr h2 {
+    font-size: clamp(26px, 9em, 46px); font-weight: 800; font-style: italic;
+    letter-spacing: 5px; color: #6df2ff;
+    text-shadow: 0 0 18px rgba(90, 230, 255, .8);
+  }
+  .howCard {
+    pointer-events: auto;
+    width: min(340px, 92%); margin: 16px auto;
+    padding: 16px;
+    background: linear-gradient(160deg, rgba(20, 34, 66, .75), rgba(8, 14, 30, .8));
+    border: 1.5px solid rgba(109, 242, 255, .35); border-radius: 14px;
+    box-shadow: 0 0 22px rgba(90, 230, 255, .14), inset 0 0 18px rgba(90, 230, 255, .05);
+  }
+  .howDiagram {
+    position: relative; height: 90px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .howTitle {
+    font-size: clamp(16px, 5.4em, 24px); font-weight: 800; letter-spacing: 3px;
+    color: #ffd76e; text-shadow: 0 0 12px rgba(255, 210, 110, .6);
+  }
+  .howDesc {
+    margin-top: 6px; font-size: clamp(12px, 3.8em, 16px); color: #cfeeff; opacity: .9;
+  }
+  /* DOKUN diyagramı: köşeye inen halka beyaza dönünce nokta büyür. */
+  .diagTap .tapRing {
+    position: absolute; border-radius: 50%;
+    border: 3px solid #6df2ff; box-shadow: 0 0 14px rgba(90, 230, 255, .7);
+    animation: tapRingAnim 1.2s ease-in-out infinite;
+  }
+  .diagTap .tapDot {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 16px rgba(255, 255, 255, .9);
+    animation: tapDotAnim 1.2s ease-in-out infinite;
+  }
+  @keyframes tapRingAnim {
+    0%   { width: 90px; height: 90px; border-color: #6df2ff; opacity: .5; }
+    80%  { width: 30px; height: 30px; border-color: #fff;    opacity: 1;  }
+    100% { width: 90px; height: 90px; border-color: #6df2ff; opacity: .5; }
+  }
+  @keyframes tapDotAnim {
+    0%, 70% { transform: scale(1); }
+    80%     { transform: scale(1.6); }
+    100%    { transform: scale(1); }
+  }
+  /* TUT diyagramı: şerit boyunca dolan bar + baştan sona kayan parmak. */
+  .diagHold .holdBar {
+    width: 210px; height: 10px; border-radius: 6px;
+    background: rgba(109, 242, 255, .18); border: 1.5px solid rgba(109, 242, 255, .4);
+    overflow: hidden; position: relative;
+  }
+  .diagHold .holdFill {
+    position: absolute; inset: 0; width: 0%;
+    background: #6df2ff; box-shadow: 0 0 10px rgba(90, 230, 255, .8);
+    animation: holdFillAnim 1.6s ease-in-out infinite;
+  }
+  .diagHold .holdThumb {
+    position: absolute; top: -5px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 14px rgba(255, 255, 255, .9);
+    animation: holdThumbAnim 1.6s ease-in-out infinite;
+  }
+  @keyframes holdFillAnim {
+    0%, 10%   { width: 0%; }
+    90%, 100% { width: 100%; }
+  }
+  @keyframes holdThumbAnim {
+    0%, 10%   { left: 0px; }
+    90%, 100% { left: 190px; }
+  }
+  /* KAYDIR diyagramı: ana hattan ayrılan kesikli yan yol + elmaslar + ok. */
+  .diagSwipe .swipeMain {
+    position: absolute; left: 50%; top: 0; bottom: 0; width: 4px;
+    background: rgba(109, 242, 255, .5); transform: translateX(-50%);
+  }
+  .diagSwipe .swipeBranch {
+    position: absolute; left: 50%; top: 42%; width: 76px; height: 3px;
+    background: repeating-linear-gradient(90deg, #8be9ff 0 6px, transparent 6px 12px);
+    transform-origin: left center; transform: rotate(-24deg);
+  }
+  .diagSwipe .swipeGem {
+    position: absolute; width: 8px; height: 8px; background: #8be9ff;
+    box-shadow: 0 0 8px rgba(139, 233, 255, .9); transform: rotate(45deg);
+  }
+  .diagSwipe .g1 { left: calc(50% + 36px); top: 27%; }
+  .diagSwipe .g2 { left: calc(50% + 62px); top: 15%; }
+  .diagSwipe .swipeArrow {
+    position: absolute; left: 50%; top: 56%; color: #8be9ff; font-size: 22px;
+    font-weight: 800; text-shadow: 0 0 10px rgba(139, 233, 255, .8);
+    animation: swipeArrowAnim 1.4s ease-in-out infinite;
+  }
+  @keyframes swipeArrowAnim {
+    0%   { transform: translate(-8px, 0); opacity: .35; }
+    50%  { transform: translate(32px, -18px); opacity: 1; }
+    100% { transform: translate(-8px, 0); opacity: .35; }
+  }
 </style>
 </head>
 <body>
@@ -349,7 +460,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v31</div>
+  <div id="ver">v32</div>
   <div id="diag"></div>
 </div>
 
@@ -372,6 +483,7 @@
 </div>
 
 <div id="overlay">
+  <button id="btnHelp" aria-label="Nasıl Oynanır">?</button>
   <div id="menuScr">
     <h1 id="title">BEAT&nbsp;LINE</h1>
     <p id="stats"></p>
@@ -379,6 +491,37 @@
     <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
     <button class="btn" id="btnPass">&#9889; BEAT PASS <span id="passMiniLvl"></span></button>
     <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
+  </div>
+  <div id="howScr" class="hidden">
+    <h2>NASIL OYNANIR</h2>
+    <div class="howCard">
+      <div class="howDiagram diagTap">
+        <div class="tapRing"></div>
+        <div class="tapDot"></div>
+      </div>
+      <div class="howTitle">DOKUN</div>
+      <div class="howDesc">Halka köşeye inip beyaza dönünce ekrana DOKUN.</div>
+    </div>
+    <div class="howCard">
+      <div class="howDiagram diagHold">
+        <div class="holdBar"><div class="holdFill"></div></div>
+        <div class="holdThumb"></div>
+      </div>
+      <div class="howTitle">TUT</div>
+      <div class="howDesc">Uzun düzlüklerde parmağını BAS TUT, köşede BIRAK.</div>
+    </div>
+    <div class="howCard">
+      <div class="howDiagram diagSwipe">
+        <div class="swipeMain"></div>
+        <div class="swipeBranch"></div>
+        <div class="swipeGem g1"></div>
+        <div class="swipeGem g2"></div>
+        <div class="swipeArrow">&#8658;</div>
+      </div>
+      <div class="howTitle">KAYDIR</div>
+      <div class="howDesc">Elmas yolu belirince doğru yöne KAYDIR, elmasları topla.</div>
+    </div>
+    <button class="btn" id="btnHowBack">&larr; GERİ</button>
   </div>
   <div id="passScr" class="hidden">
     <h2>BEAT PASS</h2>
@@ -514,6 +657,27 @@ const C = {
   accentPink: '#c94dff', accentOrange: '#ffb84d',
   grid:  'rgba(40,190,220,.34)', grid2: 'rgba(20,90,130,.5)',
 };
+
+// Renk karıştırma yardımcıları: yüzey gölgelendirme (derinlik/AO) ve
+// mesafe sisi (fog) için — düz renkler yerine gradyan üretmede kullanılır.
+// theme.glow gibi renkler çalışırken '#rrggbb' ya da 'rgb(r,g,b)' biçiminde
+// olabildiği için ikisini de ayrıştırır.
+function parseColor(str) {
+  if (str[0] === '#') {
+    const n = parseInt(str.slice(1), 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  const parts = str.slice(str.indexOf('(') + 1, str.indexOf(')')).split(',').map(Number);
+  return { r: parts[0], g: parts[1], b: parts[2] };
+}
+function mixHex(colA, colB, t) {
+  const a = parseColor(colA), b = parseColor(colB);
+  const r = Math.round(a.r + (b.r - a.r) * t);
+  const g = Math.round(a.g + (b.g - a.g) * t);
+  const bl = Math.round(a.b + (b.b - a.b) * t);
+  return 'rgb(' + r + ',' + g + ',' + bl + ')';
+}
+function lightenHex(col, amt) { return mixHex(col, '#ffffff', amt); }
 
 // ---------- Dinamik neon tema: her 15 skorda rastgele yeni renge yumuşak geçiş
 const NEON = [
@@ -1084,6 +1248,9 @@ function clipNear(vs) {
   return out;
 }
 function quad(pts, fill) {  // 4 köşeli yüzey (NEAR'da kırpılır)
+  // fill bir renk string'i OLABİLİR, ya da derinlik/gölgelendirme için
+  // projekte köşe noktalarını (ps) alıp bir CanvasGradient döndüren
+  // bir fonksiyon (yüzeyin ekrandaki gerçek boyutuna göre gradyan kurar).
   const vs = clipNear(pts.map(view));
   if (vs.length < 3) return;
   const ps = vs.map(proj);
@@ -1091,7 +1258,8 @@ function quad(pts, fill) {  // 4 köşeli yüzey (NEAR'da kırpılır)
   ctx.moveTo(ps[0].x, ps[0].y);
   for (let i = 1; i < ps.length; i++) ctx.lineTo(ps[i].x, ps[i].y);
   ctx.closePath();
-  ctx.fillStyle = fill; ctx.fill();
+  ctx.fillStyle = typeof fill === 'function' ? fill(ps, vs) : fill;
+  ctx.fill();
 }
 
 // ------------------------------------------------------ parçacıklar & dekor
@@ -1333,19 +1501,27 @@ const overlay = $('overlay'), titleEl = $('title'),
       statsEl = $('stats'), earnedEl = $('earned'), runChipsEl = $('runChips'), runGemsEl = $('runGems'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
-      menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), chipsEl = $('chips'),
+      menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), howScr = $('howScr'), chipsEl = $('chips'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
       btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
+      btnHelp = $('btnHelp'), btnHowBack = $('btnHowBack'),
       btnCrate = $('btnCrate'), crateResult = $('crateResult'),
       reviveOverlay = $('reviveOverlay'), reviveScoreTxt = $('reviveScoreTxt'),
       btnRevive = $('btnRevive'), btnReviveSkip = $('btnReviveSkip'), reviveTimerFill = $('reviveTimerFill'),
       adOverlay = $('adOverlay'), adCountdown = $('adCountdown');
-// Üç ana menü ekranından yalnızca birini gösterir, diğerlerini gizler.
+// Dört ana menü ekranından yalnızca birini gösterir, diğerlerini gizler.
 function showScreen(scr) {
-  for (const s of [menuScr, shopScr, passScr]) s.classList.toggle('hidden', s !== scr);
+  for (const s of [menuScr, shopScr, passScr, howScr]) s.classList.toggle('hidden', s !== scr);
   overlay.classList.remove('hidden');
 }
+let howReturnScr = null;   // GERİ dönüşte hangi ekrana dönülecek
+function showHow() {
+  howReturnScr = [menuScr, shopScr, passScr].find(s => !s.classList.contains('hidden')) || menuScr;
+  showScreen(howScr);
+}
+btnHelp.addEventListener('pointerdown', e => { e.stopPropagation(); showHow(); });
+btnHowBack.addEventListener('pointerdown', e => { e.stopPropagation(); showScreen(howReturnScr || menuScr); });
 const heartEls = livesEl.querySelectorAll('span');
 
 function updateHearts() {
@@ -2007,13 +2183,24 @@ function update(dt, dtRaw) {
 function drawGrid(pulse) {
   const cell = 3, n = 26;
   const cx = Math.round(cam.fx / cell) * cell, cz = Math.round(cam.fz / cell) * cell;
-  // Bas vuruşunda parla, vuruş geçtikçe sönümlen.
-  ctx.strokeStyle = themeRgba(0.26 + 0.42 * pulse, 0.85);
-  ctx.lineWidth = 1 + pulse * 0.9;
+  // Uzak taban katmanı: soluk, tüm ızgara.
+  ctx.strokeStyle = themeRgba(0.12 + 0.2 * pulse, 0.85);
+  ctx.lineWidth = 1 + pulse * 0.6;
   ctx.beginPath();
   for (let i = -n; i <= n; i++) {
     line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - n * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + n * cell });
     line3({ x: cx - n * cell, y: -BLOCK_H, z: cz + i * cell }, { x: cx + n * cell, y: -BLOCK_H, z: cz + i * cell });
+  }
+  ctx.stroke();
+  // Yakın katman: yalnızca kameraya yakın hücreler parlak -> derinlik
+  // kontrastı (uzak sisli, yakın net) mesafeyi hissettirir.
+  const nn = 9;
+  ctx.strokeStyle = themeRgba(0.34 + 0.42 * pulse, 0.85);
+  ctx.lineWidth = 1.2 + pulse * 0.9;
+  ctx.beginPath();
+  for (let i = -nn; i <= nn; i++) {
+    line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - nn * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + nn * cell });
+    line3({ x: cx - nn * cell, y: -BLOCK_H, z: cz + i * cell }, { x: cx + nn * cell, y: -BLOCK_H, z: cz + i * cell });
   }
   ctx.stroke();
 }
@@ -2046,29 +2233,74 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   const c2 = { x: bx + px * HALF_W, z: bz + pz * HALF_W };
   const c3 = { x: bx - px * HALF_W, z: bz - pz * HALF_W };
   const c4 = { x: ax - px * HALF_W, z: az - pz * HALF_W };
+
+  // Mesafe sisi: kameraya uzaklaştıkça yüzeyler arka plan rengine karışır
+  // -> atmosferik derinlik hissi. 0 = tam yakın/net, 1 = sisin içinde.
+  const fogAt = zc => Math.max(0, Math.min(1, (zc - 5) / 42));
+  const fogNear = fogAt(view({ x: x1, y: 0, z: z1 }).z);
+  const fogFar = fogAt(view({ x: x2, y: 0, z: z2 }).z);
+
   // TÜM yan yüzler + uç kapaklar: yol tamamen OPAK, köşelerden ve
-  // uçlardan arkası asla görünmez.
+  // uçlardan arkası asla görünmez. Dikey gradyan: üstte (neon şeride
+  // yakın) aydınlık, tabana doğru koyulaşan sahte AO -> hacim/derinlik.
   const sideFaces = [
-    [c1, c2], [c4, c3],   // iki uzun kenar
-    [c1, c4], [c2, c3],   // uç kapaklar
+    [c1, c2, fogNear, fogFar], [c4, c3, fogNear, fogFar],   // iki uzun kenar
+    [c1, c4, fogNear, fogNear], [c2, c3, fogFar, fogFar],   // uç kapaklar
   ];
-  for (const [p, q] of sideFaces) {
+  const baseSide = dirIdx === 0 ? C.side : C.side2;
+  for (const [p, q, fp, fq] of sideFaces) {
+    const fogAvg = (fp + fq) / 2;
     quad([
       { x: p.x, y: 0, z: p.z }, { x: q.x, y: 0, z: q.z },
       { x: q.x, y: -BLOCK_H, z: q.z }, { x: p.x, y: -BLOCK_H, z: p.z },
-    ], dirIdx === 0 ? C.side : C.side2);
+    ], (ps) => {
+      const ys = ps.map(pt => pt.y);
+      const yTop = Math.min(...ys), yBot = Math.max(...ys);
+      const g = ctx.createLinearGradient(0, yTop, 0, yBot);
+      const lit = mixHex(lightenHex(baseSide, 0.24), '#04060c', fogAvg);
+      const mid = mixHex(baseSide, '#04060c', fogAvg);
+      g.addColorStop(0, lit);
+      g.addColorStop(0.35, mid);
+      g.addColorStop(1, '#03040a');
+      return g;
+    });
   }
-  // Üst yüz: koyu siber gri/siyah
+  // Üst yüz: yakında hafif dokulu/aydınlık, uzakta sisle karışan gradyan.
   quad([
     { x: c1.x, y: 0, z: c1.z }, { x: c2.x, y: 0, z: c2.z },
     { x: c3.x, y: 0, z: c3.z }, { x: c4.x, y: 0, z: c4.z },
-  ], C.top);
+  ], (ps) => {
+    const ys = ps.map(pt => pt.y);
+    const yTop = Math.min(...ys), yBot = Math.max(...ys);
+    const g = ctx.createLinearGradient(0, yTop, 0, yBot);
+    g.addColorStop(0, mixHex('#050609', '#04060e', fogFar));
+    g.addColorStop(1, mixHex('#181d29', '#04060e', fogNear));
+    return g;
+  });
+
+  // Doku: yüzeyde belirli aralıklarla ince panel dikişleri (hız hissini
+  // de güçlendirir — geçen her dikiş bir mesafe birimi gibi okunur).
+  const runLen = Math.hypot(x2 - x1, z2 - z1);
+  const SEAM_GAP = 1.5;
+  if (runLen > SEAM_GAP * 0.6) {
+    ctx.strokeStyle = 'rgba(140,215,235,.14)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let s = SEAM_GAP; s < runLen; s += SEAM_GAP) {
+      const mx = x1 + d.x * s, mz = z1 + d.z * s;
+      line3({ x: mx + px * HALF_W * 0.92, y: 0.01, z: mz + pz * HALF_W * 0.92 },
+            { x: mx - px * HALF_W * 0.92, y: 0.01, z: mz - pz * HALF_W * 0.92 });
+    }
+    ctx.stroke();
+  }
 
   // Neon kenarlar: koşu boyunca iki üst kenar (kaydırma hilesi ile
-  // ardışık koşular tek sürekli kontur oluşturur). Kalın ve yoğun parlama.
-  ctx.strokeStyle = theme.glow;
+  // ardışık koşular tek sürekli kontur oluşturur). Kalın ve yoğun parlama;
+  // uzaktaki koşularda sisle hafifçe soluklaşır (derinlik ipucu).
+  const edgeFog = (fogNear + fogFar) / 2;
+  ctx.strokeStyle = mixHex(theme.glow, '#04060e', edgeFog * 0.55);
   ctx.shadowColor = theme.glow;
-  ctx.shadowBlur = 24;
+  ctx.shadowBlur = 24 * (1 - edgeFog * 0.5);
   ctx.lineWidth = 3.4;
   ctx.beginPath();
   for (const s of [1, -1]) {
@@ -2093,6 +2325,15 @@ function draw(t) {
   bg.addColorStop(.55, '#071224');
   bg.addColorStop(1, '#04060e');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // Ufuk sisi: yol/ızgara çizilmeden önce, kaybolma noktası hizasında
+  // temaya duyarlı soluk bir parıltı bandı -> atmosferik derinlik.
+  const horizonY = H * PROJ_CY;
+  const hz = ctx.createLinearGradient(0, horizonY - H * 0.16, 0, horizonY + H * 0.1);
+  hz.addColorStop(0, themeRgba(0));
+  hz.addColorStop(0.5, themeRgba(0.1));
+  hz.addColorStop(1, themeRgba(0));
+  ctx.fillStyle = hz; ctx.fillRect(0, 0, W, H);
 
   // ekran titremesi
   ctx.save();
@@ -2361,6 +2602,14 @@ function draw(t) {
   ctx.globalAlpha = 1;
 
   ctx.restore();
+
+  // Vinyet: ekran köşelerine doğru hafif kararma -> odak ve derinlik hissini
+  // güçlendirir (ekran sarsıntısından etkilenmesin diye restore'dan sonra).
+  const vig = ctx.createRadialGradient(W / 2, H * 0.52, H * 0.32, W / 2, H * 0.52, H * 0.78);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,.4)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
 }
 
 // ------------------------------------------------------ ana döngü
