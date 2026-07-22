@@ -134,7 +134,20 @@
     letter-spacing: 6px; color: #6df2ff;
     text-shadow: 0 0 24px rgba(90,230,255,.9), 0 0 80px rgba(90,230,255,.4);
   }
-  #title.dead { color: #ff5f7a; text-shadow: 0 0 24px rgba(255,95,122,.9), 0 0 80px rgba(255,95,122,.4); }
+  #title.dead {
+    color: #ff5f7a; text-shadow: 0 0 24px rgba(255,95,122,.9), 0 0 80px rgba(255,95,122,.4);
+    animation: deadPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes deadPulse {
+    0%, 100% { text-shadow: 0 0 24px rgba(255,95,122,.9), 0 0 80px rgba(255,95,122,.4); }
+    50%      { text-shadow: 0 0 34px rgba(255,95,122,1), 0 0 112px rgba(255,95,122,.65); }
+  }
+  #menuScr.impactIn { animation: impactIn .5s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes impactIn {
+    0%   { transform: scale(.7); opacity: 0; }
+    60%  { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); }
+  }
   #sub {
     margin-top: 14px; font-size: clamp(13px, 4.4em, 24px); font-weight: 700;
     letter-spacing: 2px; color: #cfeeff; opacity: .95; line-height: 1.6;
@@ -477,7 +490,7 @@
   <div id="combo"></div>
   <div id="popup"></div>
   <div id="biomeFlash"></div>
-  <div id="ver">v36</div>
+  <div id="ver">v37</div>
   <div id="diag"></div>
 </div>
 
@@ -728,6 +741,49 @@ function flashBiome(name, col) {
   biomeFlashEl.className = '';
   void biomeFlashEl.offsetWidth;
   biomeFlashEl.className = 'show';
+}
+
+// ---------- KOMBO EVRİMİ: kombo yükseldikçe arka plan/dünya kademeli
+// "hype" seviyesine geçer (0=normal, 1=10 kombo, 2=20 kombo, 3=30+ kombo).
+// Yalnızca oyun modundayken ilerler; kombo bozulunca ya da oyuncu
+// yanınca (mod 'play' değilken) hedef daima 0'a döner -> yumuşak sönüş.
+const HYPE_BG = ['#3a0410', '#5c0a1c'];   // ateş kırmızısı (lacivertten geçiş hedefi)
+const comboFX = { level: 0 };
+function updateComboFX(dt) {
+  const targetStage = S.mode !== 'play' ? 0 : (S.combo >= 30 ? 3 : S.combo >= 20 ? 2 : S.combo >= 10 ? 1 : 0);
+  const k = 1 - Math.exp(-3 * dt);
+  comboFX.level += (targetStage - comboFX.level) * k;
+}
+// Kenarlardan fışkıran hız/parçacık çizgileri (30+ kombo).
+const edgeStreaks = [];
+function spawnEdgeStreaks(hype3, dt) {
+  if (hype3 <= 0.02) return;
+  if (Math.random() > hype3 * 0.9) return;
+  const n = 1 + Math.floor(hype3 * 2);
+  for (let i = 0; i < n; i++) {
+    const edge = Math.floor(Math.random() * 4);
+    const spd = 480 + Math.random() * 420;
+    let x, y, vx, vy;
+    if (edge === 0)      { x = Math.random() * W; y = -12;    vx = (Math.random() - .5) * 120; vy = spd; }
+    else if (edge === 1) { x = W + 12;    y = Math.random() * H; vx = -spd; vy = (Math.random() - .5) * 120; }
+    else if (edge === 2) { x = Math.random() * W; y = H + 12;    vx = (Math.random() - .5) * 120; vy = -spd; }
+    else                 { x = -12;       y = Math.random() * H; vx = spd;  vy = (Math.random() - .5) * 120; }
+    edgeStreaks.push({ x, y, vx, vy, life: 0.5 + Math.random() * 0.3 });
+  }
+  while (edgeStreaks.length > 48) edgeStreaks.shift();
+}
+function drawEdgeStreaks(dt, hype3) {
+  for (let i = edgeStreaks.length - 1; i >= 0; i--) {
+    const p = edgeStreaks[i];
+    p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.life <= 0) { edgeStreaks.splice(i, 1); continue; }
+    ctx.strokeStyle = themeRgba(Math.min(1, p.life * 2.4) * Math.max(hype3, 0.15));
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035);
+    ctx.stroke();
+  }
 }
 
 // Titreşim yardımcıisı (destekleyen cihazlarda — iOS Safari desteklemez).
@@ -1065,7 +1121,7 @@ const S = {
   pending: false,          // geçerli dokunuş alındı, köşede dönülecek
   head: { x: 0, z: 0, y: 0 }, dirIdx: 1, // başlangıç yönü B (-z, ileri)
   trail: [],               // dönüş noktaları (dünya koordinatı)
-  fallT: 0, fallVy: 0, fallDir: null,
+  fallT: 0, fallVy: 0, fallDir: null, fallSpin: 0, fallSpinV: 0,
   shake: 0, lastBeatNo: -999,
   particles: [],
   fallFatal: false, fallKind: null,
@@ -1331,16 +1387,18 @@ function drawRings(dt) {
 
 // Koridoru iki yandan saran NEON DUVARLAR: yatay ışık şeritleri + dikey
 // direkler. Kamerayla birlikte akar; haritayı Tron kanyonu gibi çerçeveler.
-function drawWalls() {
+function drawWalls(hype = 0) {
+  // 10+ kombo: ışık şeritleri/direkler daha parlak ve hızlı flikerli.
+  const shimmer = hype * (0.5 + 0.5 * Math.sin(curT * 11 + 1.3));
   const a0 = camA - 12, a1 = camA + 70;
   for (const s of [-1, 1]) {
     const wp = camP + s * 17;
     const bx = PERP.x * wp, bz = PERP.z * wp;
     // yatay neon şeritler (alt: parlak tema, orta: soluk, üst: pembe aksan)
     const strips = [
-      [0.35, themeRgba(0.55), 2.6],
-      [2.4,  themeRgba(0.26), 1.5],
-      [5.0,  'rgba(255,80,190,.5)', 2.2],
+      [0.35, themeRgba(0.55 + 0.35 * shimmer), 2.6 + hype * 1.2],
+      [2.4,  themeRgba(0.26 + 0.3 * shimmer), 1.5 + hype * 0.8],
+      [5.0,  'rgba(255,80,190,' + (0.5 + 0.35 * shimmer) + ')', 2.2 + hype * 1.0],
     ];
     for (const [h, col, lw] of strips) {
       ctx.strokeStyle = col; ctx.lineWidth = lw;
@@ -1350,7 +1408,7 @@ function drawWalls() {
       ctx.stroke();
     }
     // dikey direkler
-    ctx.strokeStyle = themeRgba(0.2); ctx.lineWidth = 1.5;
+    ctx.strokeStyle = themeRgba(0.2 + 0.3 * hype); ctx.lineWidth = 1.5 + hype * 0.6;
     ctx.beginPath();
     for (let a = Math.ceil(a0 / 6) * 6; a < a1; a += 6) {
       line3({ x: DIAG.x * a + bx, y: -BLOCK_H, z: DIAG.z * a + bz },
@@ -1480,13 +1538,15 @@ function drawPyramid(wx, wy, wz, s, a, col) {
 // Zeminden yükselen dikey ışık sütunu (beat ile nabız atar).
 function drawPillar(wx, wz, h, col) {
   const b = { x: wx, y: -BLOCK_H, z: wz }, tp = { x: wx, y: -BLOCK_H + h, z: wz };
-  const inten = 0.55 + 0.45 * curBeatP;
+  // 10+ kombo: ışık sütunları daha parlak ve hızlı titreşir.
+  const hype1 = Math.min(1, comboFX.level);
+  const inten = 0.55 + 0.45 * curBeatP + hype1 * (0.35 + 0.35 * Math.sin(curT * 9 + wx));
   ctx.strokeStyle = col;
   ctx.globalAlpha = 0.12 * inten;
-  ctx.lineWidth = 9;
+  ctx.lineWidth = 9 + hype1 * 2;
   ctx.beginPath(); if (!line3(b, tp)) { ctx.globalAlpha = 1; return; } ctx.stroke();
   ctx.globalAlpha = 0.6 * inten;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.2 + hype1 * 1.2;
   ctx.beginPath(); line3(b, tp); ctx.stroke();
 }
 
@@ -1583,6 +1643,8 @@ function startFall(fatal, kind) {
   S.fallKind = kind;
   S.fallT = 0; S.fallVy = 1.5;
   S.fallDir = DIR[S.dirIdx];
+  S.fallSpin = 0;
+  S.fallSpinV = (Math.random() < 0.5 ? -1 : 1) * (5 + Math.random() * 4);
   S.shake = fatal ? 14 : 11;
   vibrate(fatal ? [60, 40, 60] : 50);
   burst(S.head.x, S.head.z, fatal ? 40 : 26, C.accentOrange);
@@ -1837,6 +1899,10 @@ function gameOver() {
   btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
   renderPassMini();
   showScreen(menuScr);
+  // Şık giriş vurgusu: panel hafif "impact" ile büyüyerek belirir.
+  menuScr.classList.remove('impactIn');
+  void menuScr.offsetWidth;
+  menuScr.classList.add('impactIn');
 }
 
 function startGame() {
@@ -2093,6 +2159,7 @@ function update(dt, dtRaw) {
     S.head.y += S.fallVy * dt;
     S.head.x += S.fallDir.x * S.speed * 0.45 * dt;
     S.head.z += S.fallDir.z * S.speed * 0.45 * dt;
+    S.fallSpin += S.fallSpinV * dt;   // düşerken kendi etrafında dönüş
     // Oyun saati düşüş boyunca DONUK: t0'ı kaydırarak eşlemeyi koru.
     // Müzik zamanlayıcısı t0'dan beslendiği için beat ızgarası da
     // toplamda aynı miktar kayar -> devamda senkron birebir korunur.
@@ -2165,12 +2232,14 @@ function update(dt, dtRaw) {
 }
 
 // ------------------------------------------------------ çizim
-function drawGrid(pulse) {
+function drawGrid(pulse, hype = 0) {
+  // 10+ kombo: ızgara daha parlak titreşir + hızlı bir "enerji" flikeri eklenir.
+  const shimmer = hype * (0.5 + 0.5 * Math.sin(curT * 9));
   const cell = 3, n = 26;
   const cx = Math.round(cam.fx / cell) * cell, cz = Math.round(cam.fz / cell) * cell;
   // Uzak taban katmanı: soluk, tüm ızgara.
-  ctx.strokeStyle = themeRgba(0.12 + 0.2 * pulse, 0.85);
-  ctx.lineWidth = 1 + pulse * 0.6;
+  ctx.strokeStyle = themeRgba(0.12 + 0.2 * pulse + 0.1 * shimmer, 0.85);
+  ctx.lineWidth = 1 + pulse * 0.6 + hype * 0.3;
   ctx.beginPath();
   for (let i = -n; i <= n; i++) {
     line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - n * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + n * cell });
@@ -2180,8 +2249,8 @@ function drawGrid(pulse) {
   // Yakın katman: yalnızca kameraya yakın hücreler parlak -> derinlik
   // kontrastı (uzak sisli, yakın net) mesafeyi hissettirir.
   const nn = 9;
-  ctx.strokeStyle = themeRgba(0.34 + 0.42 * pulse, 0.85);
-  ctx.lineWidth = 1.2 + pulse * 0.9;
+  ctx.strokeStyle = themeRgba(0.34 + 0.42 * pulse + 0.16 * shimmer, 0.85);
+  ctx.lineWidth = 1.2 + pulse * 0.9 + hype * 0.5;
   ctx.beginPath();
   for (let i = -nn; i <= nn; i++) {
     line3({ x: cx + i * cell, y: -BLOCK_H, z: cz - nn * cell }, { x: cx + i * cell, y: -BLOCK_H, z: cz + nn * cell });
@@ -2305,18 +2374,23 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   ctx.shadowBlur = 0;
 }
 
-let lastErr = '', errCount = 0, ballScr = { x: 0, y: 0 };
+let lastErr = '', errCount = 0, ballScr = { x: 0, y: 0 }, lastDrawT = 0;
 
 function draw(t) {
   curT = t;   // waveY() ve diğer zaman-bağlı yardımcılar için paylaşılan an
   // Çizim matrisi her karede sıfırlanır: bir hata restore'u atlasa bile
   // dönüşümler birikip sahneyi kaydıramaz.
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  // arka plan
+  // KOMBO EVRİMİ: hype seviyesinden 3 kademeli yoğunluk türetilir.
+  const hype1 = Math.min(1, comboFX.level);                         // 10+ kombo: ızgara/direk enerjisi
+  const hype2 = Math.max(0, Math.min(1, comboFX.level - 1));          // 20+ kombo: arka plan renk geçişi
+  const hype3 = Math.max(0, Math.min(1, comboFX.level - 2));          // 30+ kombo: kenar parçacıkları
+
+  // arka plan: kombo 20+ olunca lacivertten ateş kırmızısına yumuşak geçiş
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#04060e');
-  bg.addColorStop(.55, '#071224');
-  bg.addColorStop(1, '#04060e');
+  bg.addColorStop(0, mixHex('#04060e', HYPE_BG[0], hype2));
+  bg.addColorStop(.55, mixHex('#071224', HYPE_BG[1], hype2));
+  bg.addColorStop(1, mixHex('#04060e', HYPE_BG[0], hype2));
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
   // Ufuk sisi: yol/ızgara çizilmeden önce, kaybolma noktası hizasında
@@ -2341,9 +2415,9 @@ function draw(t) {
   curBeatP = beatP;
   if (ph < prevBeatPh) spawnGridFlashes();   // yeni vuruş -> zemin hücreleri
   prevBeatPh = ph;
-  drawGrid(beatP);
+  drawGrid(beatP, hype1);
   drawGridFlashes(1 / 60);
-  drawWalls();
+  drawWalls(hype1);
   drawFloaters(t);
 
   // yol koşuları: uzaktan yakına
@@ -2576,13 +2650,28 @@ function draw(t) {
     }
 
     // KARAKTER: parlak yuvarlak top — kostüm renginde çekirdek + hale + halka.
+    // Düşüşte neon parıltısı yavaşça söner (0..1 -> fallGlowFade).
+    const fallGlowFade = S.mode === 'fall' ? Math.max(0, 1 - S.fallT / (S.fallFatal ? 1.0 : 0.7)) : 1;
     ctx.fillStyle = skinCore(t, hp, r);
-    ctx.shadowColor = theme.glow; ctx.shadowBlur = 24;
+    ctx.shadowColor = theme.glow; ctx.shadowBlur = 24 * fallGlowFade;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 * (0.35 + 0.65 * fallGlowFade)) + ')';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 1.55, 0, Math.PI * 2); ctx.stroke();
-    drawAccessory(hp, r, t);
+    if (S.mode === 'fall') {
+      // Düşerken kendi etrafında dönen parlak "tumbling" vurgusu.
+      ctx.save();
+      ctx.translate(hp.x, hp.y);
+      ctx.rotate(S.fallSpin);
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.85 * fallGlowFade) + ')';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.72, -0.5, 0.9);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      drawAccessory(hp, r, t);
+    }
   }
   ctx.shadowBlur = 0;
 
@@ -2607,6 +2696,12 @@ function draw(t) {
   vig.addColorStop(1, 'rgba(0,0,0,.4)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
+
+  // 30+ kombo: kenarlardan fışkıran hız/parçacık çizgileri ("hipnoz" modu).
+  // Ekran uzayında, vinyetin üstünde çizilir ki her zaman net görünsün.
+  const edgeDt = Math.min(0.05, Math.max(0, t - lastDrawT)); lastDrawT = t;
+  spawnEdgeStreaks(hype3, edgeDt);
+  drawEdgeStreaks(edgeDt, hype3);
 }
 
 // ------------------------------------------------------ ana döngü
@@ -2630,6 +2725,7 @@ function frame(now) {
       if (!S.corners.length) genCorners(20);
     }
     updateTheme(dt);
+    updateComboFX(dt);
     draw(now / 1000);
   } catch (e) {
     errCount++;
@@ -2655,7 +2751,7 @@ showMenu();   // açılışta ana menü
 // BEAT/BPM/TR parçaya göre değiştiği için canlı getter olarak dışa aktarılır.
 if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   view, proj, cam, CAM, TRACKS, AUDIO_BUFFERS, beatPhaseAt, currentEffBpm,
-  acceptRevive, declineRevive, buyPremium, save, trySwitchLane,
+  acceptRevive, declineRevive, buyPremium, save, trySwitchLane, comboFX,
   get camA() { return camA; }, get camP() { return camP; },
   get TR() { return TR; },
   get musicSrc() { return musicSrc; },
