@@ -477,7 +477,7 @@
   <div id="combo"></div>
   <div id="popup"></div>
   <div id="biomeFlash"></div>
-  <div id="ver">v35</div>
+  <div id="ver">v36</div>
   <div id="diag"></div>
 </div>
 
@@ -628,19 +628,6 @@ const GEM_PATH_GAP = 2;              // bu uzunluktaki düzlüklerde yan elmas y
 const LANE_OFFSET  = HALF_W * 3.4;   // yan yolun ana yoldan yanal uzaklığı
 const SWIPE_MIN_PX = 40;             // yan yola geçmek için gereken yatay sürükleme
 const GEM_PICK_WIN = 0.12;           // sn — elmas toplama zaman penceresi
-
-// Daralan/genişleyen yol: bazı segmentler HALF_W'ye göre daha dar ya da
-// daha geniş çizilir -> haritaya görsel/taktiksel bir ritim katar. Yalnızca
-// düz (hold/elmas-yolu olmayan) segmentlerde uygulanır, senkronu etkilemez.
-const NARROW_MUL = 0.6;   // dar viraj: %40 daha dar
-const WIDE_MUL   = 1.5;   // geniş düzlük: %50 daha geniş
-
-// Ana hat üzerinde otomatik toplanan ELMAS (skor bonusu): yan yol
-// elmaslarından farklı olarak kaydırma gerekmez, geçerken kendiliğinden
-// toplanır. Bazı köşelere yakın, bazı düzlüklerin ortasına yerleşir.
-const PATH_GEM_CHANCE = 0.35;
-const PATH_GEM_FRACS  = [0.15, 0.5, 0.85];
-const PATH_GEM_SCORE  = 50;
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
     gaps: [1, 1, 0.5, 0.5, 1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 1, 4, 1,
@@ -1064,22 +1051,7 @@ function startMusicAudio(atSongTime) {
 function resumeMusicAudio() { if (TR.real) startMusicAudio(S.song); }
 // (Genel sentez efekt katmanı kaldırıldı — iki parça da gerçek ses kaydı,
 // kendi davulları/melodisi çalıyor. Dönüş/kayıp/düşüş geri bildirimi
-// yalnızca titreşim + görsel. Tek istisna: ana hat üzerindeki toplanabilir
-// elmasın kısa, seyrek "ping" sesi — nadir bir ödül anı, sürekli bir arka
-// plan katmanı değil.)
-function gemChime() {
-  if (!actx) return;
-  const t = actx.currentTime;
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(1046.5, t);
-  o.frequency.exponentialRampToValueAtTime(1568, t + 0.09);
-  g.gain.setValueAtTime(0.001, t);
-  g.gain.exponentialRampToValueAtTime(0.22, t + 0.015);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-  o.connect(g).connect(actx.destination);
-  o.start(t); o.stop(t + 0.24);
-}
+// yalnızca titreşim + görsel.)
 
 // ------------------------------------------------------ oyun durumu
 const S = {
@@ -1120,13 +1092,12 @@ function genCorners(untilTime) {
     const spd = speedForSeg(segIdx);
     const beatSec = beatSecForSeg(segIdx);
     const corner = { t: S.genT, beat: S.genBeat, x: S.genX, z: S.genZ,
-                     dirIdx: 1 - S.genDir, spd, beatSec, roadMul: 1 };
+                     dirIdx: 1 - S.genDir, spd, beatSec };
     // Bu köşeye gelen segment uzun bir düzlükse -> HOLD şeridi:
     // basış anı düzlüğe girdikten 1 beat sonra, bırakış tam köşede.
     if (S.genPrevGap >= HOLD_MIN_GAP) {
       const holdStart = S.genT - (S.genPrevGap - 1) * S.genPrevBeatSec;
       corner.hold = { start: holdStart };
-      corner.roadMul = WIDE_MUL;   // uzun düzlük: geniş "pist" hissi
     } else if (S.genPrevGap === GEM_PATH_GAP && S.corners.length) {
       // Düzlüğün yanında ELMAS YOLU: sağa/sola kaydırarak üstüne geçilir.
       // Ana yoldan ayrılmaz, sadece yanal görsel bir sapmadır (senkronu bozmaz);
@@ -1145,25 +1116,6 @@ function genCorners(untilTime) {
                  z: cz + pz * LANE_OFFSET * env * side, got: false };
       });
       corner.gemPath = { side, gems, zoneStart, zoneEnd };
-    } else if (S.corners.length) {
-      // Daralan/genişleyen yol: dar segmentler bazen daha da daralır (dar
-      // viraj), normal segmentler bazen genişler -> harita ritmi çeşitlenir.
-      if (S.genPrevGap <= 0.5) {
-        if (Math.random() < 0.5) corner.roadMul = NARROW_MUL;
-      } else if (Math.random() < 0.22) {
-        corner.roadMul = WIDE_MUL;
-      }
-      // Ana hat üzerinde otomatik toplanan ELMAS (skor bonusu): bazı
-      // köşelere yakın, bazı düzlüklerin ortasına yerleşir.
-      if (Math.random() < PATH_GEM_CHANCE) {
-        const prev = S.corners[S.corners.length - 1];
-        const frac = PATH_GEM_FRACS[Math.floor(Math.random() * PATH_GEM_FRACS.length)];
-        const gt = prev.t + frac * (S.genT - prev.t);
-        const hd = DIR[prev.dirIdx];
-        const gx = prev.x + hd.x * prev.spd * (gt - prev.t);
-        const gz = prev.z + hd.z * prev.spd * (gt - prev.t);
-        corner.pathGem = { t: gt, x: gx, z: gz, got: false };
-      }
     }
     S.corners.push(corner);
     // Gerçek ses parçası: bu köşeden itibaren geçerli tempo playbackRate'e
@@ -2135,16 +2087,6 @@ function update(dt, dtRaw) {
         }
       }
     }
-    // Ana hat üzerindeki otomatik ELMAS: kaydırma gerekmez, zamanı gelince
-    // kendiliğinden toplanır -> +50 skor, patlama efekti, kısa "ping".
-    if (gc && gc.pathGem && !gc.pathGem.got && Math.abs(S.song - gc.pathGem.t) <= GEM_PICK_WIN) {
-      gc.pathGem.got = true;
-      S.score += PATH_GEM_SCORE;
-      scoreEl.textContent = 'SKOR: ' + S.score;
-      burst(gc.pathGem.x, gc.pathGem.z, 16, '#ffd76e');
-      gemChime();
-      vibrate(16);
-    }
   } else if (S.mode === 'fall') {
     S.fallT += dt;
     S.fallVy -= 14 * dt;
@@ -2267,10 +2209,10 @@ function drawFloaters(t) {
 }
 
 // Yolun bir koşusunu (iki köşe arası dikdörtgen blok) çiz.
-function drawRun(x1, z1, x2, z2, dirIdx, mul = 1) {
+function drawRun(x1, z1, x2, z2, dirIdx) {
   const d = DIR[dirIdx];
   const px = -d.z, pz = d.x;                    // dik (perp) vektör
-  const hw = HALF_W * mul;                      // bu koşunun yarı genişliği (daralır/genişler)
+  const hw = HALF_W;
   const ex = d.x * hw, ez = d.z * hw;           // uçlara yarım genişlik uzat
   const c1 = { x: x1 - ex + px * hw, z: z1 - ez + pz * hw };
   const c2 = { x: x2 + ex + px * hw, z: z2 + ez + pz * hw };
@@ -2404,22 +2346,22 @@ function draw(t) {
   drawWalls();
   drawFloaters(t);
 
-  // yol koşuları: uzaktan yakına (roadMul: bazı segmentler daralır/genişler)
+  // yol koşuları: uzaktan yakına
   const segs = [];
-  let px = 0, pz = 0, pdir = 1, pmul = 1;
+  let px = 0, pz = 0, pdir = 1;
   for (let i = 0; i < S.corners.length; i++) {
     const c = S.corners[i];
-    segs.push([px, pz, c.x, c.z, pdir, c.roadMul || 1]);
-    px = c.x; pz = c.z; pdir = c.dirIdx; pmul = c.roadMul || 1;
+    segs.push([px, pz, c.x, c.z, pdir]);
+    px = c.x; pz = c.z; pdir = c.dirIdx;
   }
-  segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir, pmul]);
+  segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir]);
   const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
   for (let i = segs.length - 1; i >= 0; i--) {
     const sg = segs[i];
     const far = sg[2] * DIAG.x + sg[3] * DIAG.z;
     if (far - headAlong < -CAM.back + 1.5) continue;   // kamera arkasında
     if ((sg[0] * DIAG.x + sg[1] * DIAG.z) - headAlong > 60) continue; // çok uzak
-    drawRun(sg[0], sg[1], sg[2], sg[3], sg[4], sg[5]);
+    drawRun(sg[0], sg[1], sg[2], sg[3], sg[4]);
   }
 
   drawRings(1 / 60);
@@ -2540,26 +2482,6 @@ function draw(t) {
         ctx.textAlign = 'start';
       }
     }
-  }
-
-  // ANA HAT ELMASI: ritimle nabız atan, otomatik toplanan skor bonusu.
-  // Yan yol elmaslarından ayırt edilsin diye altın/sarı renkte.
-  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
-    const c = S.corners[i];
-    if (!c.pathGem || c.pathGem.got) continue;
-    const pg = c.pathGem;
-    const gv = view({ x: pg.x, y: 0.24 + 0.05 * curBeatP, z: pg.z });
-    if (gv.z < NEAR) continue;
-    const gq = proj(gv);
-    const gr = Math.max(7, (CAM.fl / gv.z) * 0.13) * (1 + 0.22 * curBeatP);
-    ctx.save();
-    ctx.translate(gq.x, gq.y);
-    ctx.rotate(t * 1.8);
-    ctx.fillStyle = '#ffd76e';
-    ctx.shadowColor = '#ffd76e'; ctx.shadowBlur = 16;
-    ctx.fillRect(-gr / 2, -gr / 2, gr, gr);
-    ctx.restore();
-    ctx.shadowBlur = 0;
   }
 
   // iz (çizginin kendisi): dönüş noktaları + baş.
