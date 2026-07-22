@@ -105,22 +105,6 @@
     100% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
   }
 
-  /* ---------- biyom değişim anonsu ---------- */
-  #biomeFlash {
-    position: absolute; top: 32%; left: 50%;
-    transform: translateX(-50%) scale(.7);
-    font-size: clamp(15px, 5em, 25px); font-weight: 800; letter-spacing: 4px;
-    opacity: 0; white-space: nowrap; text-align: center;
-  }
-  #biomeFlash.show { animation: biomeFlash 2.2s ease-out forwards; }
-  @keyframes biomeFlash {
-    0%   { opacity: 0; transform: translateX(-50%) scale(.7); }
-    15%  { opacity: 1; transform: translateX(-50%) scale(1.08); }
-    25%  { transform: translateX(-50%) scale(1); }
-    75%  { opacity: 1; }
-    100% { opacity: 0; transform: translateX(-50%) scale(1) translateY(-10px); }
-  }
-
   /* ---------- overlay ekranları ---------- */
   #overlay {
     position: absolute; inset: 0; z-index: 10;
@@ -489,8 +473,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="biomeFlash"></div>
-  <div id="ver">v38</div>
+  <div id="ver">v39</div>
   <div id="diag"></div>
 </div>
 
@@ -727,20 +710,10 @@ function updateTheme(dt) {
     theme.step = step;
     theme.biomeIdx = step % BIOMES.length;
     theme.tgt = BIOMES[theme.biomeIdx].col;
-    if (step > 0) flashBiome(BIOMES[theme.biomeIdx].name, theme.tgt);
   }
   const k = 1 - Math.exp(-2.2 * dt);  // yumuşak geçiş
   for (let i = 0; i < 3; i++) theme.cur[i] += (theme.tgt[i] - theme.cur[i]) * k;
   theme.glow = 'rgb(' + (theme.cur[0] | 0) + ',' + (theme.cur[1] | 0) + ',' + (theme.cur[2] | 0) + ')';
-}
-// Yeni biyoma girildiğinde ekranda kısa süreliğine adını gösterir.
-function flashBiome(name, col) {
-  biomeFlashEl.textContent = '◆ ' + name + ' ◆';
-  biomeFlashEl.style.color = 'rgb(' + col.join(',') + ')';
-  biomeFlashEl.style.textShadow = '0 0 16px rgba(' + col.join(',') + ',.8)';
-  biomeFlashEl.className = '';
-  void biomeFlashEl.offsetWidth;
-  biomeFlashEl.className = 'show';
 }
 
 // ---------- KOMBO EVRİMİ: kombo yükseldikçe arka plan/dünya kademeli
@@ -1570,7 +1543,7 @@ function drawPillar(wx, wz, h, col) {
 const $ = id => document.getElementById(id);
 const overlay = $('overlay'), titleEl = $('title'),
       statsEl = $('stats'), earnedEl = $('earned'), runChipsEl = $('runChips'), runGemsEl = $('runGems'),
-      scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'), biomeFlashEl = $('biomeFlash'),
+      scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
       menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), howScr = $('howScr'), chipsEl = $('chips'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
