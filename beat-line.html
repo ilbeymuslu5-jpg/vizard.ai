@@ -490,7 +490,7 @@
   <div id="combo"></div>
   <div id="popup"></div>
   <div id="biomeFlash"></div>
-  <div id="ver">v37</div>
+  <div id="ver">v38</div>
   <div id="diag"></div>
 </div>
 
@@ -1434,6 +1434,22 @@ for (let i = 0; i < 20; i++) {
     rot: Math.random() * Math.PI * 2,
     spin: (Math.random() - .5) * 1.2,
     colIdx: i % 4,
+    eqAmp: 0.6 + Math.random() * 0.9,   // ekolayzır: bas vuruşunda ne kadar uzayacağı
+  });
+}
+
+// Dijital toz yağmuru: geniş bir hacimde asılı, çizgi ilerledikçe kameraya
+// doğru paralaksla süzülen küçük neon zerreler (floaters ile aynı sonsuz
+// akış hilesi — geride kalan yeniden ileriye taşınır).
+const DUST_COUNT = 46;
+const dust = [];
+for (let i = 0; i < DUST_COUNT; i++) {
+  dust.push({
+    along: Math.random() * 140 - 20,
+    side: (Math.random() < .5 ? -1 : 1) * (2 + Math.random() * 46),
+    y: -7 + Math.random() * 16,
+    tw: Math.random() * Math.PI * 2,      // twinkle fazı
+    colIdx: Math.floor(Math.random() * 4),
   });
 }
 
@@ -2270,11 +2286,73 @@ function drawFloaters(t) {
     const wz = DIAG.z * f.along + DIAG.x * f.side;
     const col = f.colIdx === 0 ? theme.glow : FLOAT_COLS[f.colIdx];
     const a = f.rot + t * f.spin;
-    if (f.type === 2) drawPillar(wx, wz, f.size, col);
+    if (f.type === 2) {
+      // EKOLAYZIR KULESİ: bas vuruşunda anlık uzayıp üssel eğriyle söner
+      // (curBeatP zaten "sert sıçrama + yumuşak sönüm" şeklinde davranıyor).
+      const eqH = f.size * (1 + curBeatP * 1.1 * f.eqAmp);
+      drawPillar(wx, wz, eqH, col);
+    }
     else if (f.type === 1) drawNeonCube(wx, f.y, wz, f.size * breathe, a, col);
     else drawPyramid(wx, f.y, wz, f.size * breathe, a, col);
   }
   ctx.globalAlpha = 1;
+}
+
+// DİJİTAL TOZ YAĞMURU: geniş bir hacimde asılı küçük neon zerreler, çizgi
+// ilerledikçe kameraya doğru paralaksla süzülür; yakınlaşıp hızlandıkça
+// ekranın kaçış noktasından dışa doğru çizgisel bir "warp" izine uzar.
+function drawDust(t) {
+  const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
+  const cx = W / 2, cy = H * PROJ_CY;
+  for (const p of dust) {
+    // Geride kalan zerreyi ileriye taşı -> sonsuz paralaks akışı (floaters ile aynı hile).
+    if (p.along - headAlong < -20) p.along += 160;
+    const wx = DIAG.x * p.along - DIAG.z * p.side;
+    const wz = DIAG.z * p.along + DIAG.x * p.side;
+    const v = view({ x: wx, y: p.y, z: wz });
+    if (v.z < NEAR) continue;
+    const q = proj(v);
+    const depthK = Math.max(0, Math.min(1, 1 - (v.z - 3) / 38));   // 0 uzak, 1 çok yakın
+    const twinkle = 0.5 + 0.5 * Math.sin(t * 2 + p.tw);
+    const col = p.colIdx === 0 ? theme.glow : FLOAT_COLS[p.colIdx];
+    // Kaçış noktasından dışa doğru yön: yakın/hızlı zerreler bu yönde uzar.
+    const dxv = q.x - cx, dyv = q.y - cy;
+    const dlen = Math.hypot(dxv, dyv) || 1;
+    const ux = dxv / dlen, uy = dyv / dlen;
+    const streak = depthK * (2 + S.speed * 0.9);
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = (0.18 + 0.35 * twinkle) * (0.3 + 0.7 * depthK);
+    ctx.lineWidth = Math.max(0.8, 1.6 * depthK);
+    ctx.beginPath();
+    ctx.moveTo(q.x - ux * streak * 0.5, q.y - uy * streak * 0.5);
+    ctx.lineTo(q.x + ux * streak * 0.5, q.y + uy * streak * 0.5);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// YOL ALTI LAZER SÜTUNLARI: haritanın belirli köşelerinde, yolun altındaki
+// karanlık boşluktan gökyüzüne fırlayan şeffaf neon ışın sütunları. Hangi
+// köşelerin sütun alacağı köşe indeksinden türetilir (sabit desen) — yeni
+// bir oyun durumu eklemeden, salt görsel bir katman.
+function drawUnderRoadBeams() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = Math.max(0, S.next - 2); i < Math.min(S.next + 10, S.corners.length); i++) {
+    if (i % 5 !== 2) continue;   // belirli aralıklarla, her köşede değil
+    const c = S.corners[i];
+    const wob = waveY(c.x, c.z);
+    const b = { x: c.x, y: -BLOCK_H * 3.4 + wob, z: c.z };   // karanlık boşluğun derini
+    const tp = { x: c.x, y: 15 + wob, z: c.z };              // gökyüzüne doğru
+    ctx.strokeStyle = theme.glow;
+    ctx.lineWidth = 11;
+    ctx.globalAlpha = 0.07;
+    ctx.beginPath(); line3(b, tp); ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.2 + 0.14 * curBeatP;
+    ctx.beginPath(); line3(b, tp); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // Yolun bir koşusunu (iki köşe arası dikdörtgen blok) çiz.
@@ -2417,8 +2495,10 @@ function draw(t) {
   prevBeatPh = ph;
   drawGrid(beatP, hype1);
   drawGridFlashes(1 / 60);
+  drawDust(t);
   drawWalls(hype1);
   drawFloaters(t);
+  drawUnderRoadBeams();
 
   // yol koşuları: uzaktan yakına
   const segs = [];
