@@ -159,6 +159,15 @@
     border-color: #6df2ff; color: #6df2ff;
     box-shadow: 0 0 22px rgba(90, 230, 255, .5), inset 0 0 12px rgba(90, 230, 255, .2);
   }
+  #btnMode.zenActive {
+    border-color: #8dff3d; color: #8dff3d;
+    box-shadow: 0 0 22px rgba(140, 255, 60, .45), inset 0 0 12px rgba(140, 255, 60, .18);
+  }
+  #zenBadge {
+    position: absolute; top: clamp(72px, 18em, 96px); right: 18px;
+    font-size: clamp(11px, 3.6em, 17px); font-weight: 800; letter-spacing: 2px;
+    color: #8dff3d; text-shadow: 0 0 10px rgba(140, 255, 60, .7);
+  }
   #earned {
     margin-top: 12px; font-size: clamp(15px, 4.6em, 24px); font-weight: 700;
     letter-spacing: 2px; color: #8dff3d; text-shadow: 0 0 12px rgba(140, 255, 60, .6);
@@ -469,11 +478,12 @@
   <div id="lives">CAN: <span class="h1">&#9829;</span><span class="h2">&#9829;</span><span class="h1">&#9829;</span></div>
   <div id="runChips">&#11041; 0</div>
   <div id="runGems">&#128142; 0</div>
+  <div id="zenBadge" class="hidden">&#9679; ZEN MODU</div>
   <div id="speed"></div>
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v39</div>
+  <div id="ver">v40</div>
   <div id="diag"></div>
 </div>
 
@@ -502,6 +512,7 @@
     <p id="stats"></p>
     <p id="earned" class="hidden"></p>
     <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
+    <button class="btn" id="btnMode">MOD: <span id="modeLabel">NORMAL</span></button>
     <button class="btn" id="btnPass">&#9889; BEAT PASS <span id="passMiniLvl"></span></button>
     <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
   </div>
@@ -833,6 +844,7 @@ const save = (() => {
     xp: +(localStorage.getItem('bl_xp') || 0),
     premium: localStorage.getItem('bl_prem') === '1',
     claimedLvl: +(localStorage.getItem('bl_clvl') || 0),
+    zenMode: localStorage.getItem('bl_zen') === '1',
   };
 })();
 function persist() {
@@ -845,6 +857,7 @@ function persist() {
   localStorage.setItem('bl_xp', save.xp);
   localStorage.setItem('bl_prem', save.premium ? '1' : '0');
   localStorage.setItem('bl_clvl', save.claimedLvl);
+  localStorage.setItem('bl_zen', save.zenMode ? '1' : '0');
 }
 
 // ---------- BEAT PASS: 100 seviye, seviye başına 250 XP.
@@ -1081,6 +1094,18 @@ function resumeMusicAudio() { if (TR.real) startMusicAudio(S.song); }
 // (Genel sentez efekt katmanı kaldırıldı — iki parça da gerçek ses kaydı,
 // kendi davulları/melodisi çalıyor. Dönüş/kayıp/düşüş geri bildirimi
 // yalnızca titreşim + görsel.)
+// Yandığında (normal modda, ölümcül düşüş) ani sessizlik yerine "plak
+// durma" efekti: playbackRate 0.3 saniyede 0'a iner, kaynak asıl olarak
+// gameOver()/resumeMusicAudio() çağrıldığında normal şekilde durdurulur.
+function pitchDropMusic() {
+  if (!musicSrc) return;
+  const t = actx.currentTime;
+  try {
+    musicSrc.playbackRate.cancelScheduledValues(t);
+    musicSrc.playbackRate.setValueAtTime(musicSrc.playbackRate.value, t);
+    musicSrc.playbackRate.linearRampToValueAtTime(0.0001, t + 0.3);
+  } catch (e) {}
+}
 
 // ------------------------------------------------------ oyun durumu
 const S = {
@@ -1550,6 +1575,7 @@ const overlay = $('overlay'), titleEl = $('title'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
       btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
       btnHelp = $('btnHelp'), btnHowBack = $('btnHowBack'),
+      btnMode = $('btnMode'), modeLabelEl = $('modeLabel'), zenBadgeEl = $('zenBadge'),
       btnCrate = $('btnCrate'), crateResult = $('crateResult'),
       reviveOverlay = $('reviveOverlay'), reviveScoreTxt = $('reviveScoreTxt'),
       btnRevive = $('btnRevive'), btnReviveSkip = $('btnReviveSkip'), reviveTimerFill = $('reviveTimerFill'),
@@ -1620,6 +1646,7 @@ function reset() {
   S.lives = 3; updateHearts();
   S.revivesUsed = false;
   rings.length = 0;
+  updateModeUI();
 }
 
 // Düşüş başlat. fatal=false ise kalp gider, top düşer ve KALDIĞI YERDEN
@@ -1637,7 +1664,10 @@ function startFall(fatal, kind) {
   S.shake = fatal ? 14 : 11;
   vibrate(fatal ? [60, 40, 60] : 50);
   burst(S.head.x, S.head.z, fatal ? 40 : 26, C.accentOrange);
-  stopMusicAudio();   // gerçek parça: düşüş boyunca sessiz, S.song gibi donar
+  // Ölümcül düşüşte (normal modda oyun sonuna götürür) ani sessizlik yerine
+  // plak durma efekti; ölümcül olmayan düşüşte (kaldığı yerden devam)
+  // müzik anında susar, tıpkı önceden olduğu gibi.
+  if (fatal) pitchDropMusic(); else stopMusicAudio();
 }
 
 function die() { startFall(true, null); }
@@ -1653,6 +1683,23 @@ function showMenu() {
   renderPassMini();
   showScreen(menuScr);
 }
+
+// ZEN MODU: seçiliyken köşe kaçırılsa/yanlış dokunulsa bile can gitmez,
+// çizgi kaldığı yerden otomatik düzelir, müzik hiç kesilmez (bkz.
+// wrongTurnFail/tap/update — hepsi save.zenMode'a göre dallanır).
+function updateModeUI() {
+  modeLabelEl.textContent = save.zenMode ? 'ZEN' : 'NORMAL';
+  btnMode.classList.toggle('zenActive', save.zenMode);
+  zenBadgeEl.classList.toggle('hidden', !save.zenMode || S.mode !== 'play');
+}
+btnMode.addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  save.zenMode = !save.zenMode;
+  persist();
+  updateModeUI();
+  vibrate(15);
+});
+updateModeUI();
 
 // Ana menüdeki küçük rozet: "(SEVİYE x/100)" — detay için ayrı BEAT PASS
 // ekranına gidilir.
@@ -1869,6 +1916,7 @@ btnReviveSkip.addEventListener('pointerdown', e => { e.stopPropagation(); declin
 
 function gameOver() {
   S.mode = 'over';
+  updateModeUI();
   stopMusicAudio();
   S.best = Math.max(S.best, S.score);
   localStorage.setItem('bl_best', S.best);
@@ -1923,8 +1971,13 @@ function turnSuccess(dt) {
 
 // Ortak "yanlış dönüş" başarısızlık yolu: tap/release'ın hepsi
 // buradan geçer. Can kaldıysa kalp gider, top DÜŞER, kaldığı yerden devam
-// eder; son canda direkt oyun biter.
+// eder; son canda direkt oyun biter. ZEN MODU: can gitmez, düşme/ölüm hiç
+// tetiklenmez — hata sessizce yok sayılır (combo bozulur, o kadar).
 function wrongTurnFail(msg, fallKind) {
+  if (save.zenMode) {
+    S.combo = 0; comboEl.textContent = '';
+    return;
+  }
   if (S.lives > 1) {
     loseHeart(msg);
     S.trail.push({ x: S.head.x, z: S.head.z });
@@ -2077,7 +2130,10 @@ function update(dt, dtRaw) {
     // HOLD basışı kaçırıldı mı? (şerit başladı, parmak yok)
     if (c.hold && !c.holdDone && !S.holding && S.song > c.hold.start + HIT_WIN) {
       c.holdDone = true;                // köşe normale döner
-      if (S.lives > 1) {
+      if (save.zenMode) {
+        // ZEN: şerit hakkı sessizce kaçar, can gitmez, düşme yok.
+        S.combo = 0; comboEl.textContent = '';
+      } else if (S.lives > 1) {
         loseHeart('ŞERİDİ KAÇIRDIN!');
         startFall(false, 'hold');
       } else {
@@ -2101,7 +2157,17 @@ function update(dt, dtRaw) {
         comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
         speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
       } else if (S.song > c.t + HIT_WIN) {
-        if (S.lives > 1) {
+        if (save.zenMode) {
+          // ZEN: köşe otomatik uygulanır (çizgi kaldığı yerden düzelir),
+          // can gitmez, düşme/ölüm hiç tetiklenmez, müzik kesilmez.
+          S.trail.push({ x: c.x, z: c.z });
+          S.dirIdx = c.dirIdx;
+          S.speed = c.spd;
+          S.next++;
+          S.lane = 0;
+          S.combo = 0; comboEl.textContent = '';
+          speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
+        } else if (S.lives > 1) {
           // Köşe kaçtı: kalp git, top DÜŞSÜN, sonra kaldığı yerden devam.
           loseHeart('CAN GİTTİ!');
           startFall(false, 'miss');   // dönüş respawn'da uygulanacak
