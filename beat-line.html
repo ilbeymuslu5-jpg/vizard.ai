@@ -460,7 +460,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v32</div>
+  <div id="ver">v33</div>
   <div id="diag"></div>
 </div>
 
@@ -614,14 +614,10 @@ const GEM_PICK_WIN = 0.12;           // sn — elmas toplama zaman penceresi
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
     gaps: [1, 1, 0.5, 0.5, 1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 1, 4, 1,
-           1, 0.5, 0.5, 1, 1, 2, 1, 0.5, 0.5, 1, 6, 1, 1, 0.5, 0.5, 2],
-    melody: [261.63, 293.66, 329.63, 392.0, 440.0],
-    stab: [246.94, 987.77] },
+           1, 0.5, 0.5, 1, 1, 2, 1, 0.5, 0.5, 1, 6, 1, 1, 0.5, 0.5, 2] },
   { name: 'EGYPT WAVE', bpm: 140, real: true, audioId: 'egyptWave', offset: 1.71,
     gaps: [0.5, 0.5, 1, 1, 0.5, 0.5, 1, 2, 1, 0.5, 0.5, 1, 1, 4, 0.5, 0.5,
-           1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 6, 1, 1, 0.5, 0.5, 1, 2],
-    melody: [220, 246.94, 277.18, 329.63, 392.0],
-    stab: [174.61, 698.46] },
+           1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 6, 1, 1, 0.5, 0.5, 1, 2] },
 ];
 let TR = TRACKS[0];
 // Bir sonraki oyunda çalınacak parça: seçilemez, her reset()'te
@@ -713,10 +709,6 @@ function updateTheme(dt) {
 function vibrate(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
-
-// Başarılı dönüş melodisi: seçili parçanın dizisi, kombo bozulunca başa döner.
-let melodyIdx = 0;
-
 
 // ---------- Mağaza katalogları. Para birimleri: ÇİP (price), ELMAS (gem).
 // src:'kasa' olan öğeler satın alınamaz, yalnızca kasadan çıkar.
@@ -968,12 +960,10 @@ setInterval(() => {
 resize();
 
 // ------------------------------------------------------ ses (WebAudio)
-let actx = null, master = null, musicGain = null;
+let actx = null, musicGain = null;
 function initAudio() {
   if (!actx) {
     actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = 0.45;
-    master.connect(actx.destination);
     musicGain = actx.createGain(); musicGain.gain.value = 0.8;
     musicGain.connect(actx.destination);
     decodeAllAudio();   // yüklü gerçek ses parçalarını arka planda çöz
@@ -1034,29 +1024,9 @@ function startMusicAudio(atSongTime) {
   musicSrc = src;
 }
 function resumeMusicAudio() { if (TR.real) startMusicAudio(S.song); }
-function osc(type, f0, t, dur, vol, f1) {
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = type; o.frequency.setValueAtTime(f0, t);
-  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.02);
-}
-function noise(t, dur, vol, hp) {
-  const n = Math.ceil(actx.sampleRate * dur);
-  const buf = actx.createBuffer(1, n, actx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
-  const s = actx.createBufferSource(); s.buffer = buf;
-  const f = actx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
-  const g = actx.createGain();
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur);
-}
-// (Sentezlenmiş kick/snare/hi-hat kaldırıldı — iki parça da gerçek ses
-// kaydı, kendi davulları çalıyor. Kalan sesler: köşe vurgusu [scheduleStab,
-// aşağıda genCorners içinde] ve dönüş melodisi [turnSuccess].)
+// (Tüm sentezlenmiş efekt sesleri kaldırıldı — iki parça da gerçek ses
+// kaydı, kendi davulları/melodisi çalıyor; oyun hiçbir ek ton üretmez.
+// Dönüş/kayıp/düşüş geri bildirimi artık yalnızca titreşim + görsel.)
 
 // ------------------------------------------------------ oyun durumu
 const S = {
@@ -1103,7 +1073,6 @@ function genCorners(untilTime) {
     if (S.genPrevGap >= HOLD_MIN_GAP) {
       const holdStart = S.genT - (S.genPrevGap - 1) * S.genPrevBeatSec;
       corner.hold = { start: holdStart };
-      scheduleStab(holdStart);   // basış vurgusu
     } else if (S.genPrevGap === GEM_PATH_GAP && S.corners.length) {
       // Düzlüğün yanında ELMAS YOLU: sağa/sola kaydırarak üstüne geçilir.
       // Ana yoldan ayrılmaz, sadece yanal görsel bir sapmadır (senkronu bozmaz);
@@ -1124,7 +1093,6 @@ function genCorners(untilTime) {
       corner.gemPath = { side, gems, zoneStart, zoneEnd };
     }
     S.corners.push(corner);
-    scheduleStab(S.genT);        // köşe vurgusu
     // Gerçek ses parçası: bu köşeden itibaren geçerli tempo playbackRate'e
     // kilitlenir (görsel hız + müzik temposu birlikte köşe anında sıçrar).
     if (TR.real && musicSrc && actx) {
@@ -1144,14 +1112,6 @@ function genCorners(untilTime) {
 
 // Köşe/basış anı için kısa neon "vurgu" sesi — doğrudan o anın gerçek
 // (actx) zamanına planlanır (eski sabit-BEAT'li poll-scheduler yerine).
-function scheduleStab(songTime) {
-  if (!actx) return;
-  const t = S.t0 + songTime;
-  if (t < actx.currentTime) return;
-  osc('square', TR.stab[0], t, 0.12, 0.22);
-  osc('sine', TR.stab[1], t, 0.18, 0.2);
-}
-
 // Şarkı zamanına göre başın olması gereken yeri köşelerden hesapla.
 function headAt(t) {
   let px = 0, pz = 0, pt = 0, dirIdx = 1, spd = speedForSeg(0);
@@ -1539,8 +1499,6 @@ function loseHeart(msg) {
   popupEl.className = '';
   void popupEl.offsetWidth;
   popupEl.className = 'show miss';
-  osc('sawtooth', 300, actx.currentTime, 0.35, 0.35, 90);
-  noise(actx.currentTime, 0.25, 0.25, 700);
 }
 
 function reset() {
@@ -1555,7 +1513,6 @@ function reset() {
   S.next = 0; S.pending = false;
   S.speed = BASE_SPEED;
   S.holding = false;
-  melodyIdx = 0;
   const bs0 = beatSecForSeg(0);
   S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * bs0 * BASE_SPEED;
   S.genDir = 1; S.genT = LEAD_BEATS * bs0; S.genPrevGap = 0; S.genPrevBeatSec = bs0;
@@ -1594,8 +1551,6 @@ function startFall(fatal, kind) {
   S.shake = fatal ? 14 : 11;
   vibrate(fatal ? [60, 40, 60] : 50);
   burst(S.head.x, S.head.z, fatal ? 40 : 26, C.accentOrange);
-  osc('sawtooth', 400, actx.currentTime, fatal ? 0.7 : 0.5, 0.4, 55);
-  noise(actx.currentTime, 0.4, 0.3, 400);
   stopMusicAudio();   // gerçek parça: düşüş boyunca sessiz, S.song gibi donar
 }
 
@@ -1873,11 +1828,6 @@ function turnSuccess(dt) {
   S.runChips += kind === 'perfect' ? 3 : 2;   // para: PERFECT 3, GOOD 2
   runChipsEl.textContent = '⬡ ' + S.runChips;
   showPopup(kind);
-  // Melodik dönüş: pentatonik dizinin sıradaki notası (PERFECT'te oktav süsü).
-  const f = TR.melody[melodyIdx % TR.melody.length];
-  melodyIdx++;
-  osc('sine', f, actx.currentTime, 0.22, 0.26);
-  if (kind === 'perfect') osc('sine', f * 2, actx.currentTime + 0.04, 0.18, 0.12);
   vibrate(kind === 'perfect' ? 45 : 28);   // dönüş geri bildirimi: titreşim
 }
 
