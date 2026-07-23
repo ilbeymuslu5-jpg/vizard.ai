@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v45</div>
+  <div id="ver">v46</div>
   <div id="diag"></div>
 </div>
 
@@ -574,6 +574,10 @@
     <div id="lightGrid" class="grid"></div>
     <h3>AKSESUARLAR</h3>
     <div id="accGrid" class="grid"></div>
+    <h3>ŞAPKALAR</h3>
+    <div id="hatGrid" class="grid"></div>
+    <h3>ENSTRÜMANLAR</h3>
+    <div id="instGrid" class="grid"></div>
     <button class="btn" id="btnBack">&larr; GERİ</button>
   </div>
 </div>
@@ -840,17 +844,24 @@ const ACCS = [
   { id: 'yildiz', name: 'Tepe Yıldızı', gem: 500 },
   { id: 'taci',   name: 'Neon Taç',     src: 'kasa' },
   { id: 'elmas',  name: 'Elmas Uydu',   src: 'kasa' },
-  // GİYİLEBİLİRLER: kafa/beden üstü takılan aksesuarlar.
+  { id: 'isinkilic',     name: 'Işın Kılıcı',      gem: 380 },
+];
+// ŞAPKALAR: baş üstü giyilebilirler.
+const HATS = [
+  { id: 'yok',           name: 'Yok',              price: 0 },
   { id: 'kulaklik',      name: 'Neon Kulaklık',    price: 180 },
   { id: 'sapka',         name: 'Şapka',            price: 150 },
   { id: 'askerkaski',    name: 'Asker Kaskı',      price: 200 },
   { id: 'vikingkaski',   name: 'Viking Kaskı',     price: 220 },
   { id: 'seytanboynuzu', name: 'Şeytan Boynuzları', price: 190 },
-  { id: 'gitar',         name: 'Gitar',            price: 240 },
-  { id: 'saksofon',      name: 'Saksofon',         price: 280 },
-  { id: 'midi',          name: 'Midi Klavye',      price: 260 },
-  { id: 'isinkilic',     name: 'Işın Kılıcı',      gem: 380 },
-  { id: 'elektrogitar',  name: 'Elektro Gitar',    gem: 320 },
+];
+// ENSTRÜMANLAR: sırtta taşınan enstrümanlar.
+const INSTS = [
+  { id: 'yok',          name: 'Yok',           price: 0 },
+  { id: 'gitar',        name: 'Gitar',         price: 240 },
+  { id: 'saksofon',     name: 'Saksofon',      price: 280 },
+  { id: 'midi',         name: 'Midi Klavye',   price: 260 },
+  { id: 'elektrogitar', name: 'Elektro Gitar', gem: 320 },
 ];
 // Kasa ödül havuzu için yardımcılar
 const CRATE_COST = 150;   // elmas
@@ -859,18 +870,36 @@ function cratePool(cat, list) {
 }
 
 // Kalıcı kayıt (çipler, elmaslar, pass, sahip olunanlar, seçili öğeler).
+const HAT_IDS = ['kulaklik', 'sapka', 'askerkaski', 'vikingkaski', 'seytanboynuzu'];
+const INST_IDS = ['gitar', 'saksofon', 'midi', 'elektrogitar'];
 const save = (() => {
   let owned;
   try { owned = JSON.parse(localStorage.getItem('bl_owned') || ''); } catch (e) { owned = null; }
   if (!owned || !owned.skins || !owned.lights) owned = { skins: ['klasik'], lights: ['tema'] };
   if (!owned.acc) owned.acc = ['yok'];
+  if (!owned.hats) owned.hats = ['yok'];
+  if (!owned.inst) owned.inst = ['yok'];
+  // Eski sürümde şapka/enstrüman öğeleri 'acc' kategorisindeydi; yeni
+  // kategorilere taşı (geriye dönük kayıt uyumluluğu).
+  for (let i = owned.acc.length - 1; i >= 0; i--) {
+    const id = owned.acc[i];
+    if (HAT_IDS.includes(id)) { owned.acc.splice(i, 1); if (!owned.hats.includes(id)) owned.hats.push(id); }
+    else if (INST_IDS.includes(id)) { owned.acc.splice(i, 1); if (!owned.inst.includes(id)) owned.inst.push(id); }
+  }
+  let selAcc = localStorage.getItem('bl_acc') || 'yok';
+  let selHat = localStorage.getItem('bl_hat') || 'yok';
+  let selInst = localStorage.getItem('bl_inst') || 'yok';
+  if (HAT_IDS.includes(selAcc)) { selHat = selAcc; selAcc = 'yok'; }
+  else if (INST_IDS.includes(selAcc)) { selInst = selAcc; selAcc = 'yok'; }
   return {
     chips: +(localStorage.getItem('bl_chips') || 0),
     gems: +(localStorage.getItem('bl_gems') || 0),
     owned,
     skin: localStorage.getItem('bl_skin') || 'klasik',
     light: localStorage.getItem('bl_light') || 'tema',
-    acc: localStorage.getItem('bl_acc') || 'yok',
+    acc: selAcc,
+    hat: selHat,
+    inst: selInst,
     xp: +(localStorage.getItem('bl_xp') || 0),
     premium: localStorage.getItem('bl_prem') === '1',
     claimedLvl: +(localStorage.getItem('bl_clvl') || 0),
@@ -884,6 +913,8 @@ function persist() {
   localStorage.setItem('bl_skin', save.skin);
   localStorage.setItem('bl_light', save.light);
   localStorage.setItem('bl_acc', save.acc);
+  localStorage.setItem('bl_hat', save.hat);
+  localStorage.setItem('bl_inst', save.inst);
   localStorage.setItem('bl_xp', save.xp);
   localStorage.setItem('bl_prem', save.premium ? '1' : '0');
   localStorage.setItem('bl_clvl', save.claimedLvl);
@@ -966,7 +997,7 @@ function openCrate() {
   } else {
     const pool = r < 0.85
       ? [...cratePool('skins', SKINS), ...cratePool('lights', LIGHTS)]
-      : cratePool('acc', ACCS);
+      : [...cratePool('acc', ACCS), ...cratePool('hats', HATS), ...cratePool('inst', INSTS)];
     const pick = pool[Math.floor(Math.random() * pool.length)];
     if (save.owned[pick.cat].includes(pick.it.id)) {
       save.chips += 250;   // kopya -> çipe çevrilir
@@ -1530,7 +1561,24 @@ function drawAccessory(hp, r, t) {
     ctx.lineTo(x, y + r * 0.34);
     ctx.lineTo(x - r * 0.26, y);
     ctx.closePath(); ctx.fill();
-  } else if (id === 'kulaklik') {             // kulaklık: üstten bant + iki yastık
+  } else if (id === 'isinkilic') {            // ışın kılıcı: parlayan kılıç
+    const a = -Math.PI * 0.32;
+    const hiltX = hp.x + r * 1.15, hiltY = hp.y + r * 0.5;
+    const midX = hiltX + Math.cos(a) * r * 0.4, midY = hiltY + Math.sin(a) * r * 0.4;
+    const tipX = hiltX + Math.cos(a) * r * 2.4, tipY = hiltY + Math.sin(a) * r * 2.4;
+    ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = Math.max(3, r * 0.24); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(hiltX, hiltY); ctx.lineTo(midX, midY); ctx.stroke();
+    ctx.strokeStyle = '#5cf9ff'; ctx.shadowColor = '#5cf9ff'; ctx.shadowBlur = 10; ctx.lineWidth = Math.max(2, r * 0.16);
+    ctx.beginPath(); ctx.moveTo(midX, midY); ctx.lineTo(tipX, tipY); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+  }
+}
+
+// Seçili ŞAPKAYI başın üstüne çiz (ekran uzayında).
+function drawHat(hp, r, t) {
+  const id = save.hat;
+  if (!id || id === 'yok') return;
+  if (id === 'kulaklik') {                    // kulaklık: üstten bant + iki yastık
     const R = r * 1.25;
     ctx.strokeStyle = '#dfe7ff';
     ctx.lineWidth = Math.max(2, r * 0.22);
@@ -1581,55 +1629,79 @@ function drawAccessory(hp, r, t) {
       ctx.stroke();
     }
     ctx.lineCap = 'butt';
-  } else if (id === 'gitar') {                // akustik gitar: gövde + sap
-    const bx = hp.x + r * 1.7, by = hp.y + r * 0.3;
+  }
+}
+
+// Seçili ENSTRÜMANIN sırt kısmı: topun ARKASINDAN görünen gövde. Top
+// çizilmeden ÖNCE çağrılır ki üst kısmı topun arkasında kalıp sırtta
+// asılı duruyormuş hissi versin.
+function drawInstrumentBody(hp, r, t, id) {
+  const bx = hp.x + r * 0.5, by = hp.y + r * 1.0;
+  if (id === 'gitar') {                       // akustik gitar: kum saati gövde
     ctx.fillStyle = '#c9862f';
-    ctx.beginPath(); ctx.arc(bx, by + r * 0.35, r * 0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(bx, by - r * 0.35, r * 0.34, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#2a1c0f'; ctx.lineWidth = Math.max(2, r * 0.14);
-    ctx.beginPath(); ctx.moveTo(bx, by - r * 0.6); ctx.lineTo(bx, by - r * 1.7); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(bx, by + r * 0.32, r * 0.58, r * 0.72, 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a5691f';
+    ctx.beginPath(); ctx.ellipse(bx - r * 0.16, by - r * 0.3, r * 0.4, r * 0.48, 0.18, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#3a2716';
-    ctx.beginPath(); ctx.arc(bx, by - r * 0.05, r * 0.14, 0, Math.PI * 2); ctx.fill();
-  } else if (id === 'saksofon') {             // saksofon: J eğrisi + çan ağzı
-    const bx = hp.x + r * 1.6, topY = hp.y - r * 1.4;
-    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(3, r * 0.22); ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(bx - r * 0.15, topY);
-    ctx.bezierCurveTo(bx + r * 0.5, topY + r * 0.6, bx + r * 0.5, hp.y + r * 0.9, bx - r * 0.35, hp.y + r * 1.15);
-    ctx.stroke();
-    ctx.fillStyle = '#e0b64a';
-    ctx.beginPath(); ctx.arc(bx - r * 0.35, hp.y + r * 1.15, r * 0.28, 0, Math.PI * 2); ctx.fill();
-    ctx.lineCap = 'butt';
-  } else if (id === 'midi') {                 // midi klavye: tuş şeridi
-    const kw = r * 0.34, kh = r * 0.9, y0 = hp.y + r * 1.3, x0 = hp.x - kw * 3.5;
-    ctx.fillStyle = '#101a2c';
-    ctx.fillRect(x0 - r * 0.1, y0 - r * 0.1, kw * 7 + r * 0.2, kh + r * 0.2);
-    for (let k = 0; k < 7; k++) {
-      ctx.fillStyle = k % 2 === 0 ? '#f4f7ff' : '#0c1220';
-      ctx.fillRect(x0 + k * kw, y0, kw * 0.9, kh);
-    }
-  } else if (id === 'isinkilic') {            // ışın kılıcı: parlayan kılıç
-    const a = -Math.PI * 0.32;
-    const hiltX = hp.x + r * 1.15, hiltY = hp.y + r * 0.5;
-    const midX = hiltX + Math.cos(a) * r * 0.4, midY = hiltY + Math.sin(a) * r * 0.4;
-    const tipX = hiltX + Math.cos(a) * r * 2.4, tipY = hiltY + Math.sin(a) * r * 2.4;
-    ctx.strokeStyle = '#9aa3ad'; ctx.lineWidth = Math.max(3, r * 0.24); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(hiltX, hiltY); ctx.lineTo(midX, midY); ctx.stroke();
-    ctx.strokeStyle = '#5cf9ff'; ctx.shadowColor = '#5cf9ff'; ctx.shadowBlur = 10; ctx.lineWidth = Math.max(2, r * 0.16);
-    ctx.beginPath(); ctx.moveTo(midX, midY); ctx.lineTo(tipX, tipY); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.lineCap = 'butt';
-  } else if (id === 'elektrogitar') {         // elektro gitar: köşeli gövde
-    const bx = hp.x - r * 1.7, by = hp.y + r * 0.25;
+    ctx.beginPath(); ctx.arc(bx - r * 0.02, by + r * 0.15, r * 0.17, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'elektrogitar') {         // elektro gitar: köşeli çift oyuklu gövde
     ctx.fillStyle = '#c21f3a';
     ctx.beginPath();
-    ctx.moveTo(bx - r * 0.5, by - r * 0.3);
-    ctx.lineTo(bx + r * 0.45, by - r * 0.5);
-    ctx.lineTo(bx + r * 0.55, by + r * 0.35);
-    ctx.lineTo(bx + r * 0.05, by + r * 0.7);
-    ctx.lineTo(bx - r * 0.5, by + r * 0.45);
+    ctx.moveTo(bx - r * 0.48, by - r * 0.6);
+    ctx.lineTo(bx + r * 0.42, by - r * 0.72);
+    ctx.lineTo(bx + r * 0.58, by + r * 0.2);
+    ctx.lineTo(bx + r * 0.1, by + r * 0.85);
+    ctx.lineTo(bx - r * 0.48, by + r * 0.55);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = Math.max(2, r * 0.13);
-    ctx.beginPath(); ctx.moveTo(bx + r * 0.3, by - r * 0.45); ctx.lineTo(bx + r * 1.0, by - r * 1.7); ctx.stroke();
+    ctx.fillStyle = '#7a0f22';
+    ctx.beginPath(); ctx.arc(bx - r * 0.1, by - r * 0.15, r * 0.16, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'saksofon') {             // saksofon: J eğrisi + çan ağzı
+    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(3, r * 0.24); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bx, by - r * 0.95);
+    ctx.bezierCurveTo(bx + r * 0.55, by - r * 0.2, bx + r * 0.5, by + r * 0.6, bx - r * 0.1, by + r * 0.95);
+    ctx.stroke();
+    ctx.fillStyle = '#e0b64a';
+    ctx.beginPath(); ctx.arc(bx - r * 0.1, by + r * 0.95, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'butt';
+  } else if (id === 'midi') {                 // midi klavye (keytar tarzı, hafif eğik)
+    const kw = r * 0.3, kh = r * 0.82;
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(0.3);
+    ctx.fillStyle = '#101a2c';
+    ctx.fillRect(-kw * 3.1, -kh * 0.55, kw * 6.2, kh * 1.1);
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = k % 2 === 0 ? '#f4f7ff' : '#0c1220';
+      ctx.fillRect(-kw * 3 + k * kw, -kh * 0.5, kw * 0.86, kh);
+    }
+    ctx.restore();
+  }
+}
+
+// Seçili ENSTRÜMANIN ön kısmı: askı kayışı topun önünden çapraz geçer,
+// sapı/kolu omzun yanından yukarı uzanır. Top çizildikten SONRA çağrılır.
+function drawInstrumentFront(hp, r, t, id) {
+  ctx.strokeStyle = 'rgba(30,22,12,0.85)';
+  ctx.lineWidth = Math.max(2, r * 0.15);
+  ctx.beginPath();
+  ctx.moveTo(hp.x - r * 0.7, hp.y - r * 0.7);
+  ctx.lineTo(hp.x + r * 0.5, hp.y + r * 0.85);
+  ctx.stroke();
+  const nx = hp.x + r * 0.2, ny = hp.y - r * 0.5;
+  if (id === 'gitar' || id === 'elektrogitar') {
+    const wood = id === 'gitar';
+    ctx.strokeStyle = wood ? '#2a1c0f' : '#161616'; ctx.lineWidth = Math.max(2, r * 0.13);
+    ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(nx + r * 0.35, ny - r * 1.1); ctx.stroke();
+    ctx.fillStyle = wood ? '#3a2716' : '#1a1a1a';
+    ctx.fillRect(nx + r * 0.24, ny - r * 1.32, r * 0.3, r * 0.26);
+  } else if (id === 'saksofon') {
+    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(2, r * 0.18); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(nx, ny);
+    ctx.quadraticCurveTo(nx + r * 0.32, ny - r * 0.42, nx + r * 0.12, ny - r * 0.82);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
   }
 }
 
@@ -1702,6 +1774,7 @@ const overlay = $('overlay'), titleEl = $('title'),
       speedEl = $('speed'), livesEl = $('lives'),
       menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), howScr = $('howScr'), chipsEl = $('chips'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
+      hatGrid = $('hatGrid'), instGrid = $('instGrid'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
       btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
       btnHelp = $('btnHelp'), btnHowBack = $('btnHowBack'),
@@ -1912,15 +1985,26 @@ function renderShop() {
   chipsEl.textContent = save.chips;
   $('gems').textContent = save.gems;
   skinGrid.innerHTML = ''; lightGrid.innerHTML = ''; accGrid.innerHTML = '';
+  hatGrid.innerHTML = ''; instGrid.innerHTML = '';
   for (const it of SKINS) skinGrid.appendChild(shopCard(it, 'skins'));
   for (const it of LIGHTS) lightGrid.appendChild(shopCard(it, 'lights'));
   for (const it of ACCS) accGrid.appendChild(shopCard(it, 'acc'));
+  for (const it of HATS) hatGrid.appendChild(shopCard(it, 'hats'));
+  for (const it of INSTS) instGrid.appendChild(shopCard(it, 'inst'));
 }
 
-function selOf(cat) { return cat === 'skins' ? save.skin : cat === 'lights' ? save.light : save.acc; }
+function selOf(cat) {
+  if (cat === 'skins') return save.skin;
+  if (cat === 'lights') return save.light;
+  if (cat === 'hats') return save.hat;
+  if (cat === 'inst') return save.inst;
+  return save.acc;
+}
 function setSel(cat, id) {
   if (cat === 'skins') save.skin = id;
   else if (cat === 'lights') save.light = id;
+  else if (cat === 'hats') save.hat = id;
+  else if (cat === 'inst') save.inst = id;
   else save.acc = id;
 }
 
@@ -2890,6 +2974,10 @@ function draw(t) {
       ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
     }
 
+    // Sırtta taşınan enstrümanın gövdesi: top çizilmeden ÖNCE (topun
+    // arkasında kalıp sırtta asılıymış hissi versin).
+    if (S.mode !== 'fall' && save.inst !== 'yok') drawInstrumentBody(hp, r, t, save.inst);
+
     // KARAKTER: parlak yuvarlak top — kostüm renginde çekirdek + hale + halka.
     // Düşüşte neon parıltısı yavaşça söner (0..1 -> fallGlowFade).
     const fallGlowFade = S.mode === 'fall' ? Math.max(0, 1 - S.fallT / (S.fallFatal ? 1.0 : 0.7)) : 1;
@@ -2911,6 +2999,8 @@ function draw(t) {
       ctx.stroke();
       ctx.restore();
     } else {
+      if (save.inst !== 'yok') drawInstrumentFront(hp, r, t, save.inst);
+      drawHat(hp, r, t);
       drawAccessory(hp, r, t);
     }
   }
@@ -2993,7 +3083,7 @@ showMenu();   // açılışta ana menü
 if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   view, proj, cam, CAM, TRACKS, AUDIO_BUFFERS, beatPhaseAt, currentEffBpm,
   acceptRevive, declineRevive, buyPremium, save, trySwitchLane, comboFX, theme, BIOMES,
-  SKINS, LIGHTS, ACCS,
+  SKINS, LIGHTS, ACCS, HATS, INSTS,
   get camA() { return camA; }, get camP() { return camP; },
   get camEnergy() { return camEnergy; },
   get TR() { return TR; },
