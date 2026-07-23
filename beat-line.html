@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v42</div>
+  <div id="ver">v43</div>
   <div id="diag"></div>
 </div>
 
@@ -618,8 +618,8 @@ function beatSecForSeg(k) { return 60 / bpmForSeg(k); }
 const PATH_W     = 1.7;             // yol genişliği
 const HALF_W     = PATH_W / 2;
 const LEAD_BEATS = 4;               // ilk köşeden önceki düz giriş
-const HIT_WIN    = 0.16;            // sn — dokunuş kabul penceresi
-const PERF_WIN   = 0.06;            // sn — PERFECT penceresi
+const HIT_WIN    = 0.10;            // sn — dokunuş kabul penceresi (GOOD/miss sınırı)
+const PERF_WIN   = 0.035;           // sn — PERFECT penceresi (tam zamanında basış)
 const BLOCK_H    = 3.2;             // platform bloklarının derinliği
 
 // ---------- PARÇALAR — yalnızca GERÇEK SES kayıtları. Her ikisi de 140 BPM
