@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v41</div>
+  <div id="ver">v42</div>
   <div id="diag"></div>
 </div>
 
@@ -636,16 +636,6 @@ const LANE_OFFSET  = HALF_W * 3.4;   // yan yolun ana yoldan yanal uzaklığı
 const SWIPE_MIN_PX = 40;             // yan yola geçmek için gereken yatay sürükleme
 const GEM_PICK_WIN = 0.12;           // sn — elmas toplama zaman penceresi
 
-// ZIPLAMA (JUMP) boşlukları: uygun uzunluktaki düz segmentlerin bir kısmında
-// yolda gerçek bir boşluk açılır; başında parlayan bir ped var — pede tam
-// ritimle dokunulursa karakter kavis çizerek karşıya atlar, dokunulmazsa
-// boşluğa düşer. Yalnızca GÖRSEL/ritimsel bir katman: x/z/t hareket modeli
-// hiç değişmez (zıplama salt Y ekseninde bir render efekti — bkz. S.jumpArc),
-// bu yüzden köşe zamanlaması ve senkron asla etkilenmez.
-const JUMP_CHANCE  = 0.2;
-const JUMP_GAP_LEN = 1.5;   // dünya birimi cinsinden boşluk uzunluğu
-const JUMP_MARGIN  = 0.5;   // boşluğun her iki yanında en az bu kadar sağlam zemin
-const JUMP_HEIGHT  = 1.15;  // zıplama kavisinin tepe yüksekliği
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
     gaps: [1, 1, 0.5, 0.5, 1, 1, 0.5, 0.5, 2, 1, 1, 0.5, 0.5, 1, 4, 1,
@@ -1152,7 +1142,6 @@ const S = {
   lane: 0,                 // elmas yolu tarafı: 0 ana yol, ±1 yan yol
   runGems: 0,
   dispX: 0, dispZ: 0,       // topun GÖRSEL konumu (yan yol ofseti dahil)
-  jumpArc: null,            // { start, end } — zıplama kavisi aktifken dolu
   genBeat: LEAD_BEATS, genX: 0, genZ: -LEAD_BEATS * beatSecForSeg(0) * BASE_SPEED,
   genDir: 1, genT: LEAD_BEATS * beatSecForSeg(0),
   genPrevGap: 0, genPrevBeatSec: beatSecForSeg(0),
@@ -1194,21 +1183,6 @@ function genCorners(untilTime) {
                  z: cz + pz * LANE_OFFSET * env * side, got: false };
       });
       corner.gemPath = { side, gems, zoneStart, zoneEnd };
-    } else if (S.genPrevGap >= 1 && S.corners.length) {
-      // Uygun uzunluktaki düz segmentlerin bir kısmında ZIPLAMA boşluğu:
-      // ped, düzlüğün ortasında (boşluk ortalanacak şekilde) yerleşir.
-      const prev = S.corners[S.corners.length - 1];
-      const segLen = prev.spd * (S.genT - prev.t);
-      if (segLen > JUMP_GAP_LEN + JUMP_MARGIN * 2 && Math.random() < JUMP_CHANCE) {
-        const hd = DIR[prev.dirIdx];
-        const padDist = segLen / 2 - JUMP_GAP_LEN / 2;
-        const padT = prev.t + padDist / prev.spd;
-        corner.jump = {
-          padT, gapLen: JUMP_GAP_LEN, spd: prev.spd, dirIdx: prev.dirIdx,
-          padX: prev.x + hd.x * padDist, padZ: prev.z + hd.z * padDist,
-          done: false,
-        };
-      }
     }
     S.corners.push(corner);
     // Gerçek ses parçası: bu köşeden itibaren geçerli tempo playbackRate'e
@@ -1684,7 +1658,6 @@ function reset() {
   S.runChips = 0; runChipsEl.textContent = '⬡ 0';
   S.runGems = 0; runGemsEl.textContent = '💎 0';
   S.lane = 0;
-  S.jumpArc = null;
   S.lives = 3; updateHearts();
   S.revivesUsed = false;
   rings.length = 0;
@@ -1947,7 +1920,6 @@ function grantRevive() {
   S.dirIdx = h.dirIdx;
   S.fallVy = 0;
   S.lane = 0;
-  S.jumpArc = null;
   S.mode = 'play';
   resumeMusicAudio();
   spawnRing(S.head.x, S.head.z);
@@ -2050,22 +2022,6 @@ function tap() {
       return;
     }
   }
-  // ZIPLAMA PEDİ: boşluğun hemen başında, tam ritimle dokunulmalı —
-  // başarılıysa görsel bir kavis (S.jumpArc) devreye girer, karakter
-  // boşluğun üzerinden yumuşakça karşıya atlar.
-  if (c.jump && !c.jump.done) {
-    const jdt = S.song - c.jump.padT;
-    if (Math.abs(jdt) <= HIT_WIN) {
-      c.jump.done = true;
-      S.jumpArc = { start: c.jump.padT, end: c.jump.padT + c.jump.gapLen / c.jump.spd };
-      popupEl.textContent = 'ZIPLA!';
-      popupEl.className = '';
-      void popupEl.offsetWidth;
-      popupEl.className = 'show good';
-      vibrate(18);
-      return;
-    }
-  }
   // ELMAS YOLU bölgesinde, köşenin kendi vuruş penceresine gelmeden önceki
   // dokunuşlar köşe hatası SAYILMAZ — bu bölgede oyuncu kaydırmayla yan
   // yola geçmeyi seçebilir; köşe dönüşü hâlâ normal zamanında gerekir.
@@ -2077,7 +2033,6 @@ function tap() {
     // Yanlış zamanda dokunuş: yanlış dönüşle yoldan uç, düş, kaldığı
     // yerden devam et (ya da son canda direkt biter).
     if (c.hold) c.holdDone = true;      // şerit hakkı yandı, köşe normale döner
-    if (c.jump) c.jump.done = true;     // ped hakkı yandı, boşluk normale döner
     wrongTurnFail('ERKEN DOKUNDUN!', 'early');
   }
 }
@@ -2201,21 +2156,6 @@ function update(dt, dtRaw) {
         die();
       }
     }
-    // ZIPLAMA PEDİNE dokunulmadan boşluk geldi mi?
-    if (c.jump && !c.jump.done && S.song > c.jump.padT + HIT_WIN) {
-      c.jump.done = true;
-      if (save.zenMode) {
-        // ZEN: boşluk sessizce otomatik atlanır (görsel kavis yine oynar).
-        S.jumpArc = { start: c.jump.padT, end: c.jump.padT + c.jump.gapLen / c.jump.spd };
-        S.combo = 0; comboEl.textContent = '';
-      } else if (S.lives > 1) {
-        loseHeart('BOŞLUĞA DÜŞTÜN!');
-        startFall(false, 'jump');
-      } else {
-        S.next++;
-        die();
-      }
-    }
     if (S.mode === 'play' && S.song >= c.t) {
       if (S.pending) {
         // Tam köşe anında (== bas vuruşu anında) dön.
@@ -2316,7 +2256,6 @@ function update(dt, dtRaw) {
         S.dirIdx = h.dirIdx;
         S.fallVy = 0;
         S.lane = 0;
-        S.jumpArc = null;
         S.mode = 'play';
         resumeMusicAudio();   // gerçek parça: donduğu tam noktadan devam
         spawnRing(S.head.x, S.head.z);
@@ -2615,21 +2554,12 @@ function draw(t) {
   drawFloaters(t);
   drawUnderRoadBeams();
 
-  // yol koşuları: uzaktan yakına. ZIPLAMA'lı segmentler ikiye bölünür,
-  // aradaki boşluk (ped -> ped+gapLen) hiç çizilmez -> gerçek bir çukur.
+  // yol koşuları: uzaktan yakına.
   const segs = [];
   let px = 0, pz = 0, pdir = 1;
   for (let i = 0; i < S.corners.length; i++) {
     const c = S.corners[i];
-    if (c.jump) {
-      const d = DIR[pdir];
-      const gapEndX = c.jump.padX + d.x * c.jump.gapLen;
-      const gapEndZ = c.jump.padZ + d.z * c.jump.gapLen;
-      segs.push([px, pz, c.jump.padX, c.jump.padZ, pdir]);
-      segs.push([gapEndX, gapEndZ, c.x, c.z, pdir]);
-    } else {
-      segs.push([px, pz, c.x, c.z, pdir]);
-    }
+    segs.push([px, pz, c.x, c.z, pdir]);
     px = c.x; pz = c.z; pdir = c.dirIdx;
   }
   segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir]);
@@ -2687,71 +2617,6 @@ function draw(t) {
         }
         ctx.stroke();
         ctx.globalAlpha = 1;
-      }
-    }
-  }
-
-  // ZIPLAMA PEDİ + boşluk kenar ışıkları: erken fark edilsin diye geniş
-  // bir bakış mesafesinde çizilir (KAYDIR ipucuyla aynı görsel dil).
-  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
-    const c = S.corners[i];
-    if (!c.jump) continue;
-    const jp = c.jump;
-    const p = S.corners[i - 1];
-    const hd = DIR[p.dirIdx];
-    const px2 = -hd.z, pz2 = hd.x;
-    const gapEndX = jp.padX + hd.x * jp.gapLen, gapEndZ = jp.padZ + hd.z * jp.gapLen;
-    const active = i === S.next;
-
-    // Boşluk kenar ışıkları: tehlike (turuncu) rengiyle ped ve iniş kenarı.
-    for (const [ex, ez] of [[jp.padX, jp.padZ], [gapEndX, gapEndZ]]) {
-      ctx.strokeStyle = C.accentOrange;
-      ctx.shadowColor = C.accentOrange; ctx.shadowBlur = active ? 14 : 6;
-      ctx.lineWidth = active ? 4 : 2.5;
-      ctx.globalAlpha = active ? 0.9 : 0.4;
-      ctx.beginPath();
-      line3({ x: ex + px2 * HALF_W, y: 0.02 + waveY(ex, ez), z: ez + pz2 * HALF_W },
-            { x: ex - px2 * HALF_W, y: 0.02 + waveY(ex, ez), z: ez - pz2 * HALF_W });
-      ctx.stroke();
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-    }
-
-    if (!jp.done) {
-      // Vuruşa senkron daralan halka (hold/köşe ile aynı dil), ped üstünde.
-      const left = jp.padT - S.song;
-      const bs = p.beatSec;
-      if (left < bs * 2.5) {
-        const phh = Math.max(0, left) / (bs * 2.5);
-        const R = HALF_W * (0.55 + phh * 2.6);
-        const inWin = Math.abs(left) <= HIT_WIN;
-        ctx.strokeStyle = inWin ? '#ffffff' : C.accentOrange;
-        ctx.globalAlpha = inWin ? 1 : 0.8;
-        ctx.lineWidth = inWin ? 4 : 2.5;
-        ctx.beginPath();
-        let st = false;
-        for (let k = 0; k <= 20; k++) {
-          const a = (k / 20) * Math.PI * 2;
-          const rx = jp.padX + Math.cos(a) * R, rz = jp.padZ + Math.sin(a) * R;
-          const v = view({ x: rx, y: 0.06 + waveY(rx, rz), z: rz });
-          if (v.z < NEAR) continue;
-          const q = proj(v);
-          st ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
-          st = true;
-        }
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-      // Erken uyarı ipucu: "ZIPLA!" yazısı, pedin üstünde.
-      const hv = view({ x: jp.padX, y: 0.7, z: jp.padZ });
-      if (hv.z > NEAR) {
-        const hp2 = proj(hv);
-        ctx.fillStyle = C.accentOrange;
-        ctx.shadowColor = C.accentOrange; ctx.shadowBlur = 8;
-        ctx.font = '700 15px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('ZIPLA!', hp2.x, hp2.y - 16 + 6 * Math.sin(t * 5));
-        ctx.shadowBlur = 0;
-        ctx.textAlign = 'start';
       }
     }
   }
@@ -2879,23 +2744,11 @@ function draw(t) {
     }
   }
 
-  // ZIPLAMA KAVİSİ: aktifse topun Y'sine sinüs kavis eklenir — SALT GÖRSEL;
-  // x/z/t hareket modeli hiç etkilenmez, bu yüzden senkron korunur.
-  let jumpY = 0;
-  if (S.jumpArc) {
-    if (S.mode === 'play' && S.song >= S.jumpArc.start && S.song <= S.jumpArc.end) {
-      const jf = (S.song - S.jumpArc.start) / (S.jumpArc.end - S.jumpArc.start);
-      jumpY = JUMP_HEIGHT * Math.sin(Math.PI * jf);
-    } else if (S.song > S.jumpArc.end) {
-      S.jumpArc = null;
-    }
-  }
-
   // TOP: iri, beat ile nabız atan parlak küre.
   // GARANTİ: projeksiyon ne derse desin top ekran içine kenetlenir —
   // herhangi bir platform/viewport tuhaflığında bile daima görünür.
   {
-    const hv = view({ x: tipX, y: ((S.mode === 'fall' || S.mode === 'reviveWait') ? S.head.y : 0.16 + waveY(tipX, tipZ) + jumpY), z: tipZ });
+    const hv = view({ x: tipX, y: ((S.mode === 'fall' || S.mode === 'reviveWait') ? S.head.y : 0.16 + waveY(tipX, tipZ)), z: tipZ });
     const ok = hv.z > NEAR;
     const hp = ok ? proj(hv) : { x: W / 2, y: H * 0.6 };
     hp.x = Math.min(W - 34, Math.max(34, hp.x));
