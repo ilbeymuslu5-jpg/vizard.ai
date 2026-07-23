@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v47 — TÜMÜ AÇIK (TEST)</div>
+  <div id="ver">v48 — TÜMÜ AÇIK (TEST)</div>
   <div id="diag"></div>
 </div>
 
@@ -1644,76 +1644,82 @@ function drawHat(hp, r, t) {
   }
 }
 
-// Seçili ENSTRÜMANIN sırt kısmı: topun ARKASINDAN görünen gövde. Top
-// çizilmeden ÖNCE çağrılır ki üst kısmı topun arkasında kalıp sırtta
-// asılı duruyormuş hissi versin.
-function drawInstrumentBody(hp, r, t, id) {
-  const bx = hp.x + r * 0.5, by = hp.y + r * 1.0;
-  if (id === 'gitar') {                       // akustik gitar: kum saati gövde
-    ctx.fillStyle = '#c9862f';
-    ctx.beginPath(); ctx.ellipse(bx, by + r * 0.32, r * 0.58, r * 0.72, 0.18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#a5691f';
-    ctx.beginPath(); ctx.ellipse(bx - r * 0.16, by - r * 0.3, r * 0.4, r * 0.48, 0.18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#3a2716';
-    ctx.beginPath(); ctx.arc(bx - r * 0.02, by + r * 0.15, r * 0.17, 0, Math.PI * 2); ctx.fill();
+// Seçili ENSTRÜMANI topun yanında, tamamen görünür şekilde çiz (diğer
+// aksesuarlarla aynı görsel dil — halka/uydu gibi topun etrafında yüzer).
+function drawInstrument(hp, r, t, id) {
+  const bx = hp.x + r * 1.7, by = hp.y + r * 0.1;
+  if (id === 'gitar') {                       // akustik gitar: kum saati gövde + sap + kafalık
+    ctx.fillStyle = '#d9922f';
+    ctx.beginPath(); ctx.ellipse(bx, by + r * 0.42, r * 0.5, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(bx, by - r * 0.18, r * 0.36, r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a5a1d';
+    ctx.beginPath(); ctx.arc(bx, by + r * 0.34, r * 0.16, 0, Math.PI * 2); ctx.fill();   // ses deliği
+    ctx.strokeStyle = '#3a2716'; ctx.lineWidth = Math.max(3, r * 0.2); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by - r * 0.58); ctx.lineTo(bx, by - r * 1.85); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = '#f2e6c9'; ctx.lineWidth = 1;
+    for (const dx of [-r * 0.05, 0, r * 0.05]) {
+      ctx.beginPath(); ctx.moveTo(bx + dx, by - r * 0.55); ctx.lineTo(bx + dx, by - r * 1.8); ctx.stroke();
+    }
+    ctx.fillStyle = '#2a1c0f';
+    ctx.fillRect(bx - r * 0.22, by - r * 2.05, r * 0.44, r * 0.28);
+    ctx.fillStyle = '#c9a86a';
+    for (const dx of [-r * 0.12, 0, r * 0.12]) {
+      ctx.beginPath(); ctx.arc(bx + dx, by - r * 1.91, r * 0.04, 0, Math.PI * 2); ctx.fill();
+    }
   } else if (id === 'elektrogitar') {         // elektro gitar: köşeli çift oyuklu gövde
     ctx.fillStyle = '#c21f3a';
     ctx.beginPath();
-    ctx.moveTo(bx - r * 0.48, by - r * 0.6);
-    ctx.lineTo(bx + r * 0.42, by - r * 0.72);
-    ctx.lineTo(bx + r * 0.58, by + r * 0.2);
-    ctx.lineTo(bx + r * 0.1, by + r * 0.85);
-    ctx.lineTo(bx - r * 0.48, by + r * 0.55);
+    ctx.moveTo(bx - r * 0.5, by - r * 0.55);
+    ctx.lineTo(bx + r * 0.15, by - r * 0.68);
+    ctx.lineTo(bx + r * 0.55, by - r * 0.15);
+    ctx.lineTo(bx + r * 0.42, by + r * 0.55);
+    ctx.lineTo(bx - r * 0.1, by + r * 0.78);
+    ctx.lineTo(bx - r * 0.55, by + r * 0.35);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#7a0f22';
-    ctx.beginPath(); ctx.arc(bx - r * 0.1, by - r * 0.15, r * 0.16, 0, Math.PI * 2); ctx.fill();
-  } else if (id === 'saksofon') {             // saksofon: J eğrisi + çan ağzı
-    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(3, r * 0.24); ctx.lineCap = 'round';
+    ctx.fillStyle = '#0d0d0d';
+    ctx.beginPath(); ctx.ellipse(bx - r * 0.12, by - r * 0.28, r * 0.16, r * 0.22, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(bx - r * 0.22, by + r * 0.06, r * 0.44, r * 0.08);
+    ctx.fillRect(bx - r * 0.22, by + r * 0.24, r * 0.44, r * 0.08);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(3, r * 0.18); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx, by - r * 0.62); ctx.lineTo(bx, by - r * 1.8); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(bx - r * 0.2, by - r * 2.0, r * 0.4, r * 0.26);
+  } else if (id === 'saksofon') {             // saksofon: ağızlık + gövde eğrisi + çan ağzı + tuşlar
+    const topY = by - r * 1.3;
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath(); ctx.ellipse(bx - r * 0.26, topY - r * 0.16, r * 0.13, r * 0.22, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(3, r * 0.26); ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(bx, by - r * 0.95);
-    ctx.bezierCurveTo(bx + r * 0.55, by - r * 0.2, bx + r * 0.5, by + r * 0.6, bx - r * 0.1, by + r * 0.95);
+    ctx.moveTo(bx - r * 0.1, topY);
+    ctx.bezierCurveTo(bx + r * 0.55, topY + r * 0.5, bx + r * 0.55, by + r * 0.7, bx - r * 0.2, by + r * 1.1);
     ctx.stroke();
     ctx.fillStyle = '#e0b64a';
-    ctx.beginPath(); ctx.arc(bx - r * 0.1, by + r * 0.95, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx - r * 0.2, by + r * 1.1, r * 0.32, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f2d98a';
+    for (let k = 0; k < 4; k++) {
+      const kt = k / 3;
+      ctx.beginPath();
+      ctx.arc(bx + r * (0.1 - kt * 0.15), topY + r * (0.35 + kt * 0.85), r * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.lineCap = 'butt';
-  } else if (id === 'midi') {                 // midi klavye (keytar tarzı, hafif eğik)
-    const kw = r * 0.3, kh = r * 0.82;
+  } else if (id === 'midi') {                 // midi klavye: kontrol paneli + siyah/beyaz tuşlar
+    const kw = r * 0.32, kh = r * 0.85;
     ctx.save();
-    ctx.translate(bx, by);
-    ctx.rotate(0.3);
-    ctx.fillStyle = '#101a2c';
-    ctx.fillRect(-kw * 3.1, -kh * 0.55, kw * 6.2, kh * 1.1);
-    for (let k = 0; k < 6; k++) {
-      ctx.fillStyle = k % 2 === 0 ? '#f4f7ff' : '#0c1220';
-      ctx.fillRect(-kw * 3 + k * kw, -kh * 0.5, kw * 0.86, kh);
+    ctx.translate(bx - kw * 3, by);
+    ctx.rotate(-0.1);
+    ctx.fillStyle = '#141b2e';
+    ctx.fillRect(-r * 0.15, -kh * 0.75, kw * 7 + r * 0.3, kh * 0.35);
+    ctx.fillStyle = '#0a0f1c';
+    ctx.fillRect(-r * 0.15, -kh * 0.35, kw * 7 + r * 0.3, kh);
+    for (let k = 0; k < 7; k++) {
+      ctx.fillStyle = k % 2 === 0 ? '#f4f7ff' : '#12182a';
+      ctx.fillRect(k * kw, -kh * 0.3, kw * 0.9, kh * 0.9);
     }
     ctx.restore();
-  }
-}
-
-// Seçili ENSTRÜMANIN ön kısmı: askı kayışı topun önünden çapraz geçer,
-// sapı/kolu omzun yanından yukarı uzanır. Top çizildikten SONRA çağrılır.
-function drawInstrumentFront(hp, r, t, id) {
-  ctx.strokeStyle = 'rgba(30,22,12,0.85)';
-  ctx.lineWidth = Math.max(2, r * 0.15);
-  ctx.beginPath();
-  ctx.moveTo(hp.x - r * 0.7, hp.y - r * 0.7);
-  ctx.lineTo(hp.x + r * 0.5, hp.y + r * 0.85);
-  ctx.stroke();
-  const nx = hp.x + r * 0.2, ny = hp.y - r * 0.5;
-  if (id === 'gitar' || id === 'elektrogitar') {
-    const wood = id === 'gitar';
-    ctx.strokeStyle = wood ? '#2a1c0f' : '#161616'; ctx.lineWidth = Math.max(2, r * 0.13);
-    ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(nx + r * 0.35, ny - r * 1.1); ctx.stroke();
-    ctx.fillStyle = wood ? '#3a2716' : '#1a1a1a';
-    ctx.fillRect(nx + r * 0.24, ny - r * 1.32, r * 0.3, r * 0.26);
-  } else if (id === 'saksofon') {
-    ctx.strokeStyle = '#e0b64a'; ctx.lineWidth = Math.max(2, r * 0.18); ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(nx, ny);
-    ctx.quadraticCurveTo(nx + r * 0.32, ny - r * 0.42, nx + r * 0.12, ny - r * 0.82);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
   }
 }
 
@@ -2986,10 +2992,6 @@ function draw(t) {
       ctx.beginPath(); ctx.moveTo(hp.x, hp.y); ctx.lineTo(tp.x, tp.y); ctx.stroke();
     }
 
-    // Sırtta taşınan enstrümanın gövdesi: top çizilmeden ÖNCE (topun
-    // arkasında kalıp sırtta asılıymış hissi versin).
-    if (S.mode !== 'fall' && save.inst !== 'yok') drawInstrumentBody(hp, r, t, save.inst);
-
     // KARAKTER: parlak yuvarlak top — kostüm renginde çekirdek + hale + halka.
     // Düşüşte neon parıltısı yavaşça söner (0..1 -> fallGlowFade).
     const fallGlowFade = S.mode === 'fall' ? Math.max(0, 1 - S.fallT / (S.fallFatal ? 1.0 : 0.7)) : 1;
@@ -3011,7 +3013,7 @@ function draw(t) {
       ctx.stroke();
       ctx.restore();
     } else {
-      if (save.inst !== 'yok') drawInstrumentFront(hp, r, t, save.inst);
+      if (save.inst !== 'yok') drawInstrument(hp, r, t, save.inst);
       drawHat(hp, r, t);
       drawAccessory(hp, r, t);
     }
