@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v49 — TÜMÜ AÇIK (TEST)</div>
+  <div id="ver">v50 — TÜMÜ AÇIK (TEST)</div>
   <div id="diag"></div>
 </div>
 
@@ -639,6 +639,9 @@ const GEM_PATH_GAP = 2;              // bu uzunluktaki düzlüklerde yan elmas y
 const LANE_OFFSET  = HALF_W * 3.4;   // yan yolun ana yoldan yanal uzaklığı
 const SWIPE_MIN_PX = 40;             // yan yola geçmek için gereken yatay sürükleme
 const GEM_PICK_WIN = 0.12;           // sn — elmas toplama zaman penceresi
+const PORTAL_CHANCE  = 0.09;         // ışınlanma portalı belirme olasılığı
+const PORTAL_FWD      = 7;           // dünya birimi — ışınlanma sıçrama mesafesi
+const GRAVITY_CHANCE = 0.09;         // ters çekim pedi belirme olasılığı
 
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
@@ -732,7 +735,6 @@ function heatColor(k) {   // k: 1 = az önce geçildi (sıcak), 0 = soğudu
   const r = c2[0] + (c1[0] - c2[0]) * kk, g = c2[1] + (c1[1] - c2[1]) * kk, b = c2[2] + (c1[2] - c2[2]) * kk;
   return 'rgba(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ',' + (0.9 * k) + ')';
 }
-const SCORE_POP_DUR = 0.8;   // sn — 3D skor popup'ının yukarı süzülüp sönme süresi
 // Feature 3: kamera enerjisi — biyomun "energy" değerine yumuşak lerp.
 // Yüksek enerjide kamera geriye çekilir + FOV hafifçe genişler (bkz.
 // update()'teki CAM.back ataması ve setFocalLength()).
@@ -1238,7 +1240,7 @@ const S = {
   trail: [],               // dönüş noktaları (dünya koordinatı)
   fallT: 0, fallVy: 0, fallDir: null, fallSpin: 0, fallSpinV: 0,
   particles: [],
-  scorePops: [],           // { x, z, text, born, kind } — 3D yüzen skor yazıları
+  warpFlash: 0,            // 0..1 — ışınlanma anındaki 0.2sn'lik neon flaş
   fallFatal: false, fallKind: null,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
   speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
@@ -1287,8 +1289,20 @@ function genCorners(untilTime) {
                  z: cz + pz * LANE_OFFSET * env * side, got: false };
       });
       corner.gemPath = { side, gems, zoneStart, zoneEnd };
+    } else if (S.genPrevGap === 1 && S.corners.length > 3 && Math.random() < PORTAL_CHANCE) {
+      // IŞINLANMA PORTALI: köşenin kendisi ritimle NORMAL şekilde geçilir
+      // (dokunuş zamanlaması hiç değişmez); yalnızca bu köşeden SONRAKİ
+      // konum (x/z) ileri sıçrar -- t/beat/beatSec hiç etkilenmez, bu
+      // yüzden köşe zamanlaması ve senkron tamamen korunur.
+      const hd = DIR[corner.dirIdx];
+      corner.portal = { destX: corner.x + hd.x * PORTAL_FWD, destZ: corner.z + hd.z * PORTAL_FWD };
+    } else if (S.genPrevGap === 1 && S.corners.length > 3 && Math.random() < GRAVITY_CHANCE) {
+      // TERS ÇEKİM PEDİ: yalnızca RENDER katmanında kamera/yolu 180°
+      // çevirir (bkz. gravRollTarget) -- x/z/t hareket modeli değişmez.
+      corner.gravity = true;
     }
     S.corners.push(corner);
+    if (corner.portal) { S.genX = corner.portal.destX; S.genZ = corner.portal.destZ; }
     // Gerçek ses parçası: bu köşeden itibaren geçerli tempo playbackRate'e
     // kilitlenir (görsel hız + müzik temposu birlikte köşe anında sıçrar).
     if (TR.real && musicSrc && actx) {
@@ -1314,7 +1328,10 @@ function headAt(t) {
   for (let i = S.next - 1; i >= 0; i--) {   // en son geçilen köşe
     if (S.corners[i].t <= t) {
       const c = S.corners[i];
-      px = c.x; pz = c.z; pt = c.t; dirIdx = c.dirIdx; spd = c.spd;
+      // IŞINLANMA: bu köşeden itibaren hareket, köşenin KENDİ x/z'sinden
+      // değil, portalın sıçrama hedefinden devam eder (bkz. genCorners()).
+      if (c.portal) { px = c.portal.destX; pz = c.portal.destZ; } else { px = c.x; pz = c.z; }
+      pt = c.t; dirIdx = c.dirIdx; spd = c.spd;
       break;
     }
   }
@@ -1347,6 +1364,12 @@ function setFocalLength() {
 const cam = { x: 0, y: 0, z: 0, fx: 0, fz: 0 };   // fx/fz: kamera odağı
 let camA = 0;   // odağın çapraz eksendeki (ileri) konumu — sabit hızla artar
 let camP = 0;   // odağın yanal konumu — topu yumuşakça izler
+// TERS ÇEKİM: gravRoll ekran uzayında yumuşakça hedefe yaklaşır (bkz.
+// draw()'daki dünya-döndürme ve genCorners()'daki corner.gravity).
+let gravRoll = 0, gravRollTarget = 0;
+function updateGravityFlip(dt) {
+  gravRoll += (gravRollTarget - gravRoll) * (1 - Math.exp(-3.2 * dt));
+}
 // Sabit bakış yönü tabanı (çapraz + aşağı eğim) — her karede aynı.
 let B = null;
 function computeBasis() {
@@ -1894,7 +1917,8 @@ function reset() {
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0, t: 0 }];
   S.particles.length = 0;
-  S.scorePops.length = 0;
+  S.warpFlash = 0;
+  gravRoll = 0; gravRollTarget = 0;
   theme.cur = [...BIOMES[0].col]; theme.tgt = BIOMES[0].col; theme.step = -1; theme.biomeIdx = 0;
   camEnergy = 0; CAM.back = CAM_BACK_BASE;
   S.t0 = actx.currentTime + 0.12;
@@ -2242,22 +2266,16 @@ function showPopup(kind) {
 
 // Dokunuş: sıradaki köşenin zaman penceresiyle karşılaştır.
 // Ortak başarı yolu: hem normal dokunuş hem hold bırakışı buradan geçer.
-function turnSuccess(dt, c) {
+function turnSuccess(dt) {
   S.pending = true;                   // dönüş tam köşe anında uygulanacak
   const kind = Math.abs(dt) <= PERF_WIN ? 'perfect' : 'good';
   S.lastKind = kind;
   S.combo++;
-  const delta = (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
-  S.score += delta;
+  S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
   S.runChips += kind === 'perfect' ? 3 : 2;   // para: PERFECT 3, GOOD 2
   runChipsEl.textContent = '⬡ ' + S.runChips;
   showPopup(kind);
   vibrate(kind === 'perfect' ? 45 : 28);   // dönüş geri bildirimi: titreşim
-  // 3D DÜNYA İÇİ SKOR POPUP: köşe koordinatında belirip yukarı süzülür.
-  S.scorePops.push({
-    x: c.x, z: c.z, born: S.song, kind,
-    text: '+' + delta + (S.combo > 1 ? ' ×' + Math.min(S.combo, 10) : ''),
-  });
 }
 
 // Ortak "yanlış dönüş" başarısızlık yolu: tap/release'ın hepsi
@@ -2304,7 +2322,7 @@ function tap() {
   if (c.gemPath && S.song < c.t - HIT_WIN) return;
   const dt = S.song - c.t;              // -: erken, +: geç
   if (Math.abs(dt) <= HIT_WIN) {
-    turnSuccess(dt, c);
+    turnSuccess(dt);
   } else {
     // Yanlış zamanda dokunuş: yanlış dönüşle yoldan uç, düş, kaldığı
     // yerden devam et (ya da son canda direkt biter).
@@ -2320,7 +2338,7 @@ function release() {
   const c = S.corners[S.next];
   const dt = S.song - c.t;
   if (Math.abs(dt) <= HIT_WIN) {
-    turnSuccess(dt, c);
+    turnSuccess(dt);
     S.runChips += 1;                    // hold bonusu
     runChipsEl.textContent = '⬡ ' + S.runChips;
   } else if (dt < -HIT_WIN) {
@@ -2398,6 +2416,7 @@ btnCrate.addEventListener('pointerdown', e => {
 
 // ------------------------------------------------------ güncelleme
 function update(dt, dtRaw) {
+  if (S.warpFlash > 0) S.warpFlash = Math.max(0, S.warpFlash - dt / 0.2);   // 0.2sn'de söner
   if (S.mode === 'play') {
     // Hibrit saat: ses motoru çalışıyorsa örnek-hassas ses saati,
     // askıdaysa (iOS sessiz mod vb.) kendi saatimizle akmaya devam et.
@@ -2435,6 +2454,8 @@ function update(dt, dtRaw) {
         burst(c.x, c.z, 22, theme.glow);
         spawnRing(c.x, c.z);           // köşeden yayılan efekt halkası
         if (S.lastKind === 'perfect') burst(c.x, c.z, 16, '#8dff3d'); // yeşil ışıltı
+        if (c.portal) { S.warpFlash = 1; burst(c.portal.destX, c.portal.destZ, 26, '#c86bff'); vibrate(35); }
+        if (c.gravity) { gravRollTarget += Math.PI; vibrate([15, 25, 15]); }
         scoreEl.textContent = 'SKOR: ' + S.score;
         comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
         speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
@@ -2448,6 +2469,8 @@ function update(dt, dtRaw) {
           S.next++;
           S.lane = 0;
           S.combo = 0; comboEl.textContent = '';
+          if (c.portal) { S.warpFlash = 1; burst(c.portal.destX, c.portal.destZ, 26, '#c86bff'); }
+          if (c.gravity) gravRollTarget += Math.PI;
           speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
         } else if (S.lives > 1) {
           // Köşe kaçtı: kalp git, top DÜŞSÜN, sonra kaldığı yerden devam.
@@ -2675,8 +2698,19 @@ function drawUnderRoadBeams() {
   ctx.restore();
 }
 
+// YOL İNŞASI: yol önceden hazır durmaz; oyuncu yaklaştıkça, ritimle,
+// yerin altından bloklar halinde fırlayarak yerine oturur -- ileriyi tam
+// göremeyen oyuncu her an ekrana kilitlenir. Yalnızca RENDER katmanı:
+// gameplay/senkron (headAt/corners) bundan hiç etkilenmez.
+const ROAD_RISE_LEAD = 0.55;   // sn — köşeye varmadan bu kadar önce fırlamaya başlar
+const ROAD_RISE_DEPTH = 2.8;   // dünya birimi — tam gömülüyken bloğun ne kadar aşağıda durduğu
+function easeOutBack(x) {      // hafif aşırı-fırlama (bounce) ile sert/punchy iniş
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
 // Yolun bir koşusunu (iki köşe arası dikdörtgen blok) çiz.
-function drawRun(x1, z1, x2, z2, dirIdx) {
+function drawRun(x1, z1, x2, z2, dirIdx, riseY = 0) {
   const d = DIR[dirIdx];
   const px = -d.z, pz = d.x;                    // dik (perp) vektör
   const hw = HALF_W;
@@ -2687,8 +2721,10 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   const c4 = { x: x1 - ex - px * hw, z: z1 - ez - pz * hw };
   // Climax dalgası: her köşe noktasının kendi (x,z) konumuna göre ayrı
   // hesaplanır -> blok tamamen düz değil, hafifçe eğik/dalgalı durur.
-  const w1 = waveY(c1.x, c1.z), w2 = waveY(c2.x, c2.z);
-  const w3 = waveY(c3.x, c3.z), w4 = waveY(c4.x, c4.z);
+  // riseY: YOL İNŞASI -- oyuncu yaklaşana kadar negatif (blok yerin
+  // altında), ritimle fırlayarak 0'a (yerine) oturur (bkz. draw() çağrısı).
+  const w1 = waveY(c1.x, c1.z) + riseY, w2 = waveY(c2.x, c2.z) + riseY;
+  const w3 = waveY(c3.x, c3.z) + riseY, w4 = waveY(c4.x, c4.z) + riseY;
 
   // Mesafe sisi: kameraya uzaklaştıkça yüzeyler arka plan rengine karışır
   // -> atmosferik derinlik hissi. 0 = tam yakın/net, 1 = sisin içinde.
@@ -2746,8 +2782,8 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
       const mx = x1 + d.x * s, mz = z1 + d.z * s;
       const ax = mx + px * hw * 0.92, az = mz + pz * hw * 0.92;
       const bx = mx - px * hw * 0.92, bz = mz - pz * hw * 0.92;
-      line3({ x: ax, y: 0.01 + waveY(ax, az), z: az },
-            { x: bx, y: 0.01 + waveY(bx, bz), z: bz });
+      line3({ x: ax, y: 0.01 + waveY(ax, az) + riseY, z: az },
+            { x: bx, y: 0.01 + waveY(bx, bz) + riseY, z: bz });
     }
     ctx.stroke();
   }
@@ -2765,8 +2801,8 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
     const shift = s * hw * (dirIdx === 0 ? 1 : -1);
     const ax = x1 + px * s * hw + d.x * shift, az = z1 + pz * s * hw + d.z * shift;
     const bx = x2 + px * s * hw + d.x * shift, bz = z2 + pz * s * hw + d.z * shift;
-    line3({ x: ax, y: 0.02 + waveY(ax, az), z: az },
-          { x: bx, y: 0.02 + waveY(bx, bz), z: bz });
+    line3({ x: ax, y: 0.02 + waveY(ax, az) + riseY, z: az },
+          { x: bx, y: 0.02 + waveY(bx, bz) + riseY, z: bz });
   }
   ctx.stroke();
   ctx.shadowBlur = 0;
@@ -2801,6 +2837,14 @@ function draw(t) {
   ctx.fillStyle = hz; ctx.fillRect(0, 0, W, H);
 
   ctx.save();
+  // TERS ÇEKİM: dünya (ızgara/yol/top/parçacıklar) ekran merkezi etrafında
+  // yumuşakça 180° döner -- karakter yolun ALTINDA gidiyormuş hissi verir.
+  // Yalnızca bu canvas dönüşümü; x/z/t hareket modeli hiç değişmez.
+  if (Math.abs(gravRoll) > 0.001) {
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(gravRoll);
+    ctx.translate(-W / 2, -H / 2);
+  }
 
   // Beat darbesi: vuruş anında 1'e FIRLAR, üssel olarak çok hızlı söner.
   // (0.003^faz: fazın %25'inde ~%23'e, yarısında ~%5'e düşer — sert punch.)
@@ -2818,22 +2862,32 @@ function draw(t) {
   drawFloaters(t);
   drawUnderRoadBeams();
 
-  // yol koşuları: uzaktan yakına.
+  // yol koşuları: uzaktan yakına. IŞINLANMA (portal) köşeleri: köşenin
+  // KENDİSİNDE biter (fiziksel köprü yok), bir SONRAKİ koşu ise sıçrama
+  // hedefinden başlar -- araya gerçek bir boşluk/kopukluk girer.
   const segs = [];
-  let px = 0, pz = 0, pdir = 1;
+  let px = 0, pz = 0, pdir = 1, pt = 0, pspd = BASE_SPEED;
   for (let i = 0; i < S.corners.length; i++) {
     const c = S.corners[i];
-    segs.push([px, pz, c.x, c.z, pdir]);
-    px = c.x; pz = c.z; pdir = c.dirIdx;
+    segs.push([px, pz, c.x, c.z, pdir, pt, pspd]);
+    if (c.portal) { px = c.portal.destX; pz = c.portal.destZ; } else { px = c.x; pz = c.z; }
+    pdir = c.dirIdx; pt = c.t; pspd = c.spd;
   }
-  segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir]);
+  segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir, pt, pspd]);
   const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
   for (let i = segs.length - 1; i >= 0; i--) {
     const sg = segs[i];
     const far = sg[2] * DIAG.x + sg[3] * DIAG.z;
     if (far - headAlong < -CAM.back + 1.5) continue;   // kamera arkasında
     if ((sg[0] * DIAG.x + sg[1] * DIAG.z) - headAlong > 60) continue; // çok uzak
-    drawRun(sg[0], sg[1], sg[2], sg[3], sg[4]);
+    let riseY = 0;
+    if (inGame) {
+      const segT = sg[5];
+      const revealK = Math.max(0, Math.min(1, (S.song - (segT - ROAD_RISE_LEAD)) / ROAD_RISE_LEAD));
+      if (revealK <= 0) continue;   // henüz inşa edilmeye başlamadı -- hiç çizilmez
+      riseY = revealK >= 1 ? 0 : -ROAD_RISE_DEPTH * (1 - easeOutBack(revealK));
+    }
+    drawRun(sg[0], sg[1], sg[2], sg[3], sg[4], riseY);
   }
 
   drawRings(1 / 60);
@@ -2883,6 +2937,57 @@ function draw(t) {
         ctx.globalAlpha = 1;
       }
     }
+  }
+
+  // IŞINLANMA PORTALI: giriş noktasında ve sıçrama hedefinde dikey neon
+  // "geçit" halkaları -- oyuncu ikisini de önceden görebilsin.
+  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
+    const c = S.corners[i];
+    if (!c.portal) continue;
+    const passed = i < S.next || (i === S.next && S.pending);
+    for (const pt of (passed ? [] : [{ x: c.x, z: c.z }, { x: c.portal.destX, z: c.portal.destZ }])) {
+      const pulse = 0.7 + 0.3 * Math.sin(t * 4 + pt.x);
+      const cy = 0.1 + waveY(pt.x, pt.z) + HALF_W * 1.3;   // halkanın yerden yüksekliği
+      const R = HALF_W * 1.2;
+      ctx.strokeStyle = '#c86bff';
+      ctx.shadowColor = '#c86bff'; ctx.shadowBlur = 16 * pulse;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      let st = false;
+      for (let k = 0; k <= 20; k++) {
+        const a = (k / 20) * Math.PI * 2;
+        const v = view({ x: pt.x + Math.cos(a) * R, y: cy + Math.sin(a) * R, z: pt.z });
+        if (v.z < NEAR) continue;
+        const q = proj(v);
+        st ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+        st = true;
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // TERS ÇEKİM PEDİ: yerde nabız atan, dönen çift-yönlü ok halkası.
+  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
+    const c = S.corners[i];
+    if (!c.gravity || i < S.next) continue;
+    const pulse = 0.7 + 0.3 * Math.sin(t * 5);
+    ctx.strokeStyle = '#5cf9ff';
+    ctx.shadowColor = '#5cf9ff'; ctx.shadowBlur = 14 * pulse;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    let st = false;
+    for (let k = 0; k <= 20; k++) {
+      const a = (k / 20) * Math.PI * 2;
+      const rx = c.x + Math.cos(a) * HALF_W * 0.85, rz = c.z + Math.sin(a) * HALF_W * 0.85;
+      const v = view({ x: rx, y: 0.07 + waveY(rx, rz), z: rz });
+      if (v.z < NEAR) continue;
+      const q = proj(v);
+      st ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+      st = true;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 
   // ELMAS YOLU: yan yolun eğrisi + toplanmamış elmaslar + kaydırma ipucu.
@@ -2999,26 +3104,6 @@ function draw(t) {
       ctx.stroke();
     }
     ctx.shadowBlur = 0;
-  }
-
-  // 3D DÜNYA İÇİ SKOR POPUP'LARI: köşe koordinatında beliren, yukarı
-  // süzülüp 0.8 saniyede transparanlaşan neon skor yazıları.
-  for (let i = S.scorePops.length - 1; i >= 0; i--) {
-    const p = S.scorePops[i];
-    const age = S.song - p.born;
-    if (age > SCORE_POP_DUR) { S.scorePops.splice(i, 1); continue; }
-    const a = Math.max(0, age) / SCORE_POP_DUR;
-    const floatY = 0.55 + a * 1.5;
-    const pv = view({ x: p.x, y: floatY + waveY(p.x, p.z), z: p.z });
-    if (pv.z <= NEAR) continue;
-    const pp = proj(pv);
-    ctx.globalAlpha = Math.max(0, 1 - a);
-    ctx.fillStyle = p.kind === 'perfect' ? '#8dff3d' : '#7de8ff';
-    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14;
-    ctx.font = '800 ' + Math.round(17 + 7 * (1 - a)) + 'px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(p.text, pp.x, pp.y);
-    ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.textAlign = 'start';
   }
 
   // Sıradaki köşede beat'e senkron daralan HEDEF HALKASI:
@@ -3138,6 +3223,12 @@ function draw(t) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
+  // IŞINLANMA FLAŞI: ekran uzayında (dönüşten etkilenmeden), 0.2sn'de söner.
+  if (S.warpFlash > 0) {
+    ctx.fillStyle = 'rgba(225,195,255,' + (0.85 * S.warpFlash) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+
   // 30+ kombo: kenarlardan fışkıran hız/parçacık çizgileri ("hipnoz" modu).
   // Ekran uzayında, vinyetin üstünde çizilir ki her zaman net görünsün.
   const edgeDt = Math.min(0.05, Math.max(0, t - lastDrawT)); lastDrawT = t;
@@ -3167,6 +3258,7 @@ function frame(now) {
     }
     updateTheme(dt);
     updateComboFX(dt);
+    updateGravityFlip(dt);
     draw(now / 1000);
   } catch (e) {
     errCount++;
@@ -3201,6 +3293,8 @@ if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   get musicFilter() { return musicFilter; },
   get musicGain() { return musicGain; },
   get actx() { return actx; },
+  get gravRoll() { return gravRoll; },
+  get gravRollTarget() { return gravRollTarget; },
   setForceTrack(idx) { debugForceTrackIdx = idx; } };
 })();
 </script>
