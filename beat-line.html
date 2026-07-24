@@ -483,7 +483,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v48</div>
+  <div id="ver">v49</div>
   <div id="diag"></div>
 </div>
 
@@ -721,6 +721,18 @@ function themeRgba(a, mul = 1) {
   const c = theme.cur;
   return 'rgba(' + (c[0] * mul | 0) + ',' + (c[1] * mul | 0) + ',' + (c[2] * mul | 0) + ',' + a + ')';
 }
+// KOR İZİ: yeni geçilen iz bölümü beyaz-sıcaktan turuncuya, oradan da
+// güncel tema rengine soğuyarak sönen bir "lazer izi" katmanı verir.
+const HEAT_DURATION = 1.1;   // sn — sıcaklığın tamamen sönmesi
+const HEAT_HOT = [255, 255, 255], HEAT_MID = [255, 150, 60];
+function heatColor(k) {   // k: 1 = az önce geçildi (sıcak), 0 = soğudu
+  const c1 = k > 0.5 ? HEAT_HOT : HEAT_MID;
+  const c2 = k > 0.5 ? HEAT_MID : theme.cur;
+  const kk = k > 0.5 ? (k - 0.5) * 2 : k * 2;
+  const r = c2[0] + (c1[0] - c2[0]) * kk, g = c2[1] + (c1[1] - c2[1]) * kk, b = c2[2] + (c1[2] - c2[2]) * kk;
+  return 'rgba(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ',' + (0.9 * k) + ')';
+}
+const SCORE_POP_DUR = 0.8;   // sn — 3D skor popup'ının yukarı süzülüp sönme süresi
 // Feature 3: kamera enerjisi — biyomun "energy" değerine yumuşak lerp.
 // Yüksek enerjide kamera geriye çekilir + FOV hafifçe genişler (bkz.
 // update()'teki CAM.back ataması ve setFocalLength()).
@@ -1100,12 +1112,20 @@ setInterval(() => {
 resize();
 
 // ------------------------------------------------------ ses (WebAudio)
-let actx = null, musicGain = null;
+// Zincir: musicSrc -> musicGain -> musicFilter (lowpass, normalde açık/
+// devre dışı gibi 20kHz) -> destination. Yalnızca ölüm anında musicFilter
+// devreye girip "su altı" boğuklaşması verir (bkz. underwaterFilter()).
+let actx = null, musicGain = null, musicFilter = null;
+const MUSIC_GAIN_NORMAL = 0.8, MUSIC_FREQ_NORMAL = 20000;
 function initAudio() {
   if (!actx) {
     actx = new (window.AudioContext || window.webkitAudioContext)();
-    musicGain = actx.createGain(); musicGain.gain.value = 0.8;
-    musicGain.connect(actx.destination);
+    musicGain = actx.createGain(); musicGain.gain.value = MUSIC_GAIN_NORMAL;
+    musicFilter = actx.createBiquadFilter();
+    musicFilter.type = 'lowpass';
+    musicFilter.frequency.value = MUSIC_FREQ_NORMAL;
+    musicGain.connect(musicFilter);
+    musicFilter.connect(actx.destination);
     decodeAllAudio();   // yüklü gerçek ses parçalarını arka planda çöz
   }
   if (actx.state === 'suspended') actx.resume();
@@ -1179,6 +1199,30 @@ function pitchDropMusic() {
     musicSrc.playbackRate.linearRampToValueAtTime(0.0001, t + 0.3);
   } catch (e) {}
 }
+// Yandığında (normal modda, ölümcül düşüş): pitchDropMusic() ile birlikte
+// müziğe anlık lowpass + ses kısma uygulanır -> sanki su altından çalıyormuş
+// gibi boğuklaşıp uzaklaşır. musicFilter/musicGain KALICI düğümler (yeni
+// oyunda sıfırlanmazsa önceki ölümden boğuk kalır) -> resetMusicFilter()
+// her yeni koşuda ve müzik her devam ettiğinde normale döner.
+function underwaterFilter() {
+  if (!musicFilter) return;
+  const t = actx.currentTime;
+  musicFilter.frequency.cancelScheduledValues(t);
+  musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, t);
+  musicFilter.frequency.linearRampToValueAtTime(280, t + 0.4);
+  musicFilter.Q.setValueAtTime(1.8, t);
+  musicGain.gain.cancelScheduledValues(t);
+  musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+  musicGain.gain.linearRampToValueAtTime(MUSIC_GAIN_NORMAL * 0.35, t + 0.4);
+}
+function resetMusicFilter() {
+  if (!musicFilter) return;
+  const t = actx.currentTime;
+  musicFilter.frequency.cancelScheduledValues(t);
+  musicFilter.frequency.setValueAtTime(MUSIC_FREQ_NORMAL, t);
+  musicGain.gain.cancelScheduledValues(t);
+  musicGain.gain.setValueAtTime(MUSIC_GAIN_NORMAL, t);
+}
 
 // ------------------------------------------------------ oyun durumu
 const S = {
@@ -1194,6 +1238,7 @@ const S = {
   trail: [],               // dönüş noktaları (dünya koordinatı)
   fallT: 0, fallVy: 0, fallDir: null, fallSpin: 0, fallSpinV: 0,
   particles: [],
+  scorePops: [],           // { x, z, text, born, kind } — 3D yüzen skor yazıları
   fallFatal: false, fallKind: null,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
   speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
@@ -1847,11 +1892,13 @@ function reset() {
   S.genBeat = LEAD_BEATS; S.genX = 0; S.genZ = -LEAD_BEATS * bs0 * BASE_SPEED;
   S.genDir = 1; S.genT = LEAD_BEATS * bs0; S.genPrevGap = 0; S.genPrevBeatSec = bs0;
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
-  S.trail = [{ x: 0, z: 0 }];
+  S.trail = [{ x: 0, z: 0, t: 0 }];
   S.particles.length = 0;
+  S.scorePops.length = 0;
   theme.cur = [...BIOMES[0].col]; theme.tgt = BIOMES[0].col; theme.step = -1; theme.biomeIdx = 0;
   camEnergy = 0; CAM.back = CAM_BACK_BASE;
   S.t0 = actx.currentTime + 0.12;
+  resetMusicFilter();   // önceki koşudan kalma su altı boğuklaşmasını temizle
   // startMusicAudio ÖNCE çağrılır: genCorners() her yeni köşede musicSrc'e
   // tempo (playbackRate) otomasyonu planlıyor — kaynak henüz yoksa ilk
   // 20 saniyelik köşe grubu bu otomasyonu kaçırır.
@@ -1885,9 +1932,10 @@ function startFall(fatal, kind) {
   vibrate(fatal ? [60, 40, 60] : 50);
   burst(S.head.x, S.head.z, fatal ? 40 : 26, C.accentOrange);
   // Ölümcül düşüşte (normal modda oyun sonuna götürür) ani sessizlik yerine
-  // plak durma efekti; ölümcül olmayan düşüşte (kaldığı yerden devam)
-  // müzik anında susar, tıpkı önceden olduğu gibi.
-  if (fatal) pitchDropMusic(); else stopMusicAudio();
+  // plak durma efekti + su altı boğuklaşması (lowpass) birlikte devreye
+  // girer; ölümcül olmayan düşüşte (kaldığı yerden devam) müzik anında
+  // susar, tıpkı önceden olduğu gibi.
+  if (fatal) { pitchDropMusic(); underwaterFilter(); } else stopMusicAudio();
 }
 
 function die() { startFall(true, null); }
@@ -2142,6 +2190,7 @@ function grantRevive() {
   S.fallVy = 0;
   S.lane = 0;
   S.mode = 'play';
+  resetMusicFilter();   // reklamla devam: su altı boğuklaşması temizlenir
   resumeMusicAudio();
   spawnRing(S.head.x, S.head.z);
   burst(S.head.x, S.head.z, 20, theme.glow);
@@ -2193,16 +2242,22 @@ function showPopup(kind) {
 
 // Dokunuş: sıradaki köşenin zaman penceresiyle karşılaştır.
 // Ortak başarı yolu: hem normal dokunuş hem hold bırakışı buradan geçer.
-function turnSuccess(dt) {
+function turnSuccess(dt, c) {
   S.pending = true;                   // dönüş tam köşe anında uygulanacak
   const kind = Math.abs(dt) <= PERF_WIN ? 'perfect' : 'good';
   S.lastKind = kind;
   S.combo++;
-  S.score += (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
+  const delta = (kind === 'perfect' ? 3 : 1) * Math.min(S.combo, 10);
+  S.score += delta;
   S.runChips += kind === 'perfect' ? 3 : 2;   // para: PERFECT 3, GOOD 2
   runChipsEl.textContent = '⬡ ' + S.runChips;
   showPopup(kind);
   vibrate(kind === 'perfect' ? 45 : 28);   // dönüş geri bildirimi: titreşim
+  // 3D DÜNYA İÇİ SKOR POPUP: köşe koordinatında belirip yukarı süzülür.
+  S.scorePops.push({
+    x: c.x, z: c.z, born: S.song, kind,
+    text: '+' + delta + (S.combo > 1 ? ' ×' + Math.min(S.combo, 10) : ''),
+  });
 }
 
 // Ortak "yanlış dönüş" başarısızlık yolu: tap/release'ın hepsi
@@ -2216,11 +2271,11 @@ function wrongTurnFail(msg, fallKind) {
   }
   if (S.lives > 1) {
     loseHeart(msg);
-    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.trail.push({ x: S.head.x, z: S.head.z, t: S.song });
     S.dirIdx = 1 - S.dirIdx;
     startFall(false, fallKind);
   } else {
-    S.trail.push({ x: S.head.x, z: S.head.z });
+    S.trail.push({ x: S.head.x, z: S.head.z, t: S.song });
     S.dirIdx = 1 - S.dirIdx;
     die();
   }
@@ -2249,7 +2304,7 @@ function tap() {
   if (c.gemPath && S.song < c.t - HIT_WIN) return;
   const dt = S.song - c.t;              // -: erken, +: geç
   if (Math.abs(dt) <= HIT_WIN) {
-    turnSuccess(dt);
+    turnSuccess(dt, c);
   } else {
     // Yanlış zamanda dokunuş: yanlış dönüşle yoldan uç, düş, kaldığı
     // yerden devam et (ya da son canda direkt biter).
@@ -2265,7 +2320,7 @@ function release() {
   const c = S.corners[S.next];
   const dt = S.song - c.t;
   if (Math.abs(dt) <= HIT_WIN) {
-    turnSuccess(dt);
+    turnSuccess(dt, c);
     S.runChips += 1;                    // hold bonusu
     runChipsEl.textContent = '⬡ ' + S.runChips;
   } else if (dt < -HIT_WIN) {
@@ -2372,7 +2427,7 @@ function update(dt, dtRaw) {
     if (S.mode === 'play' && S.song >= c.t) {
       if (S.pending) {
         // Tam köşe anında (== bas vuruşu anında) dön.
-        S.trail.push({ x: c.x, z: c.z });
+        S.trail.push({ x: c.x, z: c.z, t: S.song });
         S.dirIdx = c.dirIdx;
         S.speed = c.spd;               // başarılı dönüş: yeni segmentin hızı
         S.next++; S.pending = false;
@@ -2387,7 +2442,7 @@ function update(dt, dtRaw) {
         if (save.zenMode) {
           // ZEN: köşe otomatik uygulanır (çizgi kaldığı yerden düzelir),
           // can gitmez, düşme/ölüm hiç tetiklenmez, müzik kesilmez.
-          S.trail.push({ x: c.x, z: c.z });
+          S.trail.push({ x: c.x, z: c.z, t: S.song });
           S.dirIdx = c.dirIdx;
           S.speed = c.spd;
           S.next++;
@@ -2456,7 +2511,7 @@ function update(dt, dtRaw) {
         // ray konumuna geri oturtulur.
         if (S.fallKind === 'miss') {
           const c = S.corners[S.next];
-          S.trail.push({ x: c.x, z: c.z });   // kaçan dönüş şimdi uygulanır
+          S.trail.push({ x: c.x, z: c.z, t: S.song });   // kaçan dönüş şimdi uygulanır
           S.dirIdx = c.dirIdx;
           S.speed = c.spd;
           S.next++;
@@ -2925,6 +2980,47 @@ function draw(t) {
     ctx.stroke();
   }
 
+  // KOR İZİ: yeni geçilen bölümler beyaz-sıcak başlayıp turuncudan tema
+  // rengine soğuyarak sönen ekstra bir parlama katmanı — kalıcı iz altta
+  // (yukarıdaki iki geçiş) hep durur, bu yalnızca üstüne biner.
+  if (S.mode === 'play' || S.mode === 'fall' || S.mode === 'reviveWait') {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const endT = pts[i + 1].t !== undefined ? pts[i + 1].t : S.song;
+      const age = S.song - endT;
+      if (age < 0 || age > HEAT_DURATION) continue;
+      const k = 1 - age / HEAT_DURATION;    // 1 = az önce geçildi, 0 = tamamen soğudu
+      ctx.strokeStyle = heatColor(k);
+      ctx.shadowColor = '#fff2c8'; ctx.shadowBlur = 22 * k;
+      ctx.lineWidth = 3 + 6 * k;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      line3({ x: pts[i].x, y: 0.13 + waveY(pts[i].x, pts[i].z), z: pts[i].z },
+            { x: pts[i+1].x, y: 0.13 + waveY(pts[i+1].x, pts[i+1].z), z: pts[i+1].z });
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  // 3D DÜNYA İÇİ SKOR POPUP'LARI: köşe koordinatında beliren, yukarı
+  // süzülüp 0.8 saniyede transparanlaşan neon skor yazıları.
+  for (let i = S.scorePops.length - 1; i >= 0; i--) {
+    const p = S.scorePops[i];
+    const age = S.song - p.born;
+    if (age > SCORE_POP_DUR) { S.scorePops.splice(i, 1); continue; }
+    const a = Math.max(0, age) / SCORE_POP_DUR;
+    const floatY = 0.55 + a * 1.5;
+    const pv = view({ x: p.x, y: floatY + waveY(p.x, p.z), z: p.z });
+    if (pv.z <= NEAR) continue;
+    const pp = proj(pv);
+    ctx.globalAlpha = Math.max(0, 1 - a);
+    ctx.fillStyle = p.kind === 'perfect' ? '#8dff3d' : '#7de8ff';
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14;
+    ctx.font = '800 ' + Math.round(17 + 7 * (1 - a)) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.text, pp.x, pp.y);
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1; ctx.textAlign = 'start';
+  }
+
   // Sıradaki köşede beat'e senkron daralan HEDEF HALKASI:
   // vuruş yaklaştıkça halka köşeye iner, pencere içindeyken beyaza döner.
   if (S.mode === 'play' && S.corners[S.next]) {
@@ -3102,6 +3198,9 @@ if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   get camEnergy() { return camEnergy; },
   get TR() { return TR; },
   get musicSrc() { return musicSrc; },
+  get musicFilter() { return musicFilter; },
+  get musicGain() { return musicGain; },
+  get actx() { return actx; },
   setForceTrack(idx) { debugForceTrackIdx = idx; } };
 })();
 </script>
