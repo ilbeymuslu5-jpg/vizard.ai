@@ -259,6 +259,60 @@
   }
   .mile.unlocked .mile-status { color: #8dff3d; }
 
+  /* ---------- sıralama (skor tablosu) ---------- */
+  #lbScr {
+    position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
+    padding: 18px 12px 30px; text-align: center;
+  }
+  #lbScr h2 {
+    font-size: clamp(26px, 9em, 46px); font-weight: 800; font-style: italic;
+    letter-spacing: 5px; color: #ffd76e;
+    text-shadow: 0 0 18px rgba(255, 210, 110, .8);
+  }
+  #lbScr h3 {
+    margin: 16px 0 8px; font-size: clamp(13px, 4.2em, 20px); font-weight: 700;
+    letter-spacing: 4px; color: #9fdcff;
+  }
+  #lbMeCard {
+    width: min(340px, 92%); margin: 12px auto 4px; padding: 12px 14px;
+    background: linear-gradient(160deg, rgba(52, 30, 8, .8), rgba(14, 10, 26, .85));
+    border: 1.5px solid rgba(255, 210, 110, .5); border-radius: 14px;
+    box-shadow: 0 0 22px rgba(255, 210, 110, .18);
+  }
+  #lbMeRank {
+    font-size: clamp(20px, 6.5em, 32px); font-weight: 800; letter-spacing: 2px;
+    color: #ffd76e; text-shadow: 0 0 14px rgba(255, 210, 110, .7);
+  }
+  #lbMeScore { margin-top: 3px; font-size: clamp(13px, 4.2em, 18px); font-weight: 700; color: #cfe9ff; }
+  #lbMeNext { margin-top: 6px; font-size: clamp(11px, 3.5em, 15px); font-weight: 700; color: #8dff3d; }
+  .lbTier {
+    width: 30%; min-width: 96px; padding: 10px 6px;
+    background: rgba(8, 16, 32, .6);
+    border: 2px solid rgba(120, 200, 255, .28); border-radius: 10px; color: #eaf6ff;
+  }
+  .lbTier.won { border-color: #8dff3d; box-shadow: 0 0 12px rgba(140, 255, 60, .3); }
+  .lbTier.top3 { border-color: rgba(255, 60, 90, .55); }
+  .lbTier.top3.won { border-color: #ff2d4d; box-shadow: 0 0 14px rgba(255, 45, 77, .45); }
+  .lbTier .tn { font-size: clamp(12px, 3.9em, 17px); font-weight: 800; letter-spacing: 1px; color: #ffd76e; }
+  .lbTier.top3 .tn { color: #ff5f7a; }
+  .lbTier .tr { margin-top: 5px; font-size: clamp(10px, 3.2em, 13px); font-weight: 700; line-height: 1.5; }
+  .lbTier .ts { margin-top: 5px; font-size: clamp(10px, 3.2em, 13px); font-weight: 800; color: #7f93ad; }
+  .lbTier.won .ts { color: #8dff3d; }
+  #lbList { width: min(360px, 96%); margin: 4px auto 0; }
+  .lbRow {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; margin-bottom: 4px; border-radius: 8px;
+    background: rgba(8, 16, 32, .5); border: 1px solid rgba(120, 200, 255, .16);
+    font-size: clamp(11px, 3.6em, 15px); font-weight: 700;
+  }
+  .lbRow .r { width: 34px; text-align: right; color: #7f93ad; }
+  .lbRow .n { flex: 1; text-align: left; color: #cfe9ff; letter-spacing: .5px; }
+  .lbRow .s { color: #ffd76e; }
+  .lbRow.me { background: rgba(60, 40, 8, .7); border-color: rgba(255, 210, 110, .55); }
+  .lbRow.me .n { color: #ffd76e; }
+  .lbRow.p1 .r, .lbRow.p2 .r, .lbRow.p3 .r { color: #ff5f7a; }
+  #earned .lbWin { color: #ff8fa3; text-shadow: 0 0 10px rgba(255, 60, 90, .6); }
+
   /* ---------- mağaza ---------- */
   #shop {
     position: absolute; inset: 0; overflow-y: auto; touch-action: pan-y;
@@ -297,6 +351,7 @@
   .card.sel .pr { color: #8dff3d; }
   .card .pr.gem { color: #8be9ff; }
   .card .pr.kasa { color: #c86bff; }
+  .card .pr.lider { color: #ff5f7a; font-size: clamp(9px, 2.9em, 12px); }
 
   /* ---------- kasa kutusu ---------- */
   #crateBox {
@@ -483,7 +538,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v51</div>
+  <div id="ver">v52</div>
   <div id="diag"></div>
 </div>
 
@@ -513,6 +568,7 @@
     <p id="earned" class="hidden"></p>
     <button class="btn primary" id="btnPlay">&#9654; OYNA</button>
     <button class="btn" id="btnMode">MOD: <span id="modeLabel">NORMAL</span></button>
+    <button class="btn" id="btnLb">&#127942; SIRALAMA <span id="lbMiniRank"></span></button>
     <button class="btn" id="btnPass">&#9889; BEAT PASS <span id="passMiniLvl"></span></button>
     <button class="btn" id="btnShop">&#11041; MAĞAZA</button>
   </div>
@@ -560,6 +616,19 @@
     <div id="milesTrack" class="grid"></div>
     <button class="btn" id="btnPassBack">&larr; GERİ</button>
   </div>
+  <div id="lbScr" class="hidden">
+    <h2>SIRALAMA</h2>
+    <div id="lbMeCard">
+      <div id="lbMeRank"></div>
+      <div id="lbMeScore"></div>
+      <div id="lbMeNext"></div>
+    </div>
+    <h3>KADEME ÖDÜLLERİ</h3>
+    <div id="lbTiers" class="grid"></div>
+    <h3>EN İYİ 50</h3>
+    <div id="lbList"></div>
+    <button class="btn" id="btnLbBack">&larr; GERİ</button>
+  </div>
   <div id="shop" class="hidden">
     <h2>MAĞAZA</h2>
     <div id="chipsRow">&#11041; <span id="chips">0</span> ÇİP &nbsp;•&nbsp; 💎 <span id="gems">0</span></div>
@@ -598,13 +667,16 @@
 // Dinamik hız: her başarılı dönüşte artar, tavan 17. Hız yalnızca köşe
 // anında değiştiği için her segment SABİT kendi hızıyla koşulur; segment
 // uzunlukları o hızla üretildiğinden beat senkronu asla bozulmaz.
-// Artış belirgin: ~10 dönüşte fark edilir, ~43 dönüşte tavana dayanır.
+// RAMPA YUMUŞAK: ilk onlarca köşede hız neredeyse sabit kalır, sonra
+// giderek açılır (ease-in eğrisi) -> oyun hemen en zor haline gelmez,
+// zorluk uzun bir yayılıma dağılır. ~120 dönüşte tavana ulaşır.
 const BASE_SPEED = 7.5;
 const MAX_SPEED  = 17;
-const SPEED_INC  = 0.22;
+const SPEED_FULL = 120;   // tavan hıza kaç dönüşte ulaşılacağı
 // k. segmentin hızı (0 = giriş düzlüğü; k dönüş tamamlanmış olur).
 function speedForSeg(k) {
-  return Math.min(MAX_SPEED, BASE_SPEED + SPEED_INC * k);
+  const p = Math.min(1, k / SPEED_FULL);
+  return BASE_SPEED + (MAX_SPEED - BASE_SPEED) * Math.pow(p, 1.45);
 }
 // Dinamik TEMPO: parça 140 BPM'den başlar, oyun ilerledikçe (köşe başına)
 // 160 BPM'e kadar hızlanır — SPEED ile aynı "segment kilitli" mantığıyla:
@@ -615,8 +687,11 @@ function speedForSeg(k) {
 // tonu/temposu birlikte yükselir.
 const EFF_BPM_BASE = 140;
 const EFF_BPM_MAX  = 160;
-const EFF_BPM_INC  = 0.5;    // köşe başına; ~40 köşede tavana ulaşır
-function bpmForSeg(k) { return Math.min(EFF_BPM_MAX, EFF_BPM_BASE + EFF_BPM_INC * k); }
+const BPM_FULL     = 120;    // hız rampasıyla aynı yayılım (yumuşak tırmanış)
+function bpmForSeg(k) {
+  const p = Math.min(1, k / BPM_FULL);
+  return EFF_BPM_BASE + (EFF_BPM_MAX - EFF_BPM_BASE) * Math.pow(p, 1.45);
+}
 function beatSecForSeg(k) { return 60 / bpmForSeg(k); }
 
 const PATH_W     = 1.7;             // yol genişliği
@@ -639,8 +714,6 @@ const GEM_PATH_GAP = 2;              // bu uzunluktaki düzlüklerde yan elmas y
 const LANE_OFFSET  = HALF_W * 3.4;   // yan yolun ana yoldan yanal uzaklığı
 const SWIPE_MIN_PX = 40;             // yan yola geçmek için gereken yatay sürükleme
 const GEM_PICK_WIN = 0.12;           // sn — elmas toplama zaman penceresi
-const PORTAL_CHANCE  = 0.09;         // ışınlanma portalı belirme olasılığı
-const PORTAL_FWD      = 7;           // dünya birimi — ışınlanma sıçrama mesafesi
 
 const TRACKS = [
   { name: 'NEON RAIN', bpm: 140, real: true, audioId: 'neonRain', offset: 13.71,
@@ -705,6 +778,30 @@ function mixHex(colA, colB, t) {
   return 'rgb(' + r + ',' + g + ',' + bl + ')';
 }
 function lightenHex(col, amt) { return mixHex(col, '#ffffff', amt); }
+// Sahnenin sabit "güneş" yönü (XZ düzleminde, birim vektör). Yol bloklarının
+// yan yüzleri bu yöne göre aydınlık/gölge alır -> düz kutu yerine hacim.
+const LIGHT_XZ = { x: -0.74, z: 0.67 };
+// Yan yüz tonları yalnızca yön (dirIdx) ve yüz sırasına bağlı olduğu için
+// açılışta BİR KEZ hesaplanır — drawRun() her karede yeniden renk ayrıştırmaz.
+// Yüz sırası: 0 = +perp, 1 = -perp, 2 = giriş kapağı, 3 = çıkış kapağı.
+const SIDE_TONES = [0, 1].map(dirIdx => {
+  const d = DIR[dirIdx];
+  const px = -d.z, pz = d.x;
+  const normals = [[px, pz], [-px, -pz], [-d.x, -d.z], [d.x, d.z]];
+  const baseSide = dirIdx === 0 ? C.side : C.side2;
+  return normals.map(([nx, nz]) => {
+    // Lambert benzeri terim (XZ düzleminde): 0 = ışığa sırtı dönük, 1 = tam karşı.
+    const lam = 0.5 + 0.5 * (nx * LIGHT_XZ.x + nz * LIGHT_XZ.z);
+    const shade = 0.42 + 0.78 * lam;   // 0.42 (gölge) .. 1.20 (aydınlık)
+    const tone = c => shade >= 1 ? lightenHex(c, Math.min(0.5, (shade - 1) * 1.1))
+                                 : mixHex(c, '#010206', Math.min(0.75, (1 - shade) * 1.15));
+    return {
+      lit:  tone(lightenHex(baseSide, 0.26)),
+      mid:  tone(baseSide),
+      deep: mixHex(tone(baseSide), '#03040a', 0.72),
+    };
+  });
+});
 
 // ---------- Dinamik BİYOM teması: şarkının BAR sayısına bağlı (skor değil) —
 // bir "verse/chorus/drop" yapısı gibi her BARS_PER_BIOME bar'da bir sırayla
@@ -806,7 +903,8 @@ function vibrate(ms) {
 }
 
 // ---------- Mağaza katalogları. Para birimleri: ÇİP (price), ELMAS (gem).
-// src:'kasa' olan öğeler satın alınamaz, yalnızca kasadan çıkar.
+// src:'kasa'  -> satın alınamaz, yalnızca ŞANS KASASI'ndan çıkar.
+// src:'lider' -> satın alınamaz, YALNIZCA sıralamada İLK 3'e girenlere verilir.
 const SKINS = [
   { id: 'klasik',    name: 'Klasik',     price: 0,   core: '#ffffff' },
   { id: 'altin',     name: 'Altın',      price: 120, core: '#ffd76e' },
@@ -832,6 +930,8 @@ const SKINS = [
   { id: 'inci',      name: 'İnci',       src: 'kasa', core: ['#fff6e8', '#ffc8e8'] },
   { id: 'volt',      name: 'Volt',       src: 'kasa', core: ['#fdff8a', '#3dffec'] },
   { id: 'buzul',     name: 'Buzul',      src: 'kasa', core: ['#dff9ff', '#8fd9ff'] },
+  // Yalnızca SIRALAMA İLK 3 ödülü — mağazadan asla alınamaz.
+  { id: 'seytan',    name: 'Şeytan',     src: 'lider', core: ['#ff2d2d', '#3a0008'] },
 ];
 const LIGHTS = [
   { id: 'tema',    name: 'Tema İzi',      price: 0,   col: null },
@@ -858,6 +958,8 @@ const ACCS = [
   { id: 'taci',   name: 'Neon Taç',     src: 'kasa' },
   { id: 'elmas',  name: 'Elmas Uydu',   src: 'kasa' },
   { id: 'isinkilic',     name: 'Işın Kılıcı',      gem: 380 },
+  // Yalnızca SIRALAMA İLK 3 ödülü — mağazadan asla alınamaz.
+  { id: 'seytankuyrugu', name: 'Şeytan Kuyruğu',   src: 'lider' },
 ];
 // ŞAPKALAR: baş üstü giyilebilirler.
 const HATS = [
@@ -930,6 +1032,8 @@ const save = (() => {
     premium: UNLOCK_ALL ? true : localStorage.getItem('bl_prem') === '1',
     claimedLvl: UNLOCK_ALL ? PASS_MAX : +(localStorage.getItem('bl_clvl') || 0),
     zenMode: localStorage.getItem('bl_zen') === '1',
+    // SIRALAMA: alınmış en iyi (en küçük) kademe. 0 = hiç ödül alınmadı.
+    lbTier: +(localStorage.getItem('bl_lbtier') || 0),
   };
 })();
 function persist() {
@@ -945,6 +1049,88 @@ function persist() {
   localStorage.setItem('bl_prem', save.premium ? '1' : '0');
   localStorage.setItem('bl_clvl', save.claimedLvl);
   localStorage.setItem('bl_zen', save.zenMode ? '1' : '0');
+  localStorage.setItem('bl_lbtier', save.lbTier);
+}
+
+// ---------- SIRALAMA (skor tablosu) + kademeli ödüller ------------------
+// Rakip listesi cihazda bir kez üretilip kalıcı saklanır (sunucu yok);
+// böylece sıralaman koşudan koşuya tutarlı kalır ve gerçekten "tırmanma"
+// hissi verir. Rekorun (save.best) yükseldikçe sıraya girersin.
+const LB_SIZE = 50;
+const LB_NAMES = [
+  'NEONX', 'RITIMCI', 'Zeynep', 'BASSDROP', 'Kerem', 'PULSE', 'Ada',
+  'VOLTAJ', 'Mert', 'SYNTHIA', 'Elif', 'GLITCH', 'Burak', 'ECHO',
+  'Deniz', 'KRONOS', 'Selin', 'NOVA', 'Emir', 'PRIZMA', 'Ayşe',
+  'TEMPO', 'Can', 'HELIX', 'Naz', 'VEKTOR', 'Ozan', 'LUMEN',
+  'Defne', 'KUANTUM', 'Arda', 'SIRIUS', 'Melis', 'ORBIT', 'Kaan',
+  'FAZ', 'İrem', 'RADYUS', 'Berk', 'ZENIT', 'Ece', 'TITAN',
+  'Yusuf', 'KOZMOS', 'Lara', 'DELTA', 'Tuna', 'ATLAS', 'Su', 'VORTEX',
+];
+// Kademe ödülleri: sıralamada bu yere (veya daha iyisine) ulaşınca verilir.
+const LB_TIERS = [
+  { rank: 3,  label: 'İLK 3',  chips: 1500, gems: 400,
+    items: [{ cat: 'skins', id: 'seytan', name: 'Şeytan Kostümü' },
+            { cat: 'acc',   id: 'seytankuyrugu', name: 'Şeytan Kuyruğu' }] },
+  { rank: 10, label: 'İLK 10', chips: 800,  gems: 150, items: [] },
+  { rank: 50, label: 'İLK 50', chips: 300,  gems: 50,  items: [] },
+];
+// Sabit tohumlu (deterministik) rakip skorları: en tepede ~4800, 50.'de ~250.
+function buildLeaderboard() {
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem('bl_lb') || ''); } catch (e) { stored = null; }
+  if (Array.isArray(stored) && stored.length === LB_SIZE) return stored;
+  let seed = 20260728;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const rows = [];
+  for (let i = 0; i < LB_SIZE; i++) {
+    const p = i / (LB_SIZE - 1);
+    // Üst sıralar seyrek/yüksek, alt sıralar sık/düşük -> gerçekçi dağılım.
+    const base = 4800 * Math.pow(1 - p, 2.1) + 250;
+    rows.push({ name: LB_NAMES[i % LB_NAMES.length], score: Math.round(base + rnd() * 120) });
+  }
+  rows.sort((a, b) => b.score - a.score);
+  localStorage.setItem('bl_lb', JSON.stringify(rows));
+  return rows;
+}
+const LB_ROWS = buildLeaderboard();
+// Oyuncunun rekoruyla sıradaki yeri (1 tabanlı). Liste dışıysa LB_SIZE+1.
+function playerRank() {
+  const best = S.best;
+  if (best <= 0) return LB_SIZE + 1;
+  let r = 1;
+  for (const row of LB_ROWS) if (row.score > best) r++;
+  return r;
+}
+// Rekorun hak ettiği en iyi kademe (3/10/50); hiçbiri değilse 0.
+function earnedTier(rank) {
+  for (const t of LB_TIERS) if (rank <= t.rank) return t.rank;
+  return 0;
+}
+// Hak edilen ama henüz alınmamış kademeleri ver; kazanım listesi döndürür.
+// save.lbTier = alınmış EN İYİ kademe (küçük = daha iyi), 0 = hiç.
+function claimLeaderboardRewards() {
+  const rank = playerRank();
+  const tier = earnedTier(rank);
+  if (!tier) return [];
+  // Daha önce bu kademe ya da daha iyisi alındıysa tekrar verme.
+  if (save.lbTier && save.lbTier <= tier) return [];
+  const got = [];
+  for (const t of LB_TIERS) {
+    // Yalnızca yeni hak edilen kademeler: t.rank >= tier (hak edildi) ve
+    // daha önce alınmamış (save.lbTier yoksa hepsi, varsa daha iyi olanlar).
+    if (tier > t.rank) continue;                       // bu kademeye ulaşılamadı
+    if (save.lbTier && save.lbTier <= t.rank) continue; // zaten alınmış
+    save.chips += t.chips; save.gems += t.gems;
+    got.push(t.label + ': +' + t.chips + ' ⬡ • +' + t.gems + ' 💎');
+    for (const it of t.items) {
+      if (!save.owned[it.cat].includes(it.id)) {
+        save.owned[it.cat].push(it.id);
+        got.push('👿 ' + it.name + ' AÇILDI!');
+      }
+    }
+  }
+  save.lbTier = tier;
+  return got;
 }
 
 // ---------- BEAT PASS: 100 seviye, seviye başına 250 XP.
@@ -1239,7 +1425,6 @@ const S = {
   trail: [],               // dönüş noktaları (dünya koordinatı)
   fallT: 0, fallVy: 0, fallDir: null, fallSpin: 0, fallSpinV: 0,
   particles: [],
-  warpFlash: 0,            // 0..1 — ışınlanma anındaki 0.2sn'lik neon flaş
   fallFatal: false, fallKind: null,
   // İlk köşe, giriş düzlüğünün SONUNDA durur: (0, -lead mesafesi).
   speed: BASE_SPEED,       // mevcut segmentin hızı (her dönüşte artar)
@@ -1288,16 +1473,8 @@ function genCorners(untilTime) {
                  z: cz + pz * LANE_OFFSET * env * side, got: false };
       });
       corner.gemPath = { side, gems, zoneStart, zoneEnd };
-    } else if (S.genPrevGap === 1 && S.corners.length > 3 && Math.random() < PORTAL_CHANCE) {
-      // IŞINLANMA PORTALI: köşenin kendisi ritimle NORMAL şekilde geçilir
-      // (dokunuş zamanlaması hiç değişmez); yalnızca bu köşeden SONRAKİ
-      // konum (x/z) ileri sıçrar -- t/beat/beatSec hiç etkilenmez, bu
-      // yüzden köşe zamanlaması ve senkron tamamen korunur.
-      const hd = DIR[corner.dirIdx];
-      corner.portal = { destX: corner.x + hd.x * PORTAL_FWD, destZ: corner.z + hd.z * PORTAL_FWD };
     }
     S.corners.push(corner);
-    if (corner.portal) { S.genX = corner.portal.destX; S.genZ = corner.portal.destZ; }
     // Gerçek ses parçası: bu köşeden itibaren geçerli tempo playbackRate'e
     // kilitlenir (görsel hız + müzik temposu birlikte köşe anında sıçrar).
     if (TR.real && musicSrc && actx) {
@@ -1323,10 +1500,7 @@ function headAt(t) {
   for (let i = S.next - 1; i >= 0; i--) {   // en son geçilen köşe
     if (S.corners[i].t <= t) {
       const c = S.corners[i];
-      // IŞINLANMA: bu köşeden itibaren hareket, köşenin KENDİ x/z'sinden
-      // değil, portalın sıçrama hedefinden devam eder (bkz. genCorners()).
-      if (c.portal) { px = c.portal.destX; pz = c.portal.destZ; } else { px = c.x; pz = c.z; }
-      pt = c.t; dirIdx = c.dirIdx; spd = c.spd;
+      px = c.x; pz = c.z; pt = c.t; dirIdx = c.dirIdx; spd = c.spd;
       break;
     }
   }
@@ -1640,6 +1814,29 @@ function drawAccessory(hp, r, t) {
     ctx.strokeStyle = '#5cf9ff'; ctx.shadowColor = '#5cf9ff'; ctx.shadowBlur = 10; ctx.lineWidth = Math.max(2, r * 0.16);
     ctx.beginPath(); ctx.moveTo(midX, midY); ctx.lineTo(tipX, tipY); ctx.stroke();
     ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+  } else if (id === 'seytankuyrugu') {        // şeytan kuyruğu: kıvrılan uç + ok başı
+    // Kuyruk topun ARKASINDAN çıkar, ritimle hafifçe savrulur.
+    const sway = Math.sin(t * 3.2) * r * 0.35;
+    const bx = hp.x - r * 0.85, by = hp.y + r * 0.35;
+    const c1x = bx - r * 1.3, c1y = by + r * 0.9 + sway;
+    const c2x = bx - r * 2.1, c2y = by - r * 0.3 + sway;
+    const tx  = bx - r * 1.75, ty = by - r * 1.25 + sway * 0.6;
+    ctx.strokeStyle = '#ff2d4d';
+    ctx.shadowColor = '#ff2d4d'; ctx.shadowBlur = 10;
+    ctx.lineWidth = Math.max(2.5, r * 0.2); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tx, ty);
+    ctx.stroke();
+    // Uçtaki klasik ok başı (üçgen), kuyruğun yönüne bakar.
+    const ang = Math.atan2(ty - c2y, tx - c2x);
+    ctx.fillStyle = '#ff2d4d';
+    ctx.beginPath();
+    ctx.moveTo(tx + Math.cos(ang) * r * 0.5, ty + Math.sin(ang) * r * 0.5);
+    ctx.lineTo(tx + Math.cos(ang + 2.5) * r * 0.42, ty + Math.sin(ang + 2.5) * r * 0.42);
+    ctx.lineTo(tx + Math.cos(ang - 2.5) * r * 0.42, ty + Math.sin(ang - 2.5) * r * 0.42);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0; ctx.lineCap = 'butt';
   }
 }
 
@@ -1848,24 +2045,26 @@ const overlay = $('overlay'), titleEl = $('title'),
       scoreEl = $('score'), comboEl = $('combo'), popupEl = $('popup'),
       speedEl = $('speed'), livesEl = $('lives'),
       menuScr = $('menuScr'), shopScr = $('shop'), passScr = $('passScr'), howScr = $('howScr'), chipsEl = $('chips'),
+      lbScr = $('lbScr'),
       skinGrid = $('skinGrid'), lightGrid = $('lightGrid'), accGrid = $('accGrid'),
       hatGrid = $('hatGrid'), instGrid = $('instGrid'),
       btnPlay = $('btnPlay'), btnShop = $('btnShop'), btnBack = $('btnBack'),
       btnPass = $('btnPass'), btnPassBack = $('btnPassBack'),
+      btnLb = $('btnLb'), btnLbBack = $('btnLbBack'),
       btnHelp = $('btnHelp'), btnHowBack = $('btnHowBack'),
       btnMode = $('btnMode'), modeLabelEl = $('modeLabel'), zenBadgeEl = $('zenBadge'),
       btnCrate = $('btnCrate'), crateResult = $('crateResult'),
       reviveOverlay = $('reviveOverlay'), reviveScoreTxt = $('reviveScoreTxt'),
       btnRevive = $('btnRevive'), btnReviveSkip = $('btnReviveSkip'), reviveTimerFill = $('reviveTimerFill'),
       adOverlay = $('adOverlay'), adCountdown = $('adCountdown');
-// Dört ana menü ekranından yalnızca birini gösterir, diğerlerini gizler.
+// Ana menü ekranlarından yalnızca birini gösterir, diğerlerini gizler.
 function showScreen(scr) {
-  for (const s of [menuScr, shopScr, passScr, howScr]) s.classList.toggle('hidden', s !== scr);
+  for (const s of [menuScr, shopScr, passScr, howScr, lbScr]) s.classList.toggle('hidden', s !== scr);
   overlay.classList.remove('hidden');
 }
 let howReturnScr = null;   // GERİ dönüşte hangi ekrana dönülecek
 function showHow() {
-  howReturnScr = [menuScr, shopScr, passScr].find(s => !s.classList.contains('hidden')) || menuScr;
+  howReturnScr = [menuScr, shopScr, passScr, lbScr].find(s => !s.classList.contains('hidden')) || menuScr;
   showScreen(howScr);
 }
 btnHelp.addEventListener('pointerdown', e => { e.stopPropagation(); showHow(); });
@@ -1906,7 +2105,6 @@ function reset() {
   S.head = { x: 0, z: 0, y: 0 }; S.dirIdx = 1;
   S.trail = [{ x: 0, z: 0, t: 0 }];
   S.particles.length = 0;
-  S.warpFlash = 0;
   theme.cur = [...BIOMES[0].col]; theme.tgt = BIOMES[0].col; theme.step = -1; theme.biomeIdx = 0;
   camEnergy = 0; CAM.back = CAM_BACK_BASE;
   S.t0 = actx.currentTime + 0.12;
@@ -1961,6 +2159,7 @@ function showMenu() {
   btnPlay.innerHTML = '&#9654; OYNA';
   $('nowPlaying').textContent = '';
   renderPassMini();
+  renderLbMini();
   showScreen(menuScr);
 }
 
@@ -1991,6 +2190,66 @@ function renderPassMini() {
 function showShop() {
   renderShop();
   showScreen(shopScr);
+}
+
+// ---------- SIRALAMA ekranı ---------
+// Ana menü rozeti: mevcut sıra (listede değilse "—").
+function renderLbMini() {
+  const rank = playerRank();
+  $('lbMiniRank').textContent = rank <= LB_SIZE ? '(' + rank + '.)' : '(—)';
+}
+function showLb() {
+  renderLbScreen();
+  showScreen(lbScr);
+}
+function renderLbScreen() {
+  const rank = playerRank();
+  const inList = rank <= LB_SIZE;
+  $('lbMeRank').textContent = inList ? rank + '. SIRA' : 'SIRALAMA DIŞI';
+  $('lbMeScore').textContent = 'REKORUN: ' + S.best;
+  // Bir üst kademeye ne kadar kaldığını göster (hedef odaklı geri bildirim).
+  let nextTxt = '';
+  const nextTier = LB_TIERS.slice().reverse().find(t => rank > t.rank);
+  if (nextTier) {
+    // O kademeye girmek için gereken skor: o sıradaki rakibin skoru + 1.
+    const need = LB_ROWS[nextTier.rank - 1].score + 1;
+    nextTxt = nextTier.label + ' için gereken skor: ' + need +
+      ' (' + Math.max(0, need - S.best) + ' fark)';
+  } else {
+    nextTxt = '🏆 En üst kademedesin!';
+  }
+  $('lbMeNext').textContent = nextTxt;
+
+  // Kademe ödül kartları
+  const tiersEl = $('lbTiers');
+  tiersEl.innerHTML = '';
+  for (const t of LB_TIERS) {
+    const won = save.lbTier && save.lbTier <= t.rank;
+    const el = document.createElement('div');
+    el.className = 'lbTier' + (won ? ' won' : '') + (t.rank === 3 ? ' top3' : '');
+    const items = t.items.length ? '<br>👿 ' + t.items.map(i => i.name).join('<br>👿 ') : '';
+    el.innerHTML =
+      '<div class="tn">' + t.label + '</div>' +
+      '<div class="tr">⬡ ' + t.chips + '<br>💎 ' + t.gems + items + '</div>' +
+      '<div class="ts">' + (won ? 'ALINDI' : (rank <= t.rank ? 'OYNA VE AL' : 'KİLİTLİ')) + '</div>';
+    tiersEl.appendChild(el);
+  }
+
+  // İlk 50 listesi — oyuncu kendi sırasına eklenir.
+  const listEl = $('lbList');
+  listEl.innerHTML = '';
+  const rows = LB_ROWS.map(r => ({ name: r.name, score: r.score, me: false }));
+  if (inList) rows.splice(rank - 1, 0, { name: 'SEN', score: S.best, me: true });
+  for (let i = 0; i < Math.min(LB_SIZE, rows.length); i++) {
+    const r = rows[i];
+    const el = document.createElement('div');
+    el.className = 'lbRow' + (r.me ? ' me' : '') + (i < 3 ? ' p' + (i + 1) : '');
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+    el.innerHTML = '<span class="r">' + medal + '</span>' +
+      '<span class="n">' + r.name + '</span>' +
+      '<span class="s">' + r.score + '</span>';
+    listEl.appendChild(el);
+  }
 }
 
 // ---------- BEAT PASS: ayrı, tam ekran bölüm ---------
@@ -2108,13 +2367,14 @@ function shopCard(it, cat) {
       yok: '&#8709;', halka: '&#9678;', uydu: '&#9737;', yildiz: '&#9733;', taci: '&#9819;', elmas: '&#128142;',
       kulaklik: '🎧', sapka: '🎩', askerkaski: '🪖', vikingkaski: '⛑️',
       seytanboynuzu: '😈', gitar: '🎸', saksofon: '🎷', midi: '🎹',
-      isinkilic: '🗡️', elektrogitar: '🤘',
+      isinkilic: '🗡️', elektrogitar: '🤘', seytankuyrugu: '👿',
     };
     sw = '<div class="sw" style="background:#101a30;color:#8be9ff;display:flex;align-items:center;justify-content:center;font-size:20px">' + (icons[it.id] || '?') + '</div>';
   }
   const priceHtml = owned
     ? (selId === it.id ? 'SEÇİLİ' : 'SEÇ')
     : it.src === 'kasa' ? '<span class="kasa">KASADAN</span>'
+    : it.src === 'lider' ? '<span class="lider">İLK 3 ÖDÜLÜ</span>'
     : it.gem ? '<span class="gem">💎 ' + it.gem + '</span>'
     : '⬡ ' + it.price;
   d.innerHTML = sw + '<div class="nm">' + it.name + '</div>' +
@@ -2123,8 +2383,8 @@ function shopCard(it, cat) {
     e.stopPropagation();
     if (owned) {
       setSel(cat, it.id);
-    } else if (it.src === 'kasa') {
-      d.style.borderColor = '#c86bff';       // yalnızca kasadan çıkar
+    } else if (it.src === 'kasa' || it.src === 'lider') {
+      d.style.borderColor = it.src === 'lider' ? '#ff2d4d' : '#c86bff';   // satın alınamaz
       setTimeout(renderShop, 300);
       return;
     } else if (it.gem ? save.gems >= it.gem : save.chips >= it.price) {
@@ -2222,16 +2482,20 @@ function gameOver() {
   save.gems += S.runGems;
   save.xp += S.score;
   const passRewards = claimPassLevels();
+  // SIRALAMA: yeni rekor sıralamada bir kademeye ulaştırdıysa ödülünü ver.
+  const lbRewards = claimLeaderboardRewards();
   persist();
   titleEl.textContent = 'OYUN BİTTİ';
   titleEl.classList.add('dead');
   statsEl.textContent = 'SKOR: ' + S.score + '   REKOR: ' + S.best;
   earnedEl.innerHTML = '+' + S.runChips + ' ⬡ ÇİP' +
     (S.runGems ? '  •  +' + S.runGems + ' 💎' : '') +
-    (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') : '');
+    (passRewards.length ? '<br>BEAT PASS: ' + passRewards.join(' • ') : '') +
+    (lbRewards.length ? '<br><span class="lbWin">🏆 ' + lbRewards.join('<br>🏆 ') + '</span>' : '');
   earnedEl.classList.remove('hidden');
   btnPlay.innerHTML = '&#8635; TEKRAR OYNA';
   renderPassMini();
+  renderLbMini();
   showScreen(menuScr);
   // Şık giriş vurgusu: panel hafif "impact" ile büyüyerek belirir.
   menuScr.classList.remove('impactIn');
@@ -2384,6 +2648,8 @@ btnShop.addEventListener('pointerdown', e => { e.stopPropagation(); showShop(); 
 btnBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
 btnPass.addEventListener('pointerdown', e => { e.stopPropagation(); showPass(); });
 btnPassBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
+btnLb.addEventListener('pointerdown', e => { e.stopPropagation(); showLb(); });
+btnLbBack.addEventListener('pointerdown', e => { e.stopPropagation(); showMenu(); });
 btnCrate.addEventListener('pointerdown', e => {
   e.stopPropagation();
   const res = openCrate();
@@ -2404,7 +2670,6 @@ btnCrate.addEventListener('pointerdown', e => {
 
 // ------------------------------------------------------ güncelleme
 function update(dt, dtRaw) {
-  if (S.warpFlash > 0) S.warpFlash = Math.max(0, S.warpFlash - dt / 0.2);   // 0.2sn'de söner
   if (S.mode === 'play') {
     // Hibrit saat: ses motoru çalışıyorsa örnek-hassas ses saati,
     // askıdaysa (iOS sessiz mod vb.) kendi saatimizle akmaya devam et.
@@ -2442,7 +2707,6 @@ function update(dt, dtRaw) {
         burst(c.x, c.z, 22, theme.glow);
         spawnRing(c.x, c.z);           // köşeden yayılan efekt halkası
         if (S.lastKind === 'perfect') burst(c.x, c.z, 16, '#8dff3d'); // yeşil ışıltı
-        if (c.portal) { S.warpFlash = 1; burst(c.portal.destX, c.portal.destZ, 26, '#c86bff'); vibrate(35); }
         scoreEl.textContent = 'SKOR: ' + S.score;
         comboEl.textContent = S.combo > 1 ? 'COMBO x' + Math.min(S.combo, 10) : '';
         speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
@@ -2456,7 +2720,6 @@ function update(dt, dtRaw) {
           S.next++;
           S.lane = 0;
           S.combo = 0; comboEl.textContent = '';
-          if (c.portal) { S.warpFlash = 1; burst(c.portal.destX, c.portal.destZ, 26, '#c86bff'); }
           speedEl.textContent = 'HIZ x' + (S.speed / BASE_SPEED).toFixed(2);
         } else if (S.lives > 1) {
           // Köşe kaçtı: kalp git, top DÜŞSÜN, sonra kaldığı yerden devam.
@@ -2604,6 +2867,36 @@ function drawGrid(pulse, hype = 0) {
   ctx.stroke();
 }
 
+// YILDIZ ALANI: ufkun üstünde sabit tohumlu yıldızlar. Kameranın yanal
+// konumuna göre çok küçük bir paralaksla kayar (uzaklık hissi) ve beat ile
+// hafifçe parlar. Ekran uzayında çizilir — projeksiyon maliyeti yok.
+const STARS = (() => {
+  let s = 987654321;
+  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  return Array.from({ length: 90 }, () => ({
+    u: rnd(),                       // 0..1 yatay (ekran genişliğinin katı)
+    v: rnd(),                       // 0..1 dikey (ufkun üstünde)
+    r: 0.5 + rnd() * 1.3,
+    tw: rnd() * Math.PI * 2,
+    par: 0.25 + rnd() * 0.75,       // paralaks katsayısı (uzak yıldız az kayar)
+  }));
+})();
+function drawStars(horizonY) {
+  const skyH = horizonY - H * 0.02;
+  if (skyH <= 0) return;
+  for (const st of STARS) {
+    // camP (kameranın yanal konumu) yıldızları ters yönde çok az kaydırır.
+    let x = (st.u * W - camP * 5 * st.par) % W;
+    if (x < 0) x += W;
+    const y = st.v * skyH;
+    const twk = 0.45 + 0.55 * Math.sin(curT * 1.6 + st.tw);
+    ctx.fillStyle = 'rgba(210,238,255,' + (0.18 + 0.5 * twk * st.par + 0.18 * curBeatP) + ')';
+    ctx.beginPath();
+    ctx.arc(x, y, st.r * (1 + 0.25 * curBeatP), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawFloaters(t) {
   const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
   // Dünya ritimle nefes alır: vuruş anında hafif büyür, üssel eğriyle söner.
@@ -2706,15 +2999,23 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
   const fogFar = fogAt(view({ x: x2, y: 0, z: z2 }).z);
 
   // TÜM yan yüzler + uç kapaklar: yol tamamen OPAK, köşelerden ve
-  // uçlardan arkası asla görünmez. Dikey gradyan: üstte (neon şeride
-  // yakın) aydınlık, tabana doğru koyulaşan sahte AO -> hacim/derinlik.
+  // uçlardan arkası asla görünmez. YÖNLÜ IŞIK: her yüzün dışa bakan
+  // normali sabit bir ışık yönüyle karşılaştırılır -> bloğun bir yüzü
+  // aydınlık, diğeri gölgede kalır (düz "kutu" yerine gerçek hacim).
+  // Ayrıca dikey gradyan tabana doğru koyulaşır (sahte AO).
+  // Yüz tonları (aydınlık/gölge) yalnızca dirIdx + yüz sırasına bağlı ->
+  // SIDE_TONES'ta önceden hesaplanır; karede yalnızca sis karışımı kalır.
+  const tones = SIDE_TONES[dirIdx];
   const sideFaces = [
-    [c1, w1, c2, w2, fogNear, fogFar], [c4, w4, c3, w3, fogNear, fogFar],   // iki uzun kenar
-    [c1, w1, c4, w4, fogNear, fogNear], [c2, w2, c3, w3, fogFar, fogFar],   // uç kapaklar
+    [c1, w1, c2, w2, fogNear, fogFar],    // +perp uzun kenar
+    [c4, w4, c3, w3, fogNear, fogFar],    // -perp uzun kenar
+    [c1, w1, c4, w4, fogNear, fogNear],   // giriş kapağı
+    [c2, w2, c3, w3, fogFar,  fogFar],    // çıkış kapağı
   ];
-  const baseSide = dirIdx === 0 ? C.side : C.side2;
-  for (const [p, wp, q, wq, fp, fq] of sideFaces) {
+  for (let fi = 0; fi < 4; fi++) {
+    const [p, wp, q, wq, fp, fq] = sideFaces[fi];
     const fogAvg = (fp + fq) / 2;
+    const tn = tones[fi];
     quad([
       { x: p.x, y: wp, z: p.z }, { x: q.x, y: wq, z: q.z },
       { x: q.x, y: -BLOCK_H + wq, z: q.z }, { x: p.x, y: -BLOCK_H + wp, z: p.z },
@@ -2722,15 +3023,15 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
       const ys = ps.map(pt => pt.y);
       const yTop = Math.min(...ys), yBot = Math.max(...ys);
       const g = ctx.createLinearGradient(0, yTop, 0, yBot);
-      const lit = mixHex(lightenHex(baseSide, 0.24), '#04060c', fogAvg);
-      const mid = mixHex(baseSide, '#04060c', fogAvg);
-      g.addColorStop(0, lit);
-      g.addColorStop(0.35, mid);
-      g.addColorStop(1, '#03040a');
+      g.addColorStop(0, mixHex(tn.lit, '#04060c', fogAvg));
+      g.addColorStop(0.32, mixHex(tn.mid, '#04060c', fogAvg));
+      g.addColorStop(0.82, tn.deep);
+      g.addColorStop(1, '#020307');
       return g;
     });
   }
   // Üst yüz: yakında hafif dokulu/aydınlık, uzakta sisle karışan gradyan.
+  // Üste ayrıca ince bir "ıslak asfalt" parlaması (specular bant) biner.
   quad([
     { x: c1.x, y: w1, z: c1.z }, { x: c2.x, y: w2, z: c2.z },
     { x: c3.x, y: w3, z: c3.z }, { x: c4.x, y: w4, z: c4.z },
@@ -2739,7 +3040,8 @@ function drawRun(x1, z1, x2, z2, dirIdx) {
     const yTop = Math.min(...ys), yBot = Math.max(...ys);
     const g = ctx.createLinearGradient(0, yTop, 0, yBot);
     g.addColorStop(0, mixHex('#050609', '#04060e', fogFar));
-    g.addColorStop(1, mixHex('#181d29', '#04060e', fogNear));
+    g.addColorStop(0.55, mixHex('#101623', '#04060e', (fogNear + fogFar) / 2));
+    g.addColorStop(1, mixHex('#1d2331', '#04060e', fogNear));
     return g;
   });
 
@@ -2800,12 +3102,16 @@ function draw(t) {
   bg.addColorStop(1, mixHex('#04060e', HYPE_BG[0], hype2));
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
+  // YILDIZ ALANI: ufkun üstünde, kameranın yanal hareketiyle çok yavaş
+  // kayan (paralaks) sabit yıldızlar -> gökyüzü "sonsuz uzak" okunur.
+  const horizonY = H * PROJ_CY;
+  drawStars(horizonY);
+
   // Ufuk sisi: yol/ızgara çizilmeden önce, kaybolma noktası hizasında
   // temaya duyarlı soluk bir parıltı bandı -> atmosferik derinlik.
-  const horizonY = H * PROJ_CY;
   const hz = ctx.createLinearGradient(0, horizonY - H * 0.16, 0, horizonY + H * 0.1);
   hz.addColorStop(0, themeRgba(0));
-  hz.addColorStop(0.5, themeRgba(0.1));
+  hz.addColorStop(0.5, themeRgba(0.16));
   hz.addColorStop(1, themeRgba(0));
   ctx.fillStyle = hz; ctx.fillRect(0, 0, W, H);
 
@@ -2827,16 +3133,13 @@ function draw(t) {
   drawFloaters(t);
   drawUnderRoadBeams();
 
-  // yol koşuları: uzaktan yakına. IŞINLANMA (portal) köşeleri: köşenin
-  // KENDİSİNDE biter (fiziksel köprü yok), bir SONRAKİ koşu ise sıçrama
-  // hedefinden başlar -- araya gerçek bir boşluk/kopukluk girer.
+  // yol koşuları: uzaktan yakına.
   const segs = [];
   let px = 0, pz = 0, pdir = 1;
   for (let i = 0; i < S.corners.length; i++) {
     const c = S.corners[i];
     segs.push([px, pz, c.x, c.z, pdir]);
-    if (c.portal) { px = c.portal.destX; pz = c.portal.destZ; } else { px = c.x; pz = c.z; }
-    pdir = c.dirIdx;
+    px = c.x; pz = c.z; pdir = c.dirIdx;
   }
   segs.push([px, pz, px + DIR[pdir].x * 30, pz + DIR[pdir].z * 30, pdir]);
   const headAlong = S.head.x * DIAG.x + S.head.z * DIAG.z;
@@ -2896,35 +3199,6 @@ function draw(t) {
       }
     }
   }
-
-  // IŞINLANMA PORTALI: giriş noktasında ve sıçrama hedefinde dikey neon
-  // "geçit" halkaları -- oyuncu ikisini de önceden görebilsin.
-  for (let i = Math.max(1, S.next); i < Math.min(S.next + 6, S.corners.length); i++) {
-    const c = S.corners[i];
-    if (!c.portal) continue;
-    const passed = i < S.next || (i === S.next && S.pending);
-    for (const pt of (passed ? [] : [{ x: c.x, z: c.z }, { x: c.portal.destX, z: c.portal.destZ }])) {
-      const pulse = 0.7 + 0.3 * Math.sin(t * 4 + pt.x);
-      const cy = 0.1 + waveY(pt.x, pt.z) + HALF_W * 1.3;   // halkanın yerden yüksekliği
-      const R = HALF_W * 1.2;
-      ctx.strokeStyle = '#c86bff';
-      ctx.shadowColor = '#c86bff'; ctx.shadowBlur = 16 * pulse;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      let st = false;
-      for (let k = 0; k <= 20; k++) {
-        const a = (k / 20) * Math.PI * 2;
-        const v = view({ x: pt.x + Math.cos(a) * R, y: cy + Math.sin(a) * R, z: pt.z });
-        if (v.z < NEAR) continue;
-        const q = proj(v);
-        st ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
-        st = true;
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-  }
-
 
   // ELMAS YOLU: yan yolun eğrisi + toplanmamış elmaslar + kaydırma ipucu.
   // Önden fark edilebilsin diye geniş bir bakış mesafesinde ve hep parlak
@@ -3085,6 +3359,27 @@ function draw(t) {
       hp.x = W / 2; hp.y = H * 0.6; r = 22;
     }
     ballScr.x = hp.x; ballScr.y = hp.y;
+
+    // TEMAS GÖLGESİ: yolun yüzeyinde, topun tam altında yumuşak koyu leke.
+    // Topu zemine "oturtan" en güçlü 3B ipucu; yalnızca yoldayken çizilir.
+    if (S.mode === 'play' || S.mode === 'reviveWait') {
+      const sv = view({ x: tipX, y: 0.035 + waveY(tipX, tipZ), z: tipZ });
+      if (sv.z > NEAR) {
+        const sp = proj(sv);
+        const sr = r * 1.05;
+        const sg = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, sr);
+        sg.addColorStop(0, 'rgba(0,0,0,.62)');
+        sg.addColorStop(0.6, 'rgba(0,0,0,.28)');
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = sg;
+        ctx.save();
+        ctx.translate(sp.x, sp.y);
+        ctx.scale(1, 0.42);            // perspektifte gölge basık bir elips olur
+        ctx.beginPath(); ctx.arc(0, 0, sr, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
+
     const grad = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, r * 2.2);
     grad.addColorStop(0, 'rgba(255,255,255,1)');
     grad.addColorStop(0.35, 'rgba(235,250,255,.85)');
@@ -3115,6 +3410,26 @@ function draw(t) {
     ctx.fillStyle = skinCore(t, hp, r);
     ctx.shadowColor = theme.glow; ctx.shadowBlur = 24 * fallGlowFade;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // KÜRESEL GÖLGELENDİRME: sağ-alt tarafa doğru koyulaşan terminatör
+    // + sol-üstte keskin specular nokta -> disk değil, KÜRE gibi okunur.
+    const shd = ctx.createRadialGradient(
+      hp.x - r * 0.34, hp.y - r * 0.38, r * 0.12,
+      hp.x + r * 0.12, hp.y + r * 0.18, r * 1.12);
+    shd.addColorStop(0, 'rgba(255,255,255,0)');
+    shd.addColorStop(0.52, 'rgba(6,10,24,0)');
+    shd.addColorStop(1, 'rgba(4,7,18,.55)');
+    ctx.fillStyle = shd;
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
+    const spec = ctx.createRadialGradient(
+      hp.x - r * 0.36, hp.y - r * 0.4, 0,
+      hp.x - r * 0.36, hp.y - r * 0.4, r * 0.55);
+    spec.addColorStop(0, 'rgba(255,255,255,' + (0.9 * fallGlowFade) + ')');
+    spec.addColorStop(0.45, 'rgba(255,255,255,.22)');
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = spec;
+    ctx.beginPath(); ctx.arc(hp.x, hp.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowColor = theme.glow; ctx.shadowBlur = 24 * fallGlowFade;
     ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 * (0.35 + 0.65 * fallGlowFade)) + ')';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(hp.x, hp.y, r * 1.55, 0, Math.PI * 2); ctx.stroke();
@@ -3158,12 +3473,6 @@ function draw(t) {
   vig.addColorStop(1, 'rgba(0,0,0,.4)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
-
-  // IŞINLANMA FLAŞI: ekran uzayında (dönüşten etkilenmeden), 0.2sn'de söner.
-  if (S.warpFlash > 0) {
-    ctx.fillStyle = 'rgba(225,195,255,' + (0.85 * S.warpFlash) + ')';
-    ctx.fillRect(0, 0, W, H);
-  }
 
   // 30+ kombo: kenarlardan fışkıran hız/parçacık çizgileri ("hipnoz" modu).
   // Ekran uzayında, vinyetin üstünde çizilir ki her zaman net görünsün.
@@ -3221,6 +3530,8 @@ if (location.hash === '#debug') window.BL = { S, tap, release, headAt, HIT_WIN,
   view, proj, cam, CAM, TRACKS, AUDIO_BUFFERS, beatPhaseAt, currentEffBpm,
   acceptRevive, declineRevive, buyPremium, save, trySwitchLane, comboFX, theme, BIOMES,
   SKINS, LIGHTS, ACCS, HATS, INSTS,
+  speedForSeg, bpmForSeg,
+  LB_ROWS, LB_SIZE, LB_TIERS, playerRank, claimLeaderboardRewards, renderLbScreen, openCrate,
   get camA() { return camA; }, get camP() { return camP; },
   get camEnergy() { return camEnergy; },
   get TR() { return TR; },
