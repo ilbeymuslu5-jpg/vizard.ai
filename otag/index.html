@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OTAĞ — Kızıl Sefer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <div class="hud-topleft">
+      <div class="portrait" id="hudPortrait" data-pose="idle"></div>
+      <div class="bars">
+        <div class="bar bar-hp"><i id="barHp"></i><span id="hpText">100 / 100</span></div>
+        <div class="bar bar-st"><i id="barSt"></i></div>
+        <div class="bar bar-rg"><i id="barRg"></i><span id="rgText">ÖFKE</span></div>
+      </div>
+    </div>
+
+    <div class="hud-topright">
+      <div class="zone-name" id="zoneName">Otağ Kampı</div>
+      <div class="quest-track" id="questTrack"></div>
+    </div>
+
+    <div class="boss-bar hidden" id="bossBar">
+      <div class="boss-name">KARA OTAĞ</div>
+      <div class="boss-hp"><i id="bossHp"></i></div>
+      <div class="boss-phase" id="bossPhase">1. EVRE</div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="hotbar" id="hotbar"></div>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+    <div class="hint" id="hint"></div>
+    <div class="dialogue hidden" id="dialogue">
+      <div class="portrait dlg-portrait" id="dlgPortrait" data-pose="happy"></div>
+      <div class="dlg-body">
+        <div class="dlg-name" id="dlgName">Dede</div>
+        <div class="dlg-text" id="dlgText"></div>
+        <div class="dlg-more">[ Boşluk / E ile devam ]</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EKRANLAR ============ -->
+  <div id="overlay">
+
+    <!-- Ana menü -->
+    <section class="screen" id="scrMenu">
+      <div class="menu-hero">
+        <div class="portrait big" data-pose="rage"></div>
+        <div class="titles">
+          <h1>OTAĞ</h1>
+          <h2>Kızıl Sefer</h2>
+          <p class="tag">Mızrağını al, kalkanını kuşan. Gölgeler kampı sardı.</p>
+        </div>
+      </div>
+      <nav class="menu">
+        <button data-act="continue" id="btnContinue">DEVAM ET</button>
+        <button data-act="new">YENİ OYUN</button>
+        <button data-act="help">NASIL OYNANIR</button>
+        <button data-act="settings">AYARLAR</button>
+        <button data-act="credits">KÜNYE</button>
+      </nav>
+      <div class="version">v1.0 — tarayıcıda çalışır, kurulum gerekmez</div>
+    </section>
+
+    <!-- Duraklat -->
+    <section class="screen hidden" id="scrPause">
+      <h2 class="scr-title">DURAKLATILDI</h2>
+      <nav class="menu">
+        <button data-act="resume">DEVAM ET</button>
+        <button data-act="save">OYUNU KAYDET</button>
+        <button data-act="help">NASIL OYNANIR</button>
+        <button data-act="settings">AYARLAR</button>
+        <button data-act="quit">ANA MENÜ</button>
+      </nav>
+    </section>
+
+    <!-- Ayarlar -->
+    <section class="screen hidden" id="scrSettings">
+      <h2 class="scr-title">AYARLAR</h2>
+      <div class="panel settings">
+        <label>Ana Ses <input type="range" id="setMaster" min="0" max="100"><span class="val" id="valMaster"></span></label>
+        <label>Efekt Sesi <input type="range" id="setSfx" min="0" max="100"><span class="val" id="valSfx"></span></label>
+        <label>Müzik <input type="range" id="setMusic" min="0" max="100"><span class="val" id="valMusic"></span></label>
+        <label>Ekran Sarsıntısı <input type="range" id="setShake" min="0" max="100"><span class="val" id="valShake"></span></label>
+        <label>Zorluk
+          <select id="setDiff">
+            <option value="easy">Kolay</option>
+            <option value="normal">Normal</option>
+            <option value="hard">Zor</option>
+          </select><span class="val"></span>
+        </label>
+        <label>Hasar Sayıları <input type="checkbox" id="setDmgNum"><span class="val"></span></label>
+      </div>
+      <nav class="menu"><button data-act="back">GERİ</button></nav>
+    </section>
+
+    <!-- Yardım -->
+    <section class="screen hidden" id="scrHelp">
+      <h2 class="scr-title">NASIL OYNANIR</h2>
+      <div class="panel keys">
+        <div><b>W A S D</b><span>Hareket</span></div>
+        <div><b>Fare</b><span>Nişan al / yönünü çevir</span></div>
+        <div><b>Sol Tık</b><span>Mızrak saldırısı (3'lü kombo)</span></div>
+        <div><b>Sağ Tık / Boşluk</b><span>Kalkan tut — tam zamanında bırakırsan <i>parry</i></span></div>
+        <div><b>Shift</b><span>Atılış (kısa süre dokunulmazlık)</span></div>
+        <div><b>Q</b><span>Kızıl Girdap — öfke doluyken alan saldırısı</span></div>
+        <div><b>E</b><span>Etkileşim (sandık, ateş kulesi, kapı, konuşma)</span></div>
+        <div><b>1–5</b><span>Eşya kullan</span></div>
+        <div><b>I / J</b><span>Envanter / Görev defteri</span></div>
+        <div><b>ESC</b><span>Duraklat</span></div>
+      </div>
+      <div class="tipbox">
+        <b>İpucu:</b> Düşman sana vurmadan hemen önce kalkanı kaldırıp bırakırsan <b>parry</b> yaparsın:
+        düşman sersemler, öfken dolar ve arkasına geçip vurabilirsin.
+      </div>
+      <nav class="menu"><button data-act="back">GERİ</button></nav>
+    </section>
+
+    <!-- Künye -->
+    <section class="screen hidden" id="scrCredits">
+      <h2 class="scr-title">KÜNYE</h2>
+      <div class="panel credits">
+        <p><b>OTAĞ — Kızıl Sefer</b></p>
+        <p>Tasarım, kod ve oyun sistemleri: bu proje için sıfırdan yazıldı.</p>
+        <p>Karakter görseli: senin yüklediğin “Otağ Bey” çizim seti (12 poz).</p>
+        <p>Ses: tarayıcıda gerçek zamanlı üretiliyor (WebAudio) — dış dosya yok.</p>
+        <p>Motor yok: saf HTML + CSS + JavaScript. Tek klasör, çift tık, çalışır.</p>
+      </div>
+      <nav class="menu"><button data-act="back">GERİ</button></nav>
+    </section>
+
+    <!-- Envanter -->
+    <section class="screen hidden" id="scrInv">
+      <h2 class="scr-title">ENVANTER</h2>
+      <div class="inv-wrap">
+        <div class="inv-left">
+          <div class="portrait big" data-pose="love"></div>
+          <div class="stats" id="invStats"></div>
+        </div>
+        <div class="inv-grid" id="invGrid"></div>
+      </div>
+      <div class="inv-desc" id="invDesc">Bir eşyanın üzerine gel.</div>
+      <nav class="menu"><button data-act="back">KAPAT (I)</button></nav>
+    </section>
+
+    <!-- Görev defteri -->
+    <section class="screen hidden" id="scrJournal">
+      <h2 class="scr-title">GÖREV DEFTERİ</h2>
+      <div class="panel journal" id="journalList"></div>
+      <nav class="menu"><button data-act="back">KAPAT (J)</button></nav>
+    </section>
+
+    <!-- Ölüm -->
+    <section class="screen hidden dark" id="scrDead">
+      <div class="portrait big" data-pose="dead"></div>
+      <h2 class="scr-title red">OTAĞ DÜŞTÜ</h2>
+      <p class="sub" id="deadSub"></p>
+      <nav class="menu">
+        <button data-act="retry">SON KAYITTAN DEVAM</button>
+        <button data-act="quit">ANA MENÜ</button>
+      </nav>
+    </section>
+
+    <!-- Zafer -->
+    <section class="screen hidden dark" id="scrWin">
+      <div class="portrait big" data-pose="happy"></div>
+      <h2 class="scr-title gold">KIZIL SEFER TAMAMLANDI</h2>
+      <p class="sub" id="winSub"></p>
+      <nav class="menu">
+        <button data-act="quit">ANA MENÜ</button>
+      </nav>
+    </section>
+
+    <!-- Yükleniyor -->
+    <section class="screen" id="scrLoad">
+      <div class="loader">OTAĞ HAZIRLANIYOR…</div>
+    </section>
+  </div>
+
+  <div id="fade"></div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/world.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
