@@ -36,7 +36,8 @@ const Sprites = {
       cb && cb();
     };
     im.onerror = () => { console.warn('sprite sayfası yüklenemedi'); this.ready = false; cb && cb(); };
-    im.src = 'assets/otag_sheet.png';
+    /* tek dosyalık sürümde görsel base64 olarak gömülüdür */
+    im.src = window.OTAG_SHEET_URI || 'assets/otag_sheet.png';
   },
 
   build() {

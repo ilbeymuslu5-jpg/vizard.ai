@@ -17,7 +17,7 @@ canvas#game{display:block;image-rendering:auto;background:#0a0910}
 /* ---------- karakter portresi (sprite sayfasından kırpılır) ---------- */
 .portrait{
   width:72px;height:96px;flex:0 0 auto;
-  background-image:url("assets/otag_sheet.png");
+  background-image:var(--otag-sheet, url("assets/otag_sheet.png"));
   background-size:400% 300%;
   background-repeat:no-repeat;
   filter:drop-shadow(0 4px 10px rgba(0,0,0,.7));

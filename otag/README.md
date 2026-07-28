@@ -129,3 +129,21 @@ Dürüst not: oyun **oynanır ve bitirilebilir** durumda, ama ticari bir Steam s
 için genelde şunlar da eklenir — daha fazla bölge ve düşman çeşidi, seslendirme,
 oyun içi müzik parçaları, dil desteği, oyun kolu desteği ve bir demo/fragman.
 Bunların hepsi bu yapının üstüne eklenebilir; sistemler hazır.
+
+---
+
+## Tek dosyalık sürüm
+
+GitHub'daki linke basınca **kod** görünür, oyun açılmaz — GitHub bir oyun sunucusu değil,
+kod deposu. Oynanabilir sürüm için:
+
+- **`dist/otag.html`** — her şeyi (kod, stil, karakter görseli) içinde taşıyan tek dosya.
+  İndir, çift tıkla, oynanır. Kimseye göndermek istersen sadece bu dosyayı gönder.
+- Yeniden üretmek için: `node tools/build-single.mjs`
+  (`--fragment` ile gövde-yalnız sürüm üretilir; gömülü oynatıcılar için.)
+
+### GitHub üzerinden oynanabilir link istersen
+
+Depoda **Settings → Pages → Source: Deploy from a branch** seç, dalı `main`, klasörü
+`/ (root)` yap. Birkaç dakika sonra oyun şu adreste açılır:
+`https://<kullanıcı-adın>.github.io/vizard.ai/otag/`
