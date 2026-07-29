@@ -79,9 +79,16 @@ Böylece dövüş hissi bozulmadan dünya üç boyuta taşındı.
   arazi kabartması, ufuk silueti, parçacık sistemleri.
 - **Düşmanlar, patron, ağaçlar, çadırlar, kayalar, sancaklar, sandıklar** kodla
   üretilmiş gerçek 3B gövdeler (low‑poly, düz gölgelemeli).
-- **Karakterin kendisi** senin çizimin olduğu için 3B'de *billboard* olarak durur:
-  kameraya döner, ayak noktasından yere basar, gölgesini düşürür. Pozlar aynı
-  şekilde oyuna bağlı çalışır.
+- **Karakter de 3B model** (`js/character3d.js`): gönderdiğin tasarım levhasına
+  bakılarak koddan kuruldu — ahşap yumurta gövde (dikey tahtalar, kuşaklar),
+  kiremitli külah çatı, hilal‑yıldız tepelik, kavisli yüz penceresi, hilalli
+  kalkan, kızıl sargılı mızrak ve üç parmaklı ahşap ayaklar.
+  **7 yüz ifadesi** (nötr, mutlu, kızgın, şaşkın, üzgün, âşık, uykulu + ölüm için
+  ✕‑göz) doku atlasından seçilir; arada göz kırpar.
+  **8 animasyon** koddan sürülür: bekleme, yürüme/koşma (paytak sallanma),
+  saldırı (geri yaslan → mızrak hamlesi), girdap, kalkan bloğu, darbe, ölüm
+  (devrilir, üstünden küçük hayalet yükselir).
+- Dede de aynı gövde, yaşlı ahşap tonunda; yaklaşınca sana döner.
 - **Ateşler** alev + titreyen nokta ışığı + yükselen kıvılcım demeti.
 - WebGL yoksa oyun sessizce **eski 2B çizime** düşer; oynanış değişmez.
 
@@ -89,11 +96,11 @@ Böylece dövüş hissi bozulmadan dünya üç boyuta taşındı.
 - Ses tamamen tarayıcıda üretiliyor (WebAudio) — tek bir ses dosyası bile yok.
 - Zemin dokusu kodla üretilip 3B araziye kaplanıyor.
 - Tek dış kütüphane: three.js (`vendor/three.min.js`, projeye gömülü).
-- Tek görsel dosya: senin karakter sayfan (`assets/otag_sheet.png`), 12 poz.
-  Arka planı şeffaflaştırıldı ve 4×3 ızgara olarak dilimlendi.
-- Pozlar oyuna bağlı: öfke barın dolunca **alev pozu**, canın azalınca **üzgün**,
-  blokta **kalkan pozu**, girdapta **dönme pozu**, ölünce **hayalet pozu**,
-  12 saniye kıpırdamazsan **uyuma pozu**.
+- Karakterin bütün dokuları (tahta, kiremit, kalkan, yüzler) tuvalde üretiliyor.
+- `assets/otag_sheet.png` artık yalnızca arayüz portresinde ve WebGL'siz
+  yedek 2B çizimde kullanılıyor.
+- İfadeler oyuna bağlı: öfke barın dolunca **kızgın**, canın azalınca **üzgün**,
+  şaşırınca **şaşkın**, ölünce **✕ göz**, 12 saniye kıpırdamazsan **uykulu**.
 
 ---
 
@@ -124,6 +131,8 @@ Sık istenen ayarlar:
 - **Yeni görev:** `js/systems.js` → `QUEST_DEFS` + `Quests.event`
 - **Yeni bölge:** `js/world.js` → `ZONES` içine yeni kayıt, sonra bir `exit` propu ekle
 - **Kamera açısı / uzaklığı:** `js/render3d.js` → `pitch`, `dist`
+- **Karakterin biçimi:** `js/character3d.js` → `EGG` (gövde profili), `roofProfile`
+- **Yüz ifadeleri:** `js/character3d.js` → `drawFace`
 - **Işık ve sis:** `js/render3d.js` → `buildZone` içindeki `sun`, `hemi`, `fog`
 
 ---
@@ -164,11 +173,6 @@ kod deposu. Oynanabilir sürüm için:
   İndir, çift tıkla, oynanır. Kimseye göndermek istersen sadece bu dosyayı gönder.
 - Yeniden üretmek için: `node tools/build-single.mjs`
   (`--fragment` ile gövde-yalnız sürüm üretilir; gömülü oynatıcılar için.)
-
-> Not: çok dosyalı sürümü `file://` ile açarsan tarayıcı, PNG'yi 3B dokuya
-> almana izin vermez (güvenlik kuralı) ve karakter yedek silüetle çizilir.
-> Tam görsel için `dist/otag.html` sürümünü kullan ya da klasörü küçük bir
-> sunucudan aç (`python3 -m http.server`).
 
 ### GitHub üzerinden oynanabilir link istersen
 

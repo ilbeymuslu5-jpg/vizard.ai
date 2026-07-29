@@ -15,16 +15,14 @@ const R3D = {
   W: 1, H: 1, dpr: 1,
 
   /* kamera */
-  camYaw: 0, yawT: 0, pitch: 1.0, dist: 720, distT: 720,
+  camYaw: 0, yawT: 0, pitch: .82, dist: 640, distT: 640,
   camPos: null, camAim: null,
 
   /* havuzlar */
   actors: new Map(),     // oyun nesnesi -> 3B temsili
   fires: [],             // bölgedeki ateşler
   rings: [], slashes: [],
-  billboards: [],
 
-  sheetTex: null,
   time: 0,
 
   /* ============================================================
@@ -111,6 +109,8 @@ const R3D = {
     G.disc = new THREE.CircleGeometry(1, 40); G.disc.rotateX(-Math.PI / 2);
     G.ring = new THREE.RingGeometry(.86, 1, 56); G.ring.rotateX(-Math.PI / 2);
     G.tap = new THREE.CylinderGeometry(1, .55, 1, 10); G.tap.translate(0, .5, 0);
+    /* paylaşılan geometriler bölge temizliğinde atılmamalı */
+    for (const k in G) G[k].userData.shared = true;
     this.G = G;
 
     /* yumuşak gölge lekesi */
@@ -183,63 +183,6 @@ const R3D = {
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  },
-
-  sheet() {
-    if (this.sheetTex) return this.sheetTex;
-    if (!Sprites.ready || !Sprites.img) return null;
-
-    /* file:// ile açılan çok dosyalı sürümde tarayıcı, PNG'yi WebGL dokusu
-       olarak kullandırmaz (çapraz köken kuralı). Bunu önceden anlayıp
-       yedek çizime düşeriz; tek dosyalık sürümde görsel gömülü olduğu için
-       böyle bir kısıt yoktur. */
-    let usable = true;
-    try {
-      const c = document.createElement('canvas'); c.width = c.height = 2;
-      const g = c.getContext('2d');
-      g.drawImage(Sprites.img, 0, 0, 2, 2);
-      g.getImageData(0, 0, 1, 1);
-    } catch (e) { usable = false; }
-
-    let t;
-    if (usable) {
-      t = new THREE.Texture(Sprites.img);
-    } else {
-      console.warn('Karakter sayfası tarayıcı kısıtı yüzünden 3B dokuya alınamadı ' +
-        '(file:// çapraz köken). Yedek çizim kullanılıyor — tam görsel için dist/otag.html sürümünü aç.');
-      t = new THREE.CanvasTexture(this.fallbackSheet());
-    }
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.magFilter = THREE.LinearFilter;
-    t.minFilter = THREE.LinearMipmapLinearFilter;
-    t.generateMipmaps = true;
-    t.needsUpdate = true;
-    this.sheetTex = t;
-    return t;
-  },
-
-  /* karakter sayfası okunamazsa aynı ızgarada basit bir silüet üretilir */
-  fallbackSheet() {
-    const iw = Sprites.img.width, ih = Sprites.img.height;
-    const cv = document.createElement('canvas');
-    cv.width = iw; cv.height = ih;
-    const g = cv.getContext('2d');
-    const kx = Sprites.CW / 313.5, ky = Sprites.CH / 418;
-    for (const k in Sprites.BODY) {
-      const [c, r, bx0, by0, bx1, by1] = Sprites.BODY[k];
-      const x0 = c * Sprites.CW + bx0 * kx, y0 = r * Sprites.CH + by0 * ky;
-      const w = (bx1 - bx0) * kx, h = (by1 - by0) * ky;
-      const cx = x0 + w / 2;
-      g.fillStyle = k === 'rage' ? '#a83020' : '#7a2320';
-      g.beginPath();
-      g.moveTo(cx, y0); g.lineTo(x0 + w, y0 + h); g.lineTo(x0, y0 + h);
-      g.closePath(); g.fill();
-      g.fillStyle = '#e8ddcf';
-      g.fillRect(cx - w * .2, y0 + h * .42, w * .4, h * .1);
-      g.strokeStyle = '#c9b28a'; g.lineWidth = Math.max(3, w * .04);
-      g.beginPath(); g.moveTo(cx + w * .34, y0 + h * .05); g.lineTo(cx + w * .16, y0 + h); g.stroke();
-    }
-    return cv;
   },
 
   /* --------- kamera denetimi: tekerlek yakınlaştırır, orta tuş döndürür --------- */
@@ -673,10 +616,11 @@ const R3D = {
         break;
       }
       case 'npc': {
-        const bb = this.makeBillboard();
-        bb.group.position.set(p.x, 0, p.y);
-        this.zoneGroup.add(bb.group);
-        rec.bb = bb;
+        /* Dede: aynı gövde, yaşlı ahşap tonunda */
+        const ch = CharModel.build({ h: 100, elder: true });
+        ch.root.position.set(p.x, 0, p.y);
+        this.zoneGroup.add(ch.root);
+        rec.ch = ch;
         break;
       }
       case 'bossaltar': {
@@ -743,91 +687,6 @@ const R3D = {
         return;
     }
     this.propObj.set(p, rec);
-  },
-
-  /* ============================================================
-     BILLBOARD (karakter sayfası)
-     ============================================================ */
-  makeBillboard() {
-    const geo = new THREE.PlaneGeometry(1, 1);
-    const tex = this.sheet();
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, alphaTest: .35, depthWrite: true, side: THREE.DoubleSide
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    const flashMat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
-      depthWrite: false, side: THREE.DoubleSide, color: new THREE.Color('#ff6a5a')
-    });
-    const flash = new THREE.Mesh(geo, flashMat);
-    flash.position.z = .6; flash.renderOrder = 3; flash.visible = false;
-    mesh.add(flash);
-
-    const shadow = new THREE.Mesh(this.G.disc, this.blobMat.clone());
-    shadow.position.y = 1.4;
-
-    const group = new THREE.Group();
-    group.add(mesh, shadow);
-    return { group, mesh, mat, flash, flashMat, shadow, geo, pose: null, flip: null };
-  },
-
-  /* poz + boyut + yön güncelle */
-  setBillboard(bb, pose, x, y, h, opt = {}) {
-    const S = Sprites;
-    if (!bb.mat.map) { bb.mat.map = this.sheet(); bb.flashMat.map = bb.mat.map; bb.mat.needsUpdate = true; }
-    const f = (S.frames && (S.frames[pose] || S.frames.idle));
-    if (!f || !S.img) { bb.group.visible = false; return; }
-    bb.group.visible = true;
-
-    const flip = !!opt.flip;
-    if (bb.pose !== pose || bb.flip !== flip) {
-      bb.pose = pose; bb.flip = flip;
-      const iw = S.img.width, ih = S.img.height;
-      let u0 = f.sx / iw, u1 = (f.sx + f.sw) / iw;
-      const v0 = 1 - (f.sy + f.sh) / ih, v1 = 1 - f.sy / ih;
-      if (flip) { const t = u0; u0 = u1; u1 = t; }
-      const uv = bb.geo.attributes.uv;
-      uv.setXY(0, u0, v1); uv.setXY(1, u1, v1);
-      uv.setXY(2, u0, v0); uv.setXY(3, u1, v0);
-      uv.needsUpdate = true;
-      bb.ax = f.ax; bb.ay = f.ay; bb.ratio = f.ratio;
-    }
-    const sq = opt.squash || { x: 1, y: 1 };
-    const w = h * f.ratio * sq.x, hh = h * sq.y;
-    const cam = this.camera;
-
-    /* ayak noktası dünyada (x, 0, y); çizim kamera yönünde durur */
-    bb.group.position.set(x, opt.lift || 0, y);
-    const m = bb.mesh;
-    m.quaternion.copy(cam.quaternion);
-    if (opt.rot) m.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -opt.rot));
-    m.scale.set(w, hh, 1);
-
-    /* çizimin ayak noktası hücre içinde (ax, ay) → kamera eksenlerinde kaydır */
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(m.quaternion);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(m.quaternion);
-    m.position.set(0, 0, 0)
-      .addScaledVector(right, (.5 - f.ax) * w)
-      .addScaledVector(up, (f.ay - .5) * hh);
-
-    const a = opt.alpha === undefined ? 1 : opt.alpha;
-    if (bb.mat.opacity !== a) bb.mat.opacity = a;
-    const fl = opt.flash || 0;
-    bb.flash.visible = fl > .02;
-    if (bb.flash.visible) {
-      bb.flashMat.opacity = clamp(fl, 0, 1) * .85;
-      bb.flashMat.color.set(opt.flashColor || '#ff6a5a');
-      bb.flash.scale.set(1, 1, 1);
-      bb.flash.quaternion.identity();
-    }
-    /* gölge lekesi */
-    bb.shadow.visible = opt.shadow !== false;
-    if (bb.shadow.visible) {
-      const r = opt.shadowR || h * .3;
-      bb.shadow.scale.set(r, 1, r * .92);
-      bb.shadow.position.set(0, 1.4, 0);
-      bb.shadow.material.opacity = (opt.shadowA === undefined ? .5 : opt.shadowA) * a;
-    }
   },
 
   /* ============================================================
@@ -1329,8 +1188,16 @@ const R3D = {
             rec.col.rotation.y += dt * .35;
           }
         }
-        if (p.type === 'npc' && rec.bb) {
-          this.setBillboard(rec.bb, p.pose || 'sleep', p.x, p.y, 108, { shadowR: 30, shadowA: .45 });
+        if (p.type === 'npc' && rec.ch) {
+          /* oyuncu yaklaşınca ona dönsün */
+          const pl = Game.player;
+          if (pl) {
+            const want = Math.PI / 2 - angTo(p.x, p.y, pl.x, pl.y);
+            const near = dist2(p.x, p.y, pl.x, pl.y) < 340 * 340;
+            const tgt = near ? want : 0;
+            rec.ch.root.rotation.y += angDiff(rec.ch.root.rotation.y, tgt) * Math.min(1, dt * 3);
+          }
+          rec.ch.update(dt, { state: 'idle', t, pose: p.pose || 'sleep' });
         }
       }
     }
@@ -1344,7 +1211,7 @@ const R3D = {
       const pl = Game.player;
       live.add(pl);
       let o = this.actors.get(pl);
-      if (!o) { o = { kind: 'bb', bb: this.makeBillboard(), pfx: this.makePlayerFx() }; this.actorGroup.add(o.bb.group); this.actors.set(pl, o); }
+      if (!o) { o = { kind: 'char', ch: CharModel.build({ h: pl.h }), pfx: this.makePlayerFx() }; this.actorGroup.add(o.ch.root); this.actors.set(pl, o); }
       this.syncPlayer(pl, o, dt);
     }
     for (const e of Game.enemies) {
@@ -1374,8 +1241,8 @@ const R3D = {
     /* ölenleri temizle */
     for (const [k, o] of this.actors) {
       if (live.has(k)) continue;
-      const root = o.g || (o.bb && o.bb.group);
-      if (root) { root.parent && root.parent.remove(root); this.disposeObj(root); }
+      const root = o.g || (o.ch && o.ch.root);
+      if (root) { root.parent && root.parent.remove(root); if (o.ch) o.ch.dispose(); else this.disposeObj(root); }
       if (o.pfx) { o.pfx.g.parent && o.pfx.g.parent.remove(o.pfx.g); this.disposeObj(o.pfx.g); }
       this.actors.delete(k);
     }
@@ -1411,23 +1278,16 @@ const R3D = {
   },
 
   syncPlayer(p, o, dt) {
-    const bob = p.state === 'run' ? Math.abs(Math.sin(p.bobT)) * 6 : Math.sin(p.bobT * .6) * 2;
-    let x = p.x, y = p.y, rot = 0;
+    let x = p.x, y = p.y;
+    /* saldırıda gövde hamleyle birlikte ileri savrulur */
     if (p.state === 'attack') {
       const k = clamp(p.t / .18, 0, 1);
       const push = Math.sin(k * Math.PI) * (p.combo === 3 ? 26 : 16);
       x += Math.cos(p.face) * push; y += Math.sin(p.face) * push;
     }
-    if (p.state === 'spin') rot = p.t * 22;
-
-    const alpha = (p.iframe > 0 && p.state !== 'dash' && !p.dead) ? (Math.sin(p.t * 40) > 0 ? .55 : 1) : 1;
-    this.setBillboard(o.bb, p.pose, x, y, p.h, {
-      flip: p.flip, rot, alpha,
-      flash: p.hurtFlash, flashColor: '#ff6a5a',
-      squash: p.squash, lift: bob,
-      shadowR: 30 * (p.state === 'dash' ? 1.2 : 1), shadowA: .45
-    });
-    o.bb.shadow.position.y = 1.4 - bob;
+    o.ch.root.position.set(x, 0, y);
+    o.ch.root.rotation.y = Math.PI / 2 - p.face;
+    o.ch.update(dt, p);
 
     const fx = o.pfx;
     fx.g.position.set(p.x, 0, p.y);
@@ -1456,11 +1316,13 @@ const R3D = {
   },
   disposeObj(o) {
     o.traverse && o.traverse(c => {
-      if (c.geometry && c.geometry !== this.G.disc && !Object.values(this.G).includes(c.geometry)) c.geometry.dispose();
+      if (c.geometry && !c.geometry.userData.shared) c.geometry.dispose();
       const m = c.material;
-      if (m) {
-        if (Array.isArray(m)) m.forEach(mm => mm.dispose());
-        else m.dispose();
+      if (!m) return;
+      for (const mm of (Array.isArray(m) ? m : [m])) {
+        /* yalnızca o nesneye özel üretilmiş dokular atılır */
+        if (mm.map && mm.map.userData.perInstance) mm.map.dispose();
+        mm.dispose();
       }
     });
   },
@@ -1468,8 +1330,8 @@ const R3D = {
   /* bölge değişince canlıların 3B temsillerini at */
   clearActors() {
     for (const [k, o] of this.actors) {
-      const root = o.g || (o.bb && o.bb.group);
-      if (root) { root.parent && root.parent.remove(root); this.disposeObj(root); }
+      const root = o.g || (o.ch && o.ch.root);
+      if (root) { root.parent && root.parent.remove(root); if (o.ch) o.ch.dispose(); else this.disposeObj(root); }
       if (o.pfx) { o.pfx.g.parent && o.pfx.g.parent.remove(o.pfx.g); this.disposeObj(o.pfx.g); }
     }
     this.actors.clear();

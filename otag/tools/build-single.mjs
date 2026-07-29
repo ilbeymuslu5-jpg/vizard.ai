@@ -15,7 +15,7 @@ const dataUri = 'data:image/png;base64,' + fs.readFileSync(sheetPath).toString('
    değişkeni de aşağıdaki betik atar. */
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 
-const order = ['core', 'sprites', 'render3d', 'world', 'entities', 'systems', 'ui', 'main'];
+const order = ['core', 'sprites', 'character3d', 'render3d', 'world', 'entities', 'systems', 'ui', 'main'];
 const js = order.map(n => `/* ===== ${n}.js ===== */\n` +
   fs.readFileSync(path.join(root, `js/${n}.js`), 'utf8')).join('\n');
 
