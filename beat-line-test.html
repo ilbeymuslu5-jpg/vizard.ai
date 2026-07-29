@@ -538,7 +538,7 @@
   <div id="nowPlaying"></div>
   <div id="combo"></div>
   <div id="popup"></div>
-  <div id="ver">v52 — TÜMÜ AÇIK (TEST)</div>
+  <div id="ver">v53 — TÜMÜ AÇIK (TEST)</div>
   <div id="diag"></div>
 </div>
 
@@ -1332,7 +1332,16 @@ function decodeAllAudio() {
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     actx.decodeAudioData(bytes.buffer,
-      buf => { AUDIO_BUFFERS[id] = buf; },
+      buf => {
+        AUDIO_BUFFERS[id] = buf;
+        // İlk oyunda çözme, reset()'in ilk startMusicAudio() çağrısını
+        // kaçırmış olabilir (o an buffer henüz yoktu -> sessiz kaldı).
+        // Tam bu parça çözülüp oyun hâlâ 'play' modundaysa ve müzik
+        // gerçekten başlamadıysa, kaldığı andan hemen başlat.
+        if (S.mode === 'play' && TR.real && TR.audioId === id && !musicSrc) {
+          startMusicAudio(S.song);
+        }
+      },
       err => console.warn('Ses çözülemedi:', id, err));
   }
 }
