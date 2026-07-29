@@ -79,7 +79,7 @@ const Input = {
     this.releasedR = false;
     this.wheel = 0;
   },
-  /* hareket vektörü */
+  /* hareket vektörü — 3B'de kamera yönüne göre döndürülür */
   axis() {
     let x = 0, y = 0;
     if (this.down('a', 'arrowleft')) x -= 1;
@@ -87,7 +87,15 @@ const Input = {
     if (this.down('w', 'arrowup')) y -= 1;
     if (this.down('s', 'arrowdown')) y += 1;
     const l = Math.hypot(x, y);
-    return l > 0 ? { x: x / l, y: y / l, len: 1 } : { x: 0, y: 0, len: 0 };
+    if (l <= 0) return { x: 0, y: 0, len: 0 };
+    x /= l; y /= l;
+    const yaw = (typeof R3D !== 'undefined' && R3D.ok) ? R3D.camYaw : 0;
+    if (yaw) {
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const nx = x * c + y * s, ny = -x * s + y * c;
+      x = nx; y = ny;
+    }
+    return { x, y, len: 1 };
   }
 };
 

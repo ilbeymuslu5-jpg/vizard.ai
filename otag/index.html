@@ -9,6 +9,7 @@
 <body>
 <div id="app">
   <canvas id="game"></canvas>
+  <canvas id="fx2d"></canvas>
 
   <!-- ============ HUD ============ -->
   <div id="hud" class="hidden">
@@ -117,6 +118,8 @@
         <div><b>1–5</b><span>Eşya kullan</span></div>
         <div><b>I / J</b><span>Envanter / Görev defteri</span></div>
         <div><b>ESC</b><span>Duraklat</span></div>
+        <div><b>Fare tekerleği</b><span>Kamerayı yakınlaştır / uzaklaştır</span></div>
+        <div><b>Orta tuş sürükle</b><span>Kamerayı çevir (<b>[</b> ve <b>]</b> ile de olur)</span></div>
       </div>
       <div class="tipbox">
         <b>İpucu:</b> Düşman sana vurmadan hemen önce kalkanı kaldırıp bırakırsan <b>parry</b> yaparsın:
@@ -189,8 +192,10 @@
   <div id="fade"></div>
 </div>
 
+<script src="vendor/three.min.js"></script>
 <script src="js/core.js"></script>
 <script src="js/sprites.js"></script>
+<script src="js/render3d.js"></script>
 <script src="js/world.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/systems.js"></script>

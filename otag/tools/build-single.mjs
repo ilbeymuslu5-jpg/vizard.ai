@@ -15,9 +15,12 @@ const dataUri = 'data:image/png;base64,' + fs.readFileSync(sheetPath).toString('
    değişkeni de aşağıdaki betik atar. */
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 
-const order = ['core', 'sprites', 'world', 'entities', 'systems', 'ui', 'main'];
+const order = ['core', 'sprites', 'render3d', 'world', 'entities', 'systems', 'ui', 'main'];
 const js = order.map(n => `/* ===== ${n}.js ===== */\n` +
   fs.readFileSync(path.join(root, `js/${n}.js`), 'utf8')).join('\n');
+
+/* three.js tek dosyaya olduğu gibi girer (IIFE, global THREE) */
+const three = fs.readFileSync(path.join(root, 'vendor/three.min.js'), 'utf8');
 
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('<script src'));
@@ -30,6 +33,7 @@ const scripts =
   `(function(){var s=document.createElement('style');` +
   `s.textContent='.portrait{background-image:url("'+window.OTAG_SHEET_URI+'") !important}';` +
   `(document.body||document.documentElement).appendChild(s);})();\n</script>\n` +
+  `<script>\n${three}\n</script>\n` +
   `<script>\n${js}\n</script>`;
 
 const out = fragment

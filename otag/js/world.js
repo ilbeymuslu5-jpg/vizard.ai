@@ -143,6 +143,8 @@ const World = {
 
     this.ground = this.getGround(id);
     Cam.bounds = { x: 0, y: 0, w: this.z.w, h: this.z.h };
+    /* 3B sahne bölgeyle birlikte yeniden kurulur */
+    if (typeof R3D !== 'undefined' && R3D.ok) { R3D.clearActors(); R3D.buildZone(); }
     const s = this.z.starts[startKey] || Object.values(this.z.starts)[0];
     return { x: s.x, y: s.y };
   },

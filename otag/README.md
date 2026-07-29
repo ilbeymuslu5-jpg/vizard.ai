@@ -1,10 +1,10 @@
 # OTAĞ — Kızıl Sefer
 
 Senin gönderdiğin karakterle (mızraklı, hilal‑yıldız kalkanlı küçük otağ savaşçısı)
-yapılmış, **çalışır durumda** bir aksiyon‑macera oyunu.
+yapılmış, **çalışır durumda**, **3 boyutlu** bir aksiyon‑macera oyunu.
 
-Unreal Engine yok, Blueprint yok, C++ yok, kurulum yok.
-Tek klasör, **çift tıkla açılır**, tarayıcıda çalışır.
+Unreal Engine yok, kurulum yok. Tek klasör, **çift tıkla açılır**, tarayıcıda çalışır.
+Dünya gerçek 3B: perspektif kamera, gölge haritası, ateş ışıkları, sis ve derinlik.
 
 ---
 
@@ -27,6 +27,8 @@ Tek klasör, **çift tıkla açılır**, tarayıcıda çalışır.
 | **1–5** | Eşya kullan |
 | **I / J** | Envanter / Görev defteri |
 | **ESC** | Duraklat |
+| **Fare tekerleği** | Kamerayı yakınlaştır / uzaklaştır |
+| **Orta tuş sürükle** (veya **[** **]**) | Kamerayı çevir — yürüyüş yönü kameraya göre döner |
 
 ### Dövüşün püf noktaları
 
@@ -67,9 +69,26 @@ Tek klasör, **çift tıkla açılır**, tarayıcıda çalışır.
 | Patron dövüşü | ✔ 3 evre, 4 farklı saldırı, gölge çağırma |
 | Paketleme | Aşağıya bak ⬇ |
 
+### 3B nasıl çalışıyor
+
+Oyun mantığı 2B kaldı — çarpışma, yapay zekâ, görevler hep `(x, y)` düzleminde.
+Çizim katmanı ise tamamen 3B: `(x, y)` zemin düzlemi, yükseklik ayrı eksen.
+Böylece dövüş hissi bozulmadan dünya üç boyuta taşındı.
+
+- **`js/render3d.js`** — three.js sahnesi: kamera, ışıklar, gölge haritası, sis,
+  arazi kabartması, ufuk silueti, parçacık sistemleri.
+- **Düşmanlar, patron, ağaçlar, çadırlar, kayalar, sancaklar, sandıklar** kodla
+  üretilmiş gerçek 3B gövdeler (low‑poly, düz gölgelemeli).
+- **Karakterin kendisi** senin çizimin olduğu için 3B'de *billboard* olarak durur:
+  kameraya döner, ayak noktasından yere basar, gölgesini düşürür. Pozlar aynı
+  şekilde oyuna bağlı çalışır.
+- **Ateşler** alev + titreyen nokta ışığı + yükselen kıvılcım demeti.
+- WebGL yoksa oyun sessizce **eski 2B çizime** düşer; oynanış değişmez.
+
 **Teknik:**
 - Ses tamamen tarayıcıda üretiliyor (WebAudio) — tek bir ses dosyası bile yok.
-- Zemin dokuları, düşmanlar, ağaçlar, ateşler kodla çiziliyor.
+- Zemin dokusu kodla üretilip 3B araziye kaplanıyor.
+- Tek dış kütüphane: three.js (`vendor/three.min.js`, projeye gömülü).
 - Tek görsel dosya: senin karakter sayfan (`assets/otag_sheet.png`), 12 poz.
   Arka planı şeffaflaştırıldı ve 4×3 ızgara olarak dilimlendi.
 - Pozlar oyuna bağlı: öfke barın dolunca **alev pozu**, canın azalınca **üzgün**,
@@ -85,6 +104,7 @@ otag/
 ├─ index.html            arayüz iskeleti (menüler, HUD)
 ├─ style.css             tüm arayüz görünümü
 ├─ assets/otag_sheet.png karakter sayfası (4 sütun × 3 satır)
+├─ vendor/three.min.js   3B motoru (tek dış kütüphane)
 └─ js/
    ├─ core.js       matematik, girdi, ses, parçacıklar, kamera
    ├─ sprites.js    karakter sayfasının dilimlenmesi + çizimi
@@ -103,6 +123,8 @@ Sık istenen ayarlar:
 - **Dalga içerikleri:** `js/systems.js` → `WAVES`
 - **Yeni görev:** `js/systems.js` → `QUEST_DEFS` + `Quests.event`
 - **Yeni bölge:** `js/world.js` → `ZONES` içine yeni kayıt, sonra bir `exit` propu ekle
+- **Kamera açısı / uzaklığı:** `js/render3d.js` → `pitch`, `dist`
+- **Işık ve sis:** `js/render3d.js` → `buildZone` içindeki `sun`, `hemi`, `fog`
 
 ---
 
@@ -137,10 +159,16 @@ Bunların hepsi bu yapının üstüne eklenebilir; sistemler hazır.
 GitHub'daki linke basınca **kod** görünür, oyun açılmaz — GitHub bir oyun sunucusu değil,
 kod deposu. Oynanabilir sürüm için:
 
-- **`dist/otag.html`** — her şeyi (kod, stil, karakter görseli) içinde taşıyan tek dosya.
+- **`dist/otag.html`** — her şeyi (3B motoru, kod, stil, karakter görseli) içinde
+  taşıyan tek dosya.
   İndir, çift tıkla, oynanır. Kimseye göndermek istersen sadece bu dosyayı gönder.
 - Yeniden üretmek için: `node tools/build-single.mjs`
   (`--fragment` ile gövde-yalnız sürüm üretilir; gömülü oynatıcılar için.)
+
+> Not: çok dosyalı sürümü `file://` ile açarsan tarayıcı, PNG'yi 3B dokuya
+> almana izin vermez (güvenlik kuralı) ve karakter yedek silüetle çizilir.
+> Tam görsel için `dist/otag.html` sürümünü kullan ya da klasörü küçük bir
+> sunucudan aç (`python3 -m http.server`).
 
 ### GitHub üzerinden oynanabilir link istersen
 

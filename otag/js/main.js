@@ -17,7 +17,14 @@ const Game = {
   /* ---------------------------------------------------------- */
   init() {
     this.canvas = document.getElementById('game');
-    this.ctx = this.canvas.getContext('2d');
+    /* önce 3B denenir; WebGL yoksa eski 2B çizime düşülür */
+    this.is3d = R3D.init(this.canvas);
+    if (!this.is3d) this.ctx = this.canvas.getContext('2d');
+    this.fx2d = document.getElementById('fx2d');
+    if (this.fx2d) {
+      if (this.is3d) this.fxctx = this.fx2d.getContext('2d');
+      else this.fx2d.style.display = 'none';
+    }
 
     const st = Save.readSettings();
     if (st) Object.assign(this.settings, st);
@@ -56,12 +63,24 @@ const Game = {
     const w = innerWidth, h = innerHeight;
     this.cssW = w; this.cssH = h;
     this.dpr = Math.min(devicePixelRatio || 1, 2);
-    this.canvas.width = Math.floor(w * this.dpr);
-    this.canvas.height = Math.floor(h * this.dpr);
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
-    this.zoom = clamp(h / 780, .62, 1.5);
-    Cam.setView(w / this.zoom, h / this.zoom);
+
+    if (this.is3d) {
+      this.zoom = 1;
+      R3D.resize(w, h, this.dpr);
+      if (this.fx2d) {
+        this.fx2d.width = Math.floor(w * this.dpr);
+        this.fx2d.height = Math.floor(h * this.dpr);
+        this.fx2d.style.width = w + 'px';
+        this.fx2d.style.height = h + 'px';
+      }
+    } else {
+      this.canvas.width = Math.floor(w * this.dpr);
+      this.canvas.height = Math.floor(h * this.dpr);
+      this.zoom = clamp(h / 780, .62, 1.5);
+      Cam.setView(w / this.zoom, h / this.zoom);
+    }
     Cam.clampToBounds();
   },
 
@@ -318,6 +337,7 @@ const Game = {
     this.last = t;
     if (!isFinite(dt) || dt <= 0) dt = 1 / 60;
     dt = Math.min(dt, .05);
+    this._dt = dt;
 
     this.handleGlobalKeys();
 
@@ -391,7 +411,8 @@ const Game = {
     if (!p) return;
 
     /* fare dünya koordinatı */
-    const mw = Cam.toWorld(Input.mx / this.zoom, Input.my / this.zoom);
+    const mw = this.is3d ? R3D.groundPoint(Input.mx, Input.my)
+                         : Cam.toWorld(Input.mx / this.zoom, Input.my / this.zoom);
     Input.wx = mw.x; Input.wy = mw.y;
 
     p.update(dt);
@@ -430,8 +451,10 @@ const Game = {
     Waves.update(dt);
     this.updateWorldLight(dt);
 
-    /* kamera: oyuncu + fare arası hafif kayma; patron varsa kadraja onu da al */
-    let lx = lerp(p.x, Input.wx, .16), ly = lerp(p.y - 30, Input.wy, .16);
+    /* kamera: oyuncu + fare arası hafif kayma; patron varsa kadraja onu da al
+       (3B'de perspektif yüzünden kayma daha az tutulur, yoksa oyuncu köşeye düşer) */
+    const lead = this.is3d ? .07 : .16;
+    let lx = lerp(p.x, Input.wx, lead), ly = lerp(p.y - (this.is3d ? 10 : 30), Input.wy, lead);
     if (this.boss && !this.boss.dead) {
       lx = lerp(lx, this.boss.x, .24);
       ly = lerp(ly, this.boss.y - 110, .32);
@@ -456,6 +479,87 @@ const Game = {
 
   /* ---------------------------------------------------------- */
   render() {
+    if (this.is3d) { R3D.frame(this._dt || 1 / 60); this.overlay(); }
+    else this.render2d();
+  },
+
+  /* 3B sahnenin üstündeki 2B katman: hasar sayıları, vinyet, nişan */
+  overlay() {
+    const ctx = this.fxctx; if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.fx2d.width, this.fx2d.height);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    /* uçuşan yazılar (hasar, +ÖFKE …) dünyadan ekrana yansıtılır */
+    const pt = this._pt || (this._pt = { x: 0, y: 0, vis: false });
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const t of FX.texts) {
+      if (t.y0 === undefined) t.y0 = t.y;
+      R3D.project(t.x, 46 + (t.y0 - t.y) * .9, t.y0, pt);
+      if (!pt.vis) continue;
+      const k = 1 - t.t / t.life;
+      ctx.globalAlpha = clamp(k * 1.6, 0, 1);
+      ctx.font = `bold ${t.size}px "Trebuchet MS", sans-serif`;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.85)';
+      ctx.strokeText(t.str, pt.x, pt.y);
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.str, pt.x, pt.y);
+    }
+    ctx.globalAlpha = 1;
+
+    /* düşman can çubukları */
+    for (const e of Game.enemies) {
+      if (e.dead || e.hp >= e.maxHp) continue;
+      R3D.project(e.x, e.h + 34, e.y, pt);
+      if (!pt.vis) continue;
+      const bw = 46;
+      ctx.fillStyle = 'rgba(0,0,0,.6)';
+      ctx.fillRect(pt.x - bw / 2, pt.y, bw, 5);
+      ctx.fillStyle = e.stunT > 0 ? '#ffe9b0' : '#d8402c';
+      ctx.fillRect(pt.x - bw / 2, pt.y, bw * (e.hp / e.maxHp), 5);
+    }
+    /* sersemleme yıldızları */
+    if (this.boss && !this.boss.dead && this.boss.stunT > 0) {
+      R3D.project(this.boss.x, this.boss.h + 40, this.boss.y, pt);
+      if (pt.vis) {
+        ctx.globalAlpha = .85; ctx.fillStyle = '#ffe9b0';
+        ctx.font = 'bold 20px "Trebuchet MS", sans-serif';
+        ctx.fillText('★ ★ ★', pt.x, pt.y);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    this.screenLayer(ctx);
+  },
+
+  /* vinyet + düşük can + nişan imleci (iki çizim yolunda da ortak) */
+  screenLayer(ctx) {
+    const g = ctx.createRadialGradient(this.cssW / 2, this.cssH / 2, Math.min(this.cssW, this.cssH) * .35,
+                                       this.cssW / 2, this.cssH / 2, Math.max(this.cssW, this.cssH) * .72);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.62)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, this.cssW, this.cssH);
+
+    const p = this.player;
+    if (p && !p.dead && p.hp < p.maxHp * .3 && this.mode === 'play') {
+      const pulse = .12 + Math.sin(performance.now() / 220) * .07;
+      ctx.fillStyle = `rgba(180,20,10,${Math.max(0, pulse)})`;
+      ctx.fillRect(0, 0, this.cssW, this.cssH);
+    }
+    if (this.mode === 'play' && p && !p.dead) {
+      ctx.save();
+      ctx.translate(Input.mx, Input.my);
+      ctx.strokeStyle = 'rgba(255,210,160,.75)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-15, 0); ctx.lineTo(-5, 0); ctx.moveTo(5, 0); ctx.lineTo(15, 0);
+      ctx.moveTo(0, -15); ctx.lineTo(0, -5); ctx.moveTo(0, 5); ctx.lineTo(0, 15);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+
+  /* ---------- WebGL yoksa: eski 2B çizim ---------- */
+  render2d() {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -503,31 +607,7 @@ const Game = {
 
     /* --- ekran üstü katman --- */
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    /* vinyet */
-    const g = ctx.createRadialGradient(this.cssW / 2, this.cssH / 2, Math.min(this.cssW, this.cssH) * .35,
-                                       this.cssW / 2, this.cssH / 2, Math.max(this.cssW, this.cssH) * .72);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.62)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, this.cssW, this.cssH);
-
-    /* düşük can uyarısı */
-    const p = this.player;
-    if (p && !p.dead && p.hp < p.maxHp * .3 && this.mode === 'play') {
-      const pulse = .12 + Math.sin(performance.now() / 220) * .07;
-      ctx.fillStyle = `rgba(180,20,10,${Math.max(0, pulse)})`;
-      ctx.fillRect(0, 0, this.cssW, this.cssH);
-    }
-    /* nişan imleci */
-    if (this.mode === 'play' && p && !p.dead) {
-      ctx.save();
-      ctx.translate(Input.mx, Input.my);
-      ctx.strokeStyle = 'rgba(255,210,160,.75)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-15, 0); ctx.lineTo(-5, 0); ctx.moveTo(5, 0); ctx.lineTo(15, 0);
-      ctx.moveTo(0, -15); ctx.lineTo(0, -5); ctx.moveTo(0, 5); ctx.lineTo(0, 15);
-      ctx.stroke();
-      ctx.restore();
-    }
+    this.screenLayer(ctx);
   }
 };
 
