@@ -11,11 +11,16 @@ const fragment = process.argv.includes('--fragment');
 const sheetPath = process.env.OTAG_SHEET || path.join(root, 'assets/otag_sheet.png');
 const dataUri = 'data:image/png;base64,' + fs.readFileSync(sheetPath).toString('base64');
 
+const warriorPath = path.join(root, 'assets/warrior/otag-warrior.glb');
+const warriorUri = fs.existsSync(warriorPath)
+  ? 'data:model/gltf-binary;base64,' + fs.readFileSync(warriorPath).toString('base64')
+  : null;
+
 /* Görsel yalnızca BİR kez gömülür: CSS onu --otag-sheet değişkeninden okur,
    değişkeni de aşağıdaki betik atar. */
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
 
-const order = ['core', 'sprites', 'character3d', 'render3d', 'world', 'entities', 'systems', 'ui', 'main'];
+const order = ['core', 'sprites', 'character3d', 'warrior', 'render3d', 'world', 'entities', 'systems', 'ui', 'main'];
 const js = order.map(n => `/* ===== ${n}.js ===== */\n` +
   fs.readFileSync(path.join(root, `js/${n}.js`), 'utf8')).join('\n');
 
@@ -30,6 +35,7 @@ const head = `<title>OTAĞ — Kızıl Sefer</title>\n<style>\n${css}\n</style>`
    (Uzun data URI'ler CSS değişkenine sığmıyor, stil kuralına sığıyor.) */
 const scripts =
   `<script>\nwindow.OTAG_SHEET_URI=${JSON.stringify(dataUri)};\n` +
+  (warriorUri ? `window.OTAG_WARRIOR_URI=${JSON.stringify(warriorUri)};\n` : '') +
   `(function(){var s=document.createElement('style');` +
   `s.textContent='.portrait{background-image:url("'+window.OTAG_SHEET_URI+'") !important}';` +
   `(document.body||document.documentElement).appendChild(s);})();\n</script>\n` +

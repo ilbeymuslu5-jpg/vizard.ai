@@ -617,7 +617,7 @@ const R3D = {
       }
       case 'npc': {
         /* Dede: aynı gövde, yaşlı ahşap tonunda */
-        const ch = CharModel.build({ h: 100, elder: true });
+        const ch = (Warrior.ready ? Warrior : CharModel).build({ h: 100, elder: true });
         ch.root.position.set(p.x, 0, p.y);
         this.zoneGroup.add(ch.root);
         rec.ch = ch;
@@ -1211,7 +1211,11 @@ const R3D = {
       const pl = Game.player;
       live.add(pl);
       let o = this.actors.get(pl);
-      if (!o) { o = { kind: 'char', ch: CharModel.build({ h: pl.h }), pfx: this.makePlayerFx() }; this.actorGroup.add(o.ch.root); this.actors.set(pl, o); }
+      if (!o) {
+        const M = Warrior.ready ? Warrior : CharModel;
+        o = { kind: 'char', ch: M.build({ h: pl.h }), pfx: this.makePlayerFx() };
+        this.actorGroup.add(o.ch.root); this.actors.set(pl, o);
+      }
       this.syncPlayer(pl, o, dt);
     }
     for (const e of Game.enemies) {

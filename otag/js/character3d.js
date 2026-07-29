@@ -11,7 +11,7 @@
 'use strict';
 
 const CharModel = {
-  ready: false, tex: {}, geo: {}, mat: {},
+  ready: false, tex: {}, cv: {}, geo: {}, mat: {}, pbr: {},
 
   /* oyunun poz adları → yüz ifadesi (sayfadaki ifade seti) */
   POSE2EXPR: {
@@ -62,7 +62,7 @@ const CharModel = {
       for (const y of [h * .30, h * .66]) g.fillRect(0, y, w, 7);
       g.fillStyle = 'rgba(176,130,78,.5)';
       for (const y of [h * .30, h * .66]) g.fillRect(0, y + 1, w, 4);
-    }, { repeat: [1, 1] });
+    }, { repeat: [1, 1], name: 'planks' });
 
     this.tex.shingle = this.canvasTex(512, 512, (g, w, h) => {
       g.fillStyle = C.shingleDark; g.fillRect(0, 0, w, h);
@@ -83,7 +83,7 @@ const CharModel = {
           g.fillRect(x + 2, y + 2, cw - 4, 2.5);
         }
       }
-    }, { repeat: [3, 3] });
+    }, { repeat: [3, 3], name: 'shingle' });
 
     this.tex.wood = this.canvasTex(256, 256, (g, w, h) => {
       g.fillStyle = C.wood; g.fillRect(0, 0, w, h);
@@ -96,7 +96,7 @@ const CharModel = {
         g.stroke();
       }
       g.fillStyle = 'rgba(255,230,190,.12)'; g.fillRect(0, 0, w, 6);
-    }, { repeat: [1, 3] });
+    }, { repeat: [1, 3], name: 'wood' });
 
     this.tex.shield = this.canvasTex(256, 256, (g, w, h) => {
       const c = w / 2;
@@ -126,7 +126,7 @@ const CharModel = {
         i ? g.lineTo(px, py) : g.moveTo(px, py);
       }
       g.closePath(); g.fill();
-    });
+    }, { name: 'shield' });
 
     /* yüz ifadeleri: 4x2 atlas, saydam zemin */
     this.tex.faces = this.canvasTex(1024, 256, (g, w, h) => {
@@ -158,17 +158,26 @@ const CharModel = {
 
     /* --- geometriler --- */
     const G = this.geo;
-    G.egg = new THREE.LatheGeometry(this.eggProfile(), 22);
-    G.roof = new THREE.LatheGeometry(this.roofProfile(), 18);
+    G.egg = new THREE.LatheGeometry(this.eggProfile(), 40);
+    G.roof = new THREE.LatheGeometry(this.roofProfile(), 32);
     G.cyl = new THREE.CylinderGeometry(1, 1, 1, 12); G.cyl.translate(0, .5, 0);
     G.cylC = new THREE.CylinderGeometry(1, 1, 1, 12);
     G.cone = new THREE.ConeGeometry(1, 1, 10); G.cone.translate(0, .5, 0);
-    G.sph = new THREE.SphereGeometry(1, 14, 10);
+    G.sph = new THREE.SphereGeometry(1, 12, 8);
     G.box = new THREE.BoxGeometry(1, 1, 1);
-    G.disc = new THREE.CylinderGeometry(1, 1, 1, 32);
+    G.disc = new THREE.CylinderGeometry(1, 1, 1, 36);
     G.plane = new THREE.PlaneGeometry(1, 1);
     G.tip = new THREE.LatheGeometry(this.tipProfile(), 8);
     for (const k in G) G[k].userData.shared = true;
+
+    /* PBR: normal / pürüzlülük / AO haritaları taban renkten türetilir */
+    for (const n of ['planks', 'shingle', 'wood', 'shield']) {
+      this.pbr[n] = {
+        normal: this.derived(n, 'normal', { strength: n === 'shingle' ? 3.4 : 2.6 }),
+        rough: this.derived(n, 'rough', { base: n === 'shield' ? .62 : .88, range: .3 }),
+        ao: this.derived(n, 'ao', { amount: n === 'shield' ? .5 : .8 })
+      };
+    }
 
     this.ready = true;
   },
@@ -293,6 +302,56 @@ const CharModel = {
     t.colorSpace = THREE.SRGBColorSpace;
     if (opt.repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(opt.repeat[0], opt.repeat[1]); }
     t.anisotropy = 4;
+    t.userData.src = cv;
+    if (opt.name) this.cv[opt.name] = { cv, repeat: opt.repeat };
+    return t;
+  },
+
+  /* ---------- PBR yardımcı haritaları ----------
+     Taban renk tuvalinin parlaklığı yükseklik kabul edilir; normal haritası
+     Sobel ile, pürüzlülük ve AO da aynı parlaklıktan türetilir. */
+  derived(name, kind, opt = {}) {
+    const src = this.cv[name]; if (!src) return null;
+    const w = src.cv.width, h = src.cv.height;
+    const sd = src.cv.getContext('2d').getImageData(0, 0, w, h).data;
+    const lum = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++)
+      lum[i] = (sd[i * 4] * .299 + sd[i * 4 + 1] * .587 + sd[i * 4 + 2] * .114) / 255;
+
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const g = out.getContext('2d');
+    const img = g.createImageData(w, h), d = img.data;
+    const at = (x, y) => lum[((y + h) % h) * w + ((x + w) % w)];
+    const strength = opt.strength === undefined ? 2.6 : opt.strength;
+
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4, l = lum[y * w + x];
+      if (kind === 'normal') {
+        const dx = (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1)) -
+                   (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1));
+        const dy = (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1)) -
+                   (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1));
+        let nx = dx * strength, ny = dy * strength, nz = 1;
+        const len = Math.hypot(nx, ny, nz);
+        d[i] = (nx / len * .5 + .5) * 255;
+        d[i + 1] = (ny / len * .5 + .5) * 255;
+        d[i + 2] = (nz / len * .5 + .5) * 255;
+      } else if (kind === 'rough') {
+        const v = clamp((opt.base === undefined ? .86 : opt.base) - (l - .5) * (opt.range || .35), 0, 1);
+        d[i] = d[i + 1] = d[i + 2] = v * 255;
+      } else {                                   // 'ao'
+        const v = clamp(1 - (1 - l) * (opt.amount || .75), 0, 1);
+        d[i] = d[i + 1] = d[i + 2] = v * 255;
+      }
+      d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(out);
+    t.colorSpace = THREE.NoColorSpace;           // veri haritası, renk değil
+    if (src.repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(src.repeat[0], src.repeat[1]); }
+    t.anisotropy = 4;
+    t.channel = 0;                               // AO da birinci UV setini kullansın
     return t;
   },
   shade(hex, k) {
@@ -300,6 +359,19 @@ const CharModel = {
     return `rgb(${(c.r * 255) | 0},${(c.g * 255) | 0},${(c.b * 255) | 0})`;
   },
   std(o) { return new THREE.MeshStandardMaterial(Object.assign({ roughness: .82, metalness: .03 }, o)); },
+
+  /* taban renk + türetilmiş normal/pürüzlülük/AO ile tam PBR malzeme */
+  pbrMat(name, o = {}) {
+    const s2 = this.pbr[name] || {};
+    const m = new THREE.MeshStandardMaterial({
+      map: this.tex[name], normalMap: s2.normal, roughnessMap: s2.rough, aoMap: s2.ao,
+      color: o.color || new THREE.Color(1, 1, 1),
+      roughness: 1, metalness: o.metalness === undefined ? .03 : o.metalness,
+      aoMapIntensity: .85
+    });
+    if (s2.normal) m.normalScale = new THREE.Vector2(o.nScale || 1, o.nScale || 1);
+    return m;
+  },
 
   /* ============================================================
      GÖVDE KURULUMU
@@ -313,14 +385,14 @@ const CharModel = {
 
     const M = {
       /* renkler 1'in üstünde: karanlık bölgelerde karakter siluete gömülmesin */
-      body: this.std({ map: this.tex.planks, color: tint.clone().multiplyScalar(1.28), roughness: .9 }),
-      roof: this.std({ map: this.tex.shingle, color: tint.clone().multiplyScalar(1.22), roughness: .88 }),
-      wood: this.std({ map: this.tex.wood, color: tint.clone().multiplyScalar(1.2), roughness: .8 }),
+      body: this.pbrMat('planks', { color: tint.clone().multiplyScalar(1.28), nScale: 1.1 }),
+      roof: this.pbrMat('shingle', { color: tint.clone().multiplyScalar(1.22), nScale: 1.35 }),
+      wood: this.pbrMat('wood', { color: tint.clone().multiplyScalar(1.2), nScale: .7 }),
       dark: this.std({ color: new THREE.Color('#241611'), roughness: 1 }),
       steel: this.std({ color: new THREE.Color(C.steel), roughness: .35, metalness: .85 }),
       steelD: this.std({ color: new THREE.Color(C.steelDark), roughness: .5, metalness: .7 }),
       cloth: this.std({ color: new THREE.Color(C.cloth), roughness: .95, side: THREE.DoubleSide }),
-      shield: this.std({ map: this.tex.shield, color: new THREE.Color(1.2, 1.2, 1.2), roughness: .7 }),
+      shield: this.pbrMat('shield', { color: new THREE.Color(1.2, 1.2, 1.2), nScale: .8, metalness: .15 }),
       star: this.std({ color: new THREE.Color('#d8402c'), roughness: .6, emissive: new THREE.Color('#3a0a05') })
     };
     const faceMat = new THREE.MeshStandardMaterial({
@@ -330,12 +402,14 @@ const CharModel = {
     });
     faceMat.emissiveMap = faceMat.map;
     faceMat.map.needsUpdate = true;
-    faceMat.map.userData.perInstance = true;
+    faceMat.name = 'Face_Expressions'; faceMat.map.userData.perInstance = true;
     faceMat.map.repeat.set(.25, .5);
     faceMat.map.offset.set(0, .5);
 
     const root = new THREE.Group();
+    root.name = 'OtagWarrior';
     const body = new THREE.Group();       // eğilme / zıplama burada
+    body.name = 'Body';
     root.add(body);
 
     const put = (geo, mat, pos, scale, rot, shadow = true) => {
@@ -358,11 +432,12 @@ const CharModel = {
 
     /* ---- çatı: gövdenin tepesine oturan kiremitli külah ---- */
     const roofG = new THREE.Group();
+    roofG.name = 'Roof';
     roofG.position.y = 38 * S;
     body.add(roofG);
     roofG.add(put(G.roof, M.roof, [0, 0, 0], [1, 1, 1]));
     /* saçak: ince ahşap kuşak */
-    roofG.add(put(new THREE.CylinderGeometry(26.8, 28.2, 4, 20), M.wood, [0, 0, 0], [1, 1, 1]));
+    roofG.add(put(new THREE.CylinderGeometry(26.8, 28.2, 4, 28), M.wood, [0, 0, 0], [1, 1, 1]));
     /* iki ön eğik kiriş — referanstaki ahşap iskelet */
     for (const sx of [-1, 1]) {
       const bm = put(G.box, M.wood, [sx * 9, 20, 13], [3, 42, 2.8]);
@@ -390,6 +465,7 @@ const CharModel = {
     /* ---- yüz penceresi: gövde eğrisini izleyen kavisli panel ---- */
     const FY = 25, FR = this.eggR(FY), HALF = .56;
     const faceG = new THREE.Group();
+    faceG.name = 'Face';
     faceG.position.set(0, FY * S, 0);
     body.add(faceG);
     /* karanlık oyuk */
@@ -421,6 +497,7 @@ const CharModel = {
     const feet = [];
     for (const sx of [-1, 1]) {
       const f = new THREE.Group();
+      f.name = sx < 0 ? 'FootL' : 'FootR';
       f.position.set(sx * 11.5 * S, 0, 13 * S);
       body.add(f);
       f.add(put(G.sph, M.wood, [0, 4.5, 0], [9, 5.2, 11.5]));
@@ -431,6 +508,7 @@ const CharModel = {
     /* ---- kollar: kısa güdükler, eller gövdeye yakın ---- */
     const mkArm = sx => {
       const g2 = new THREE.Group();
+      g2.name = sx < 0 ? 'ArmL' : 'ArmR';
       g2.position.set(sx * this.eggR(28) * .8 * S, 28 * S, 8 * S);
       body.add(g2);
       g2.add(put(G.cyl, M.wood, [0, 0, 0], [3, 11, 3], [0, 0, sx * -1.25]));
@@ -442,11 +520,12 @@ const CharModel = {
 
     /* ---- kalkan (sol kol) ---- */
     const shieldG = new THREE.Group();
+    shieldG.name = 'Shield';
     shieldG.position.set(-7 * S, -4 * S, 15 * S);
     armL.g.add(shieldG);
     shieldG.rotation.set(Math.PI / 2, 0, 0);
     shieldG.add(put(G.disc, M.shield, [0, 0, 0], [18.5, 2.4, 18.5]));
-    shieldG.add(put(new THREE.TorusGeometry(18.5, 1.8, 7, 28), M.steelD, [0, 1, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    shieldG.add(put(new THREE.TorusGeometry(18.5, 1.8, 8, 34), M.steelD, [0, 1, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
     for (let i = 0; i < 12; i++) {
       const ang = i / 12 * TAU;
       shieldG.add(put(G.sph, M.steel, [Math.cos(ang) * 17, 1.5, Math.sin(ang) * 17], [1.2, 1.2, 1.2], null, false));
@@ -455,6 +534,7 @@ const CharModel = {
 
     /* ---- mızrak (sağ kol) ---- */
     const spearG = new THREE.Group();
+    spearG.name = 'Spear';
     spearG.position.set(11 * S, -26 * S, 4 * S);
     armR.g.add(spearG);
     spearG.add(put(G.cyl, M.wood, [0, 0, 0], [1.9, 92, 1.9]));
@@ -463,6 +543,7 @@ const CharModel = {
     /* kızıl sargı + püskül */
     spearG.add(put(new THREE.TorusGeometry(2.3, 1.2, 6, 12), M.cloth, [0, 60, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
     const ribbon = new THREE.Group();
+    ribbon.name = 'Ribbon';
     ribbon.position.set(0, 60 * S, 0);
     spearG.add(ribbon);
     for (let i = 0; i < 3; i++)
@@ -537,13 +618,13 @@ const CharModel = {
       aR = -.6; aL = .4;
     } else switch (st) {
       case 'run': {
-        inst.walkT += dt * 13;
-        const w = inst.walkT;
-        lift = Math.abs(Math.sin(w)) * 5.5;
-        tilt = Math.sin(w) * .13;
-        pitch = .16;
+        inst.walkT += dt * 13 * (s.gait === undefined ? 1 : s.gait);
+        const w = inst.walkT, amp = s.gait === undefined ? 1 : clamp(s.gait, .5, 1);
+        lift = Math.abs(Math.sin(w)) * 5.5 * amp;
+        tilt = Math.sin(w) * .13 * amp;
+        pitch = .16 * amp;
         squashY = 1 - Math.abs(Math.sin(w * 2)) * .05;
-        stepL = Math.sin(w) * 7; stepR = -Math.sin(w) * 7;
+        stepL = Math.sin(w) * 7 * amp; stepR = -Math.sin(w) * 7 * amp;
         aR = Math.sin(w) * .3 - .1; aL = -Math.sin(w) * .25;
         break;
       }

@@ -79,24 +79,52 @@ Böylece dövüş hissi bozulmadan dünya üç boyuta taşındı.
   arazi kabartması, ufuk silueti, parçacık sistemleri.
 - **Düşmanlar, patron, ağaçlar, çadırlar, kayalar, sancaklar, sandıklar** kodla
   üretilmiş gerçek 3B gövdeler (low‑poly, düz gölgelemeli).
-- **Karakter de 3B model** (`js/character3d.js`): gönderdiğin tasarım levhasına
-  bakılarak koddan kuruldu — ahşap yumurta gövde (dikey tahtalar, kuşaklar),
-  kiremitli külah çatı, hilal‑yıldız tepelik, kavisli yüz penceresi, hilalli
-  kalkan, kızıl sargılı mızrak ve üç parmaklı ahşap ayaklar.
-  **7 yüz ifadesi** (nötr, mutlu, kızgın, şaşkın, üzgün, âşık, uykulu + ölüm için
-  ✕‑göz) doku atlasından seçilir; arada göz kırpar.
-  **8 animasyon** koddan sürülür: bekleme, yürüme/koşma (paytak sallanma),
-  saldırı (geri yaslan → mızrak hamlesi), girdap, kalkan bloğu, darbe, ölüm
-  (devrilir, üstünden küçük hayalet yükselir).
-- Dede de aynı gövde, yaşlı ahşap tonunda; yaklaşınca sana döner.
+- **Karakter, senin gönderdiğin gerçek 3B taramadan** (`assets/warrior/otag-warrior.glb`,
+  bkz. "Karakter modeli nereden geliyor" ⬇): ahşap gövde, kiremitli çatı,
+  hilal‑yıldız tepelik, hilalli kalkan, kızıl sargılı mızrak — hepsi taranmış
+  dokusuyla birlikte. Tek parça bir model olduğu için animasyon gövde bütünü
+  üzerinde çalışıyor: bekleme, koşma, saldırı (geri yaslan → mızrak hamlesi),
+  girdap, kalkan bloğu, darbe, ölüm (devrilir, üstünden hayalet yükselir).
+  `js/warrior.js` bu hareketleri sürüyor.
+- Dede de aynı model, gri‑ahşap tonunda; yaklaşınca sana döner.
+- WebGL var ama model yüklenemezse (ya da hiç WebGL yoksa), oyun otomatik
+  olarak **eski prosedürel gövdeye** düşer (`js/character3d.js` — ahşap yumurta
+  + 7 yüz ifadesi + kol/kalkan/mızrak ayrı ayrı animasyonlu, tamamen kodla
+  üretilmiş yedek model). Oynanış hiçbir durumda bozulmaz.
 - **Ateşler** alev + titreyen nokta ışığı + yükselen kıvılcım demeti.
 - WebGL yoksa oyun sessizce **eski 2B çizime** düşer; oynanış değişmez.
 
 **Teknik:**
 - Ses tamamen tarayıcıda üretiliyor (WebAudio) — tek bir ses dosyası bile yok.
 - Zemin dokusu kodla üretilip 3B araziye kaplanıyor.
-- Tek dış kütüphane: three.js (`vendor/three.min.js`, projeye gömülü).
-- Karakterin bütün dokuları (tahta, kiremit, kalkan, yüzler) tuvalde üretiliyor.
+- Tek dış kütüphane: three.js (`vendor/three.min.js`, projeye gömülü, `GLTFLoader` dahil).
+- Yedek prosedürel karakterin bütün dokuları (tahta, kiremit, kalkan, yüzler) tuvalde üretiliyor.
+
+### Karakter modeli nereden geliyor
+
+Gönderdiğin `.glb` bir "image‑to‑3D" taraması — 1 milyon üçgen, tek parça,
+KTX2 sıkıştırmalı dokular. Oyun içinde doğrudan kullanılamayacak kadar ağırdı,
+o yüzden bir kerelik bir indirgeme hattından geçirildi:
+
+1. **`tools/finalize-warrior.mjs`** taramayı açar (tarayıcıda, KTX2 + meshopt
+   çözerek), dokuları GPU'dan okuyup düz JPEG'e çevirir, üçgen sayısını
+   [meshoptimizer](https://github.com/zeux/meshoptimizer)'ın hızlı basitleştiricisiyle
+   ~8.300 üçgene indirir (spec'teki "7.842 tri" hedefine çok yakın — göz,
+   kalkan, hiçbir ayrıntı kaybolmadan), ayağı yere oturtur, boyu 1 birime
+   ölçekler ve tek bir `otag-warrior.glb` (0,7 MB) olarak dışa aktarır.
+2. Sonuç dosya düz `THREE.GLTFLoader` ile açılır — KTX2/meshopt/Draco gibi ek
+   çözücü gerektirmez, oyunun kendisi hiçbir ek kütüphane taşımaz.
+
+Kaynak tarama (`assets/warrior/source.glb`, 15 MB) depoya dahil edilmedi
+(`.gitignore`) — sadece indirgenmiş sonuç kullanılır. Farklı bir oranla
+yeniden üretmek istersen kaynağı `assets/warrior/source.glb`'ye koyup
+tekrar çalıştır:
+
+```bash
+npm i three esbuild playwright meshoptimizer
+node tools/build-single.mjs                 # dist/otag.html (GLTFExporter bunu okur)
+WARRIOR_RATIO=0.012 node tools/finalize-warrior.mjs   # daha yüksek detay isterse
+```
 - `assets/otag_sheet.png` artık yalnızca arayüz portresinde ve WebGL'siz
   yedek 2B çizimde kullanılıyor.
 - İfadeler oyuna bağlı: öfke barın dolunca **kızgın**, canın azalınca **üzgün**,
@@ -110,11 +138,15 @@ Böylece dövüş hissi bozulmadan dünya üç boyuta taşındı.
 otag/
 ├─ index.html            arayüz iskeleti (menüler, HUD)
 ├─ style.css             tüm arayüz görünümü
-├─ assets/otag_sheet.png karakter sayfası (4 sütun × 3 satır)
-├─ vendor/three.min.js   3B motoru (tek dış kütüphane)
+├─ assets/otag_sheet.png karakter sayfası (4 sütun × 3 satır, portre + yedek 2B)
+├─ assets/warrior/otag-warrior.glb   asıl 3B karakter modeli (indirgenmiş tarama)
+├─ vendor/three.min.js   3B motoru + GLTFLoader (tek dış kütüphane)
 └─ js/
    ├─ core.js       matematik, girdi, ses, parçacıklar, kamera
-   ├─ sprites.js    karakter sayfasının dilimlenmesi + çizimi
+   ├─ sprites.js    karakter sayfasının dilimlenmesi + çizimi (portre/yedek)
+   ├─ warrior.js    asıl 3B model: yükleme + katı gövde animasyonu
+   ├─ character3d.js prosedürel yedek model (WebGL var ama model yüklenemezse)
+   ├─ render3d.js   3B çizim: sahne, kamera, ışık, gövdeler, efektler
    ├─ world.js      BÖLGELER burada (ZONES). Harita, engel, sandık, kapı ekle
    ├─ entities.js   oyuncu, düşman türleri (ENEMY_TYPES), patron, mermiler
    ├─ systems.js    eşyalar (ITEMS), görevler (QUEST_DEFS), dalgalar (WAVES), kayıt
@@ -131,8 +163,9 @@ Sık istenen ayarlar:
 - **Yeni görev:** `js/systems.js` → `QUEST_DEFS` + `Quests.event`
 - **Yeni bölge:** `js/world.js` → `ZONES` içine yeni kayıt, sonra bir `exit` propu ekle
 - **Kamera açısı / uzaklığı:** `js/render3d.js` → `pitch`, `dist`
-- **Karakterin biçimi:** `js/character3d.js` → `EGG` (gövde profili), `roofProfile`
-- **Yüz ifadeleri:** `js/character3d.js` → `drawFace`
+- **Karakterin animasyonları:** `js/warrior.js` → `update()` içindeki `switch(st)`
+- **Karakter modelini yeniden üret:** `tools/finalize-warrior.mjs` (bkz. yukarı)
+- **Yedek prosedürel modelin biçimi/ifadeleri:** `js/character3d.js` → `EGG`, `drawFace`
 - **Işık ve sis:** `js/render3d.js` → `buildZone` içindeki `sun`, `hemi`, `fog`
 
 ---

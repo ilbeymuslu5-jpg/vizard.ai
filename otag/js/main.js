@@ -45,10 +45,16 @@ const Game = {
     addEventListener('keydown', unlock, { once: true });
 
     Sprites.load(() => {
-      UI.open('menu');
-      this.mode = 'menu';
-      this.menuScene();
-      requestAnimationFrame(t => { this.last = t; this.loop(t); });
+      const start = () => {
+        UI.open('menu');
+        this.mode = 'menu';
+        this.menuScene();
+        requestAnimationFrame(t => { this.last = t; this.loop(t); });
+      };
+      /* 3B karakter modeli yalnızca WebGL varken yüklenir; başarısız olursa
+         prosedürel gövdeye düşülür (bkz. render3d.js) */
+      if (this.is3d && typeof Warrior !== 'undefined') Warrior.load(start);
+      else start();
     });
   },
 
