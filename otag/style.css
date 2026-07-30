@@ -150,6 +150,17 @@ canvas#fx2d{position:absolute;inset:0;pointer-events:none;z-index:2}
 @keyframes scrIn{from{opacity:0}to{opacity:1}}
 
 .menu-hero{display:flex;align-items:center;gap:34px}
+/* ana menüdeki kahraman görseli: gönderilen taramadan üretilmiş gerçek
+   render (bkz. tools/bake-portrait.mjs) — sprite sayfasından değil */
+.menu-hero .portrait.big{
+  width:216px;height:288px;background-image:none !important;
+  filter:drop-shadow(0 10px 26px rgba(0,0,0,.65)) drop-shadow(0 0 30px rgba(220,60,30,.25));
+}
+.menu-hero .portrait.big::before{
+  content:"";display:block;width:100%;height:100%;
+  background-image:var(--otag-portrait, url("assets/warrior/portrait.png"));
+  background-size:contain;background-position:bottom center;background-repeat:no-repeat;
+}
 .titles h1{
   font-size:78px;letter-spacing:20px;line-height:.95;color:#f2d9a8;
   text-shadow:0 0 30px rgba(220,70,40,.45),0 6px 0 #3a1512;

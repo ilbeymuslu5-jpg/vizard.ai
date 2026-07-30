@@ -125,10 +125,27 @@ npm i three esbuild playwright meshoptimizer
 node tools/build-single.mjs                 # dist/otag.html (GLTFExporter bunu okur)
 WARRIOR_RATIO=0.012 node tools/finalize-warrior.mjs   # daha yüksek detay isterse
 ```
-- `assets/otag_sheet.png` artık yalnızca arayüz portresinde ve WebGL'siz
-  yedek 2B çizimde kullanılıyor.
-- İfadeler oyuna bağlı: öfke barın dolunca **kızgın**, canın azalınca **üzgün**,
-  şaşırınca **şaşkın**, ölünce **✕ göz**, 12 saniye kıpırdamazsan **uykulu**.
+
+`assets/otag_sheet.png` artık yalnızca HUD'daki küçük ifade ikonunda (canlı,
+duruma göre değişen portre — bu gerçek modelden üretilemez, çünkü model tek
+bir sabit yüzle taranmış) ve WebGL'siz yedek 2B çizimde kullanılıyor.
+
+### Ana menüdeki kahraman görseli
+
+Menünün büyük portresi de gerçek modelden: `tools/bake-portrait.mjs`,
+`otag-warrior.glb`'yi iyi ışıklandırılmış bir sahneye koyup tam boy, şeffaf
+arka planlı bir `assets/warrior/portrait.png` (432×576) üretir. Model veya
+ışık değişirse yeniden üretmek için:
+
+```bash
+node tools/build-single.mjs
+node tools/bake-portrait.mjs
+```
+
+(Küçük ipucu: ilk sürümde menü hâlâ eski sprite'ı gösteriyordu ve oyun içi
+kamera da fazla uzak/dikti — karakter oyunda küçük, karanlık bir leke gibi
+görünüyordu. Kamera artık daha yakın ve daha az tepeden bakıyor
+(`R3D.pitch`/`dist` varsayılanları), menü de gerçek render'ı kullanıyor.)
 
 ---
 
@@ -140,6 +157,7 @@ otag/
 ├─ style.css             tüm arayüz görünümü
 ├─ assets/otag_sheet.png karakter sayfası (4 sütun × 3 satır, portre + yedek 2B)
 ├─ assets/warrior/otag-warrior.glb   asıl 3B karakter modeli (indirgenmiş tarama)
+├─ assets/warrior/portrait.png       ana menü kahraman görseli (aynı modelden render)
 ├─ vendor/three.min.js   3B motoru + GLTFLoader (tek dış kütüphane)
 └─ js/
    ├─ core.js       matematik, girdi, ses, parçacıklar, kamera

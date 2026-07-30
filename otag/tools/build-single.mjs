@@ -16,6 +16,11 @@ const warriorUri = fs.existsSync(warriorPath)
   ? 'data:model/gltf-binary;base64,' + fs.readFileSync(warriorPath).toString('base64')
   : null;
 
+const portraitPath = path.join(root, 'assets/warrior/portrait.png');
+const portraitUri = fs.existsSync(portraitPath)
+  ? 'data:image/png;base64,' + fs.readFileSync(portraitPath).toString('base64')
+  : null;
+
 /* Görsel yalnızca BİR kez gömülür: CSS onu --otag-sheet değişkeninden okur,
    değişkeni de aşağıdaki betik atar. */
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
@@ -36,8 +41,10 @@ const head = `<title>OTAĞ — Kızıl Sefer</title>\n<style>\n${css}\n</style>`
 const scripts =
   `<script>\nwindow.OTAG_SHEET_URI=${JSON.stringify(dataUri)};\n` +
   (warriorUri ? `window.OTAG_WARRIOR_URI=${JSON.stringify(warriorUri)};\n` : '') +
+  (portraitUri ? `window.OTAG_PORTRAIT_URI=${JSON.stringify(portraitUri)};\n` : '') +
   `(function(){var s=document.createElement('style');` +
-  `s.textContent='.portrait{background-image:url("'+window.OTAG_SHEET_URI+'") !important}';` +
+  `s.textContent='.portrait{background-image:url("'+window.OTAG_SHEET_URI+'") !important}' +` +
+  `(window.OTAG_PORTRAIT_URI?'.menu-hero .portrait.big::before{background-image:url("'+window.OTAG_PORTRAIT_URI+'") !important}':'');` +
   `(document.body||document.documentElement).appendChild(s);})();\n</script>\n` +
   `<script>\n${three}\n</script>\n` +
   `<script>\n${js}\n</script>`;

@@ -15,7 +15,7 @@ const R3D = {
   W: 1, H: 1, dpr: 1,
 
   /* kamera */
-  camYaw: 0, yawT: 0, pitch: .82, dist: 640, distT: 640,
+  camYaw: 0, yawT: 0, pitch: .56, dist: 520, distT: 520,
   camPos: null, camAim: null,
 
   /* havuzlar */
