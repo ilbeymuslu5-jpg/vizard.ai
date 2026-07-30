@@ -53,9 +53,22 @@ const Game = {
       };
       /* 3B karakter modeli yalnızca WebGL varken yüklenir; başarısız olursa
          prosedürel gövdeye düşülür (bkz. render3d.js) */
-      if (this.is3d && typeof Warrior !== 'undefined') Warrior.load(start);
-      else start();
+      if (this.is3d && typeof Warrior !== 'undefined') {
+        Warrior.load(() => { this.showModelBadge(); start(); });
+      } else { this.showModelBadge(); start(); }
     });
+  },
+
+  /* hangi karakter yolunun aktif olduğunu köşede küçük bir etiketle gösterir —
+     "modeli koydum ama değişmemiş" gibi durumlarda tarayıcının sessizce
+     yedeğe düştüğünü (ya da hiç WebGL olmadığını) doğrudan görmek için */
+  showModelBadge() {
+    const el = document.getElementById('modelBadge');
+    if (!el) return;
+    if (!this.is3d) { el.textContent = 'model: 2B yedek çizim (WebGL yok)'; el.className = 'flat'; }
+    else if (typeof Warrior !== 'undefined' && Warrior.ready) { el.textContent = 'model: gerçek tarama (Warrior)'; el.className = 'ok'; }
+    else { el.textContent = 'model: prosedürel yedek (CharModel) — Warrior yüklenemedi'; el.className = 'fallback'; }
+    console.info('[OTAĞ] ' + el.textContent + (Warrior && Warrior.failReason ? ' — ' + Warrior.failReason : ''));
   },
 
   applyDifficulty() {

@@ -12,6 +12,17 @@ body{
 #app{position:fixed;inset:0;display:grid;place-items:center;background:#08070a}
 canvas#game{display:block;image-rendering:auto;background:#0a0910}
 canvas#fx2d{position:absolute;inset:0;pointer-events:none;z-index:2}
+/* hangi karakter modelinin yüklendiğini gösteren küçük teşhis etiketi —
+   "karakter değişmemiş" izlenimi verirse burada hangi yolun çalıştığı görülür */
+#modelBadge{
+  position:absolute;left:8px;bottom:8px;z-index:8;
+  font-family:monospace;font-size:11px;letter-spacing:.5px;
+  padding:4px 9px;border-radius:4px;pointer-events:none;
+  background:rgba(10,7,9,.72);border:1px solid rgba(255,255,255,.12);color:#9b8878;
+}
+#modelBadge.ok{color:#8ce87f;border-color:rgba(140,232,127,.35)}
+#modelBadge.fallback{color:#ffcf7d;border-color:rgba(255,207,125,.35)}
+#modelBadge.flat{color:#ff8a6e;border-color:rgba(255,138,110,.35)}
 #hud{z-index:5}
 #overlay{z-index:6}
 #fade{z-index:7}

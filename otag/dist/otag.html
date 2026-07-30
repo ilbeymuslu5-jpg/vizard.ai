@@ -19,6 +19,17 @@ body{
 #app{position:fixed;inset:0;display:grid;place-items:center;background:#08070a}
 canvas#game{display:block;image-rendering:auto;background:#0a0910}
 canvas#fx2d{position:absolute;inset:0;pointer-events:none;z-index:2}
+/* hangi karakter modelinin yüklendiğini gösteren küçük teşhis etiketi —
+   "karakter değişmemiş" izlenimi verirse burada hangi yolun çalıştığı görülür */
+#modelBadge{
+  position:absolute;left:8px;bottom:8px;z-index:8;
+  font-family:monospace;font-size:11px;letter-spacing:.5px;
+  padding:4px 9px;border-radius:4px;pointer-events:none;
+  background:rgba(10,7,9,.72);border:1px solid rgba(255,255,255,.12);color:#9b8878;
+}
+#modelBadge.ok{color:#8ce87f;border-color:rgba(140,232,127,.35)}
+#modelBadge.fallback{color:#ffcf7d;border-color:rgba(255,207,125,.35)}
+#modelBadge.flat{color:#ff8a6e;border-color:rgba(255,138,110,.35)}
 #hud{z-index:5}
 #overlay{z-index:6}
 #fade{z-index:7}
@@ -258,6 +269,7 @@ nav.menu button:disabled{opacity:.35;cursor:default}
 <div id="app">
   <canvas id="game"></canvas>
   <canvas id="fx2d"></canvas>
+  <div id="modelBadge"></div>
 
   <!-- ============ HUD ============ -->
   <div id="hud" class="hidden">
@@ -5826,16 +5838,20 @@ const CharModel = {
 'use strict';
 
 const Warrior = {
-  ready: false, failed: false, geo: null, baseMat: null,
+  ready: false, failed: false, failReason: null, geo: null, baseMat: null,
 
   load(cb) {
-    if (!window.THREE || !THREE.GLTFLoader) { this.failed = true; cb && cb(); return; }
+    if (!window.THREE || !THREE.GLTFLoader) {
+      this.failed = true; this.failReason = 'THREE.GLTFLoader yok (vendor/three.min.js eski?)';
+      cb && cb(); return;
+    }
     const loader = new THREE.GLTFLoader();
     const uri = window.OTAG_WARRIOR_URI || 'assets/warrior/otag-warrior.glb';
+    if (!window.OTAG_WARRIOR_URI) console.info('[OTAĞ] OTAG_WARRIOR_URI gömülü değil, dosyadan fetch deneniyor:', uri);
     const done = gltf => {
       let mesh = null;
       gltf.scene.traverse(o => { if (o.isMesh) mesh = o; });
-      if (!mesh) { this.failed = true; cb && cb(); return; }
+      if (!mesh) { this.failed = true; this.failReason = 'GLB içinde mesh bulunamadı'; cb && cb(); return; }
       this.geo = mesh.geometry;
       this.geo.computeBoundingSphere();
       this.baseMat = mesh.material;
@@ -5843,7 +5859,11 @@ const Warrior = {
       this.ready = true;
       cb && cb();
     };
-    const fail = e => { console.warn('Otağ modeli yüklenemedi, prosedürel modele dönülüyor:', e); this.failed = true; cb && cb(); };
+    const fail = e => {
+      this.failReason = (e && (e.message || e.type)) || String(e);
+      console.warn('Otağ modeli yüklenemedi, prosedürel modele dönülüyor:', e);
+      this.failed = true; cb && cb();
+    };
     if (uri.startsWith('data:')) {
       const bin = atob(uri.split(',')[1]);
       const arr = new Uint8Array(bin.length);
@@ -9509,9 +9529,22 @@ const Game = {
       };
       /* 3B karakter modeli yalnızca WebGL varken yüklenir; başarısız olursa
          prosedürel gövdeye düşülür (bkz. render3d.js) */
-      if (this.is3d && typeof Warrior !== 'undefined') Warrior.load(start);
-      else start();
+      if (this.is3d && typeof Warrior !== 'undefined') {
+        Warrior.load(() => { this.showModelBadge(); start(); });
+      } else { this.showModelBadge(); start(); }
     });
+  },
+
+  /* hangi karakter yolunun aktif olduğunu köşede küçük bir etiketle gösterir —
+     "modeli koydum ama değişmemiş" gibi durumlarda tarayıcının sessizce
+     yedeğe düştüğünü (ya da hiç WebGL olmadığını) doğrudan görmek için */
+  showModelBadge() {
+    const el = document.getElementById('modelBadge');
+    if (!el) return;
+    if (!this.is3d) { el.textContent = 'model: 2B yedek çizim (WebGL yok)'; el.className = 'flat'; }
+    else if (typeof Warrior !== 'undefined' && Warrior.ready) { el.textContent = 'model: gerçek tarama (Warrior)'; el.className = 'ok'; }
+    else { el.textContent = 'model: prosedürel yedek (CharModel) — Warrior yüklenemedi'; el.className = 'fallback'; }
+    console.info('[OTAĞ] ' + el.textContent + (Warrior && Warrior.failReason ? ' — ' + Warrior.failReason : ''));
   },
 
   applyDifficulty() {

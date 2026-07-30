@@ -17,16 +17,20 @@
 'use strict';
 
 const Warrior = {
-  ready: false, failed: false, geo: null, baseMat: null,
+  ready: false, failed: false, failReason: null, geo: null, baseMat: null,
 
   load(cb) {
-    if (!window.THREE || !THREE.GLTFLoader) { this.failed = true; cb && cb(); return; }
+    if (!window.THREE || !THREE.GLTFLoader) {
+      this.failed = true; this.failReason = 'THREE.GLTFLoader yok (vendor/three.min.js eski?)';
+      cb && cb(); return;
+    }
     const loader = new THREE.GLTFLoader();
     const uri = window.OTAG_WARRIOR_URI || 'assets/warrior/otag-warrior.glb';
+    if (!window.OTAG_WARRIOR_URI) console.info('[OTAĞ] OTAG_WARRIOR_URI gömülü değil, dosyadan fetch deneniyor:', uri);
     const done = gltf => {
       let mesh = null;
       gltf.scene.traverse(o => { if (o.isMesh) mesh = o; });
-      if (!mesh) { this.failed = true; cb && cb(); return; }
+      if (!mesh) { this.failed = true; this.failReason = 'GLB içinde mesh bulunamadı'; cb && cb(); return; }
       this.geo = mesh.geometry;
       this.geo.computeBoundingSphere();
       this.baseMat = mesh.material;
@@ -34,7 +38,11 @@ const Warrior = {
       this.ready = true;
       cb && cb();
     };
-    const fail = e => { console.warn('Otağ modeli yüklenemedi, prosedürel modele dönülüyor:', e); this.failed = true; cb && cb(); };
+    const fail = e => {
+      this.failReason = (e && (e.message || e.type)) || String(e);
+      console.warn('Otağ modeli yüklenemedi, prosedürel modele dönülüyor:', e);
+      this.failed = true; cb && cb();
+    };
     if (uri.startsWith('data:')) {
       const bin = atob(uri.split(',')[1]);
       const arr = new Uint8Array(bin.length);
