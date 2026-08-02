@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#08080f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>HORDE SURVIVOR — Bullet Heaven</title>
+<style>
+  /* ==========================================================
+     TEMEL SAYFA / MOBİL UYUM
+     ========================================================== */
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    width:100%; height:100%; overflow:hidden; background:#08080f;
+    font-family:"Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    color:#e9edf5; user-select:none; -webkit-user-select:none; touch-action:none;
+    overscroll-behavior:none;
+  }
+  #cv{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  /* Güvenli alan (çentik) ölçüm probu */
+  #safeProbe{ position:fixed; top:0; left:0; width:0;
+    padding-top:env(safe-area-inset-top,0px); pointer-events:none; visibility:hidden; }
+
+  /* ==========================================================
+     OVERLAY (MENÜ / SEVİYE / OYUN SONU)
+     ========================================================== */
+  .overlay{
+    position:fixed; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:18px;
+    padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);
+    background:radial-gradient(ellipse at 50% 35%, rgba(30,26,66,.92), rgba(6,6,12,.96) 70%);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); z-index:10; text-align:center;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  /* Alçak ekranlarda (yatay telefon / küçük cihaz) kartları sıkılaştır */
+  @media (max-height:700px){
+    .card{ padding:9px 8px; gap:3px; } .card .ico{ font-size:24px; }
+    .card .nm{ font-size:14px; } .card .ds{ font-size:11px; } .card .lv{ font-size:10px; }
+    .lvHead{ font-size:22px; } #levelup{ gap:8px; }
+  }
+  .overlay.show{ display:flex; }
+  .title{
+    font-size:clamp(28px,8vw,64px); font-weight:900; letter-spacing:2px; line-height:1;
+    background:linear-gradient(180deg,#fff,#ffb347 60%,#ff5f6d);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 30px rgba(255,120,60,.35); text-transform:uppercase;
+  }
+  .subtitle{ font-size:clamp(12px,3.4vw,16px); color:#9aa4bd; max-width:520px; line-height:1.5; }
+  .btn{
+    padding:14px 34px; font-size:clamp(15px,4vw,20px); font-weight:800; letter-spacing:1px;
+    border:none; border-radius:12px; cursor:pointer; color:#12121c; text-transform:uppercase;
+    background:linear-gradient(180deg,#ffd479,#ff9a3c); box-shadow:0 6px 0 #a4521a, 0 10px 24px rgba(0,0,0,.5);
+    transition:transform .06s ease, box-shadow .06s ease;
+  }
+  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #a4521a, 0 6px 14px rgba(0,0,0,.5); }
+  .btn.ghost{ background:linear-gradient(180deg,#39405c,#252a3d); color:#e9edf5; box-shadow:0 6px 0 #161a28; }
+
+  /* Seviye atlama kartları */
+  #levelup{ justify-content:center; gap:14px; }
+  .lvHead{ font-size:clamp(20px,6vw,34px); font-weight:900; color:#ffd479; letter-spacing:3px; text-shadow:0 0 18px rgba(255,180,60,.5); }
+  .lvSub{ font-size:12px; color:#8f99b4; letter-spacing:2px; margin-top:-8px; }
+  #cards{ display:flex; flex-wrap:wrap; gap:12px; justify-content:center; width:100%; max-width:820px; }
+  .card{
+    flex:1 1 220px; max-width:260px; min-width:0; background:linear-gradient(180deg,#1b2033,#12141f);
+    border:2px solid #2e3450; border-radius:14px; padding:14px 12px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    transition:transform .08s ease, border-color .12s ease, box-shadow .12s ease;
+  }
+  .card:active{ transform:scale(.97); }
+  .card .ico{ font-size:34px; line-height:1; filter:drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+  .card .nm{ font-size:16px; font-weight:800; letter-spacing:.5px; }
+  .card .lv{ font-size:11px; font-weight:700; letter-spacing:2px; opacity:.85; }
+  .card .ds{ font-size:12px; color:#9aa4bd; line-height:1.4; }
+  .card.weapon{ border-color:#c9762e; box-shadow:0 0 0 1px rgba(255,160,60,.15), 0 8px 20px rgba(0,0,0,.45); }
+  .card.weapon .nm{ color:#ffbe6e; }
+  .card.passive{ border-color:#3a6ea8; box-shadow:0 0 0 1px rgba(90,160,255,.15), 0 8px 20px rgba(0,0,0,.45); }
+  .card.passive .nm{ color:#8fc4ff; }
+  .card.evo{ border-color:#a95bff; background:linear-gradient(180deg,#2c1c46,#171227);
+    box-shadow:0 0 22px rgba(170,90,255,.35), 0 8px 20px rgba(0,0,0,.5); animation:evoPulse 1.2s infinite alternate; }
+  .card.evo .nm{ color:#e0b3ff; }
+  .card.util{ border-color:#3fa980; } .card.util .nm{ color:#7fe6bd; }
+  @keyframes evoPulse{ from{ box-shadow:0 0 14px rgba(170,90,255,.25),0 8px 20px rgba(0,0,0,.5);} to{ box-shadow:0 0 30px rgba(190,120,255,.6),0 8px 20px rgba(0,0,0,.5);} }
+
+  /* İstatistik tablosu */
+  .stats{ display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:8px 18px; max-width:420px; width:100%; }
+  .stat{ display:flex; justify-content:space-between; gap:10px; background:rgba(255,255,255,.05);
+    border-radius:8px; padding:8px 12px; font-size:14px; }
+  .stat b{ color:#ffd479; font-variant-numeric:tabular-nums; }
+
+  /* Duraklat butonu */
+  #pauseBtn{
+    position:fixed; z-index:6; right:calc(env(safe-area-inset-right,0px) + 10px);
+    top:calc(env(safe-area-inset-top,0px) + 28px);
+    width:38px; height:38px; border-radius:10px; border:1px solid rgba(255,255,255,.18);
+    background:rgba(16,18,30,.65); color:#dbe2f0; font-size:16px; display:none;
+    align-items:center; justify-content:center; cursor:pointer;
+  }
+  #pauseBtn.show{ display:flex; }
+  .hint{ font-size:11px; color:#6f7896; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<div id="safeProbe"></div>
+<canvas id="cv"></canvas>
+<button id="pauseBtn">II</button>
+
+<!-- ANA MENÜ -->
+<div id="menu" class="overlay show">
+  <div class="title">Horde Survivor</div>
+  <div class="subtitle">
+    Sonsuz düşman sürüsüne karşı 15 dakika hayatta kal. Silahların <b>otomatik</b> ateş eder —
+    senin tek işin kaçmak, XP toplamak ve doğru kartları seçmek.
+  </div>
+  <button class="btn" id="startBtn">OYUNA BAŞLA</button>
+  <div class="hint">MOBİL: ekrana dokun ve sürükle &nbsp;•&nbsp; PC: WASD / Yön Tuşları &nbsp;•&nbsp; P: Duraklat</div>
+</div>
+
+<!-- SEVİYE ATLAMA -->
+<div id="levelup" class="overlay">
+  <div class="lvHead">SEVİYE ATLADIN!</div>
+  <div class="lvSub" id="lvSub">BİR YETENEK SEÇ</div>
+  <div id="cards"></div>
+</div>
+
+<!-- DURAKLATMA -->
+<div id="paused" class="overlay">
+  <div class="title" style="font-size:clamp(24px,7vw,48px)">DURAKLATILDI</div>
+  <div class="subtitle" id="pauseInv"></div>
+  <button class="btn" id="resumeBtn">DEVAM ET</button>
+  <button class="btn ghost" id="quitBtn">BAŞA DÖN</button>
+</div>
+
+<!-- OYUN SONU / ZAFER -->
+<div id="over" class="overlay">
+  <div class="title" id="overTitle">OYUN BİTTİ</div>
+  <div class="subtitle" id="overSub"></div>
+  <div class="stats" id="overStats"></div>
+  <button class="btn" id="againBtn">TEKRAR OYNA</button>
+</div>
+
+<script>
+"use strict";
+/* ==============================================================
+   HORDE SURVIVOR — 2D Bullet Heaven / Aksiyon-Roguelike
+   Tek dosya · HTML5 Canvas · Vanilla JS
+   --------------------------------------------------------------
+   BÖLÜMLER
+    0) Yardımcı fonksiyonlar
+    1) Canvas & responsive ölçek
+    2) Girdi (sanal joystick + klavye)
+    3) Nesne havuzu (Object Pool) & Spatial Hash
+    4) Sprite önbelleği (pre-render)
+    5) Oyun durumu / kamera / juice
+    6) Oyuncu
+    7) Düşmanlar, dalga sistemi & boss
+    8) Mermiler, alanlar, ışınlar, efektler
+    9) Silahlar, pasifler ve evrim (EVO)
+   10) XP / seviye / kart seçimi
+   11) Çarpışma & hasar
+   12) Çizim
+   13) HUD
+   14) Ana döngü
+   ============================================================== */
+
+/* ============ 0) YARDIMCI FONKSİYONLAR ============ */
+const TAU = Math.PI * 2;
+const rnd   = (a = 1, b = 0) => b + Math.random() * (a - b);
+const rndi  = (a, b) => Math.floor(rnd(a, b));
+const pick  = arr => arr[(Math.random() * arr.length) | 0];
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp  = (a, b, t) => a + (b - a) * t;
+const dist  = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
+const fmtTime = s => {
+  s = Math.max(0, Math.floor(s));
+  return String((s / 60) | 0).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+};
+
+/* ============ 1) CANVAS & RESPONSIVE ÖLÇEK ============ */
+const cv  = document.getElementById("cv");
+const ctx = cv.getContext("2d", { alpha: false });
+let VW = 0, VH = 0, DPR = 1, SAFE_TOP = 0;
+
+// Düşük güçlü cihazlarda kalabalığı ve DPR'yi otomatik kıs.
+const LOW_END = (navigator.hardwareConcurrency || 4) <= 4 ||
+                /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, LOW_END ? 2 : 2.5);
+  VW = Math.round(window.innerWidth);
+  VH = Math.round(window.innerHeight);
+  cv.width  = Math.round(VW * DPR);
+  cv.height = Math.round(VH * DPR);
+  cv.style.width  = VW + "px";
+  cv.style.height = VH + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  SAFE_TOP = parseFloat(getComputedStyle(document.getElementById("safeProbe")).paddingTop) || 0;
+  vignette = null;                 // ekran boyutu değişti → vinyet yeniden üretilir
+}
+let vignette = null;               // ölçekten bağımsız, boyut başına bir kez üretilen vinyet gradyanı
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 120));
+if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
+resize();
+
+/* ============ 2) GİRDİ: SANAL JOYSTİCK + KLAVYE ============ */
+const keys = {};
+// Dinamik joystick: ekrana nerede dokunulursa orada belirir.
+const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, r: Math.min(70, VW * 0.16) };
+const input = { ax: 0, ay: 0 };            // -1..1 normalize edilmiş hareket vektörü
+
+cv.addEventListener("pointerdown", e => {
+  if (G.state !== "PLAY") return;
+  if (joy.active) return;                   // ilk parmak joystick'i tutar
+  joy.active = true; joy.id = e.pointerId;
+  joy.ox = joy.x = e.clientX; joy.oy = joy.y = e.clientY;
+  joy.r = Math.min(70, Math.min(VW, VH) * 0.17);
+  cv.setPointerCapture(e.pointerId);
+}, { passive: true });
+
+cv.addEventListener("pointermove", e => {
+  if (!joy.active || e.pointerId !== joy.id) return;
+  joy.x = e.clientX; joy.y = e.clientY;
+}, { passive: true });
+
+function endPointer(e) {
+  if (joy.active && e.pointerId === joy.id) { joy.active = false; joy.id = null; }
+}
+cv.addEventListener("pointerup", endPointer, { passive: true });
+cv.addEventListener("pointercancel", endPointer, { passive: true });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (e.code === "KeyP" || e.code === "Escape") togglePause();
+  if (e.code === "Space" && (G.state === "MENU" || G.state === "OVER")) startGame();
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; joy.active = false; });
+
+// Her karede hareket vektörünü hesapla (joystick önceliklidir)
+function readInput() {
+  let ax = 0, ay = 0;
+  if (joy.active) {
+    const dx = joy.x - joy.ox, dy = joy.y - joy.oy;
+    const d = Math.hypot(dx, dy);
+    if (d > 6) {                              // ölü bölge
+      const m = Math.min(d, joy.r) / joy.r;    // analog güç
+      ax = (dx / d) * m; ay = (dy / d) * m;
+    }
+  } else {
+    if (keys.KeyA || keys.ArrowLeft)  ax -= 1;
+    if (keys.KeyD || keys.ArrowRight) ax += 1;
+    if (keys.KeyW || keys.ArrowUp)    ay -= 1;
+    if (keys.KeyS || keys.ArrowDown)  ay += 1;
+    const d = Math.hypot(ax, ay);
+    if (d > 1) { ax /= d; ay /= d; }
+  }
+  input.ax = ax; input.ay = ay;
+}
+
+/* ============ 3) NESNE HAVUZU & SPATIAL HASH ============ */
+/* Object Pooling: GC baskısını sıfırlamak için nesneler asla atılmaz,
+   sadece "aktif" listesi ile "boş" listesi arasında taşınır. */
+class Pool {
+  constructor(factory, cap) { this.factory = factory; this.cap = cap; this.free = []; this.active = []; }
+  get() {
+    if (this.active.length >= this.cap) return null;   // sert üst sınır = sabit performans
+    const o = this.free.pop() || this.factory();
+    o.dead = false; this.active.push(o); return o;
+  }
+  releaseAt(i) {                                       // swap-remove: O(1)
+    const a = this.active, last = a.length - 1;
+    const o = a[i]; a[i] = a[last]; a.pop(); this.free.push(o);
+  }
+  sweep() { for (let i = this.active.length - 1; i >= 0; i--) if (this.active[i].dead) this.releaseAt(i); }
+  clear() { while (this.active.length) this.releaseAt(this.active.length - 1); }
+  get count() { return this.active.length; }
+}
+
+/* Spatial Partitioning: 300+ düşman ile O(n²) çarpışmadan kaçınmak için
+   dünya sabit hücrelere bölünür; sorgular sadece komşu hücreleri gezer. */
+class SpatialHash {
+  constructor(cell) { this.cell = cell; this.map = new Map(); }
+  key(cx, cy) { return ((cx & 0xffff) << 16) | (cy & 0xffff); }
+  clear() { for (const b of this.map.values()) b.length = 0; }
+  insert(o) {
+    const cx = Math.floor(o.x / this.cell), cy = Math.floor(o.y / this.cell);
+    const k = this.key(cx, cy);
+    let b = this.map.get(k); if (!b) { b = []; this.map.set(k, b); }
+    b.push(o);
+  }
+  // Yarıçap r içindeki adayları out dizisine doldurur (kaba filtre).
+  query(x, y, r, out) {
+    out.length = 0;
+    const c = this.cell;
+    const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
+    const y0 = Math.floor((y - r) / c), y1 = Math.floor((y + r) / c);
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) {
+      const b = this.map.get(this.key(cx, cy));
+      if (b) for (let i = 0; i < b.length; i++) out.push(b[i]);
+    }
+    return out;
+  }
+}
+const hash = new SpatialHash(56);
+const qbuf = [];   // sorgu tamponu (tekrar kullanılır)
+
+/* ============ 4) SPRITE ÖNBELLEĞİ (PRE-RENDER) ============ */
+/* Her karede path çizmek yerine düşmanlar küçük offscreen canvas'lara
+   bir kez çizilir; sonrasında sadece drawImage yapılır (çok daha hızlı). */
+const spriteCache = new Map();
+function sprite(key, size, draw) {
+  let s = spriteCache.get(key);
+  if (s) return s;
+  const c = document.createElement("canvas");
+  const pad = 6;
+  c.width = c.height = Math.ceil(size * 2 + pad * 2);
+  const x = c.getContext("2d");
+  x.translate(c.width / 2, c.height / 2);
+  draw(x, size);
+  spriteCache.set(key, c);
+  return c;
+}
+function poly(x, n, r, rot = 0, squash = 1) {
+  x.beginPath();
+  for (let i = 0; i < n; i++) {
+    const a = rot + i / n * TAU;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r * squash;
+    i ? x.lineTo(px, py) : x.moveTo(px, py);
+  }
+  x.closePath();
+}
+// Düşman silueti — flash=true iken tamamen beyaz (vuruş efekti)
+function drawEnemyShape(x, r, cfg, flash) {
+  const main = flash ? "#ffffff" : cfg.color;
+  const dark = flash ? "#ffffff" : cfg.dark;
+  x.lineJoin = "round";
+  switch (cfg.shape) {
+    case "blob":                                   // Zombi: yuvarlak gövde
+      x.fillStyle = dark; poly(x, 12, r, 0, 1.05); x.fill();
+      x.fillStyle = main; poly(x, 12, r * 0.82, 0.2, 1.05); x.fill();
+      break;
+    case "tri":                                    // Hızlı: keskin üçgen
+      x.fillStyle = dark; poly(x, 3, r * 1.15, -Math.PI / 2); x.fill();
+      x.fillStyle = main; poly(x, 3, r * 0.8, -Math.PI / 2); x.fill();
+      break;
+    case "hex":                                    // Tank: altıgen zırh
+      x.fillStyle = dark; poly(x, 6, r, 0.4); x.fill();
+      x.fillStyle = main; poly(x, 6, r * 0.76, 0.4); x.fill();
+      x.strokeStyle = dark; x.lineWidth = Math.max(2, r * 0.12);
+      x.beginPath(); x.moveTo(-r * 0.5, 0); x.lineTo(r * 0.5, 0); x.stroke();
+      break;
+    case "wraith":                                 // Hayalet: pelerinli
+      x.fillStyle = dark; poly(x, 9, r, 0.1, 1.15); x.fill();
+      x.fillStyle = main; poly(x, 9, r * 0.75, 0.5, 1.15); x.fill();
+      break;
+    case "boss":                                   // Boss: dikenli dev
+      x.fillStyle = dark; poly(x, 14, r, 0); x.fill();
+      x.fillStyle = main; poly(x, 8, r * 0.86, 0.3); x.fill();
+      x.fillStyle = dark; poly(x, 3, r * 0.42, -Math.PI / 2); x.fill();
+      break;
+  }
+  if (!flash) {                                    // gözler (juice)
+    const er = Math.max(1.6, r * 0.14);
+    x.fillStyle = cfg.eye || "#ff4d4d";
+    x.beginPath(); x.arc(-r * 0.3, -r * 0.12, er, 0, TAU); x.fill();
+    x.beginPath(); x.arc(r * 0.3, -r * 0.12, er, 0, TAU); x.fill();
+  }
+}
+function enemySprite(type, r, flash) {
+  const key = type + "|" + Math.round(r) + "|" + (flash ? 1 : 0);
+  return sprite(key, r + 4, x => drawEnemyShape(x, r, ETYPES[type], flash));
+}
+// XP kristali / altın / can — parıltılı, önceden çizilmiş
+function gemSprite(kind) {
+  const C = { xp1: "#4ea8ff", xp5: "#5dffa0", xp20: "#ffd23f", gold: "#ffb020", heal: "#ff5f7a" }[kind];
+  const R = kind === "xp20" ? 8 : kind === "xp5" ? 7 : 6;
+  return sprite("gem" + kind, R + 6, x => {
+    x.shadowColor = C; x.shadowBlur = 10;
+    x.fillStyle = C;
+    if (kind === "gold") { x.beginPath(); x.arc(0, 0, R, 0, TAU); x.fill(); x.shadowBlur = 0; x.fillStyle = "#fff3c4"; x.beginPath(); x.arc(-R * .25, -R * .25, R * .35, 0, TAU); x.fill(); }
+    else if (kind === "heal") { x.fillRect(-R, -R * .35, R * 2, R * .7); x.fillRect(-R * .35, -R, R * .7, R * 2); }
+    else { poly(x, 4, R, 0); x.fill(); x.shadowBlur = 0; x.fillStyle = "rgba(255,255,255,.75)"; poly(x, 4, R * .42, 0); x.fill(); }
+  });
+}
+// Arka plan ızgarası — tek karo desen olarak üretilip pattern ile boyanır
+const TILE = 64;
+const gridPattern = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = TILE;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0c0d18"; x.fillRect(0, 0, TILE, TILE);
+  x.strokeStyle = "rgba(120,150,220,.09)"; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(.5, 0); x.lineTo(.5, TILE); x.moveTo(0, .5); x.lineTo(TILE, .5); x.stroke();
+  x.fillStyle = "rgba(120,150,220,.10)"; x.fillRect(TILE / 2 - 1, TILE / 2 - 1, 2, 2);
+  return ctx.createPattern(c, "repeat");
+})();
+
+/* ============ 5) OYUN DURUMU / KAMERA / JUICE ============ */
+const G = {
+  state: "MENU",          // MENU | PLAY | LEVELUP | PAUSED | OVER
+  time: 0, kills: 0, gold: 0,
+  level: 1, xp: 0, xpNext: 8, pendingLevels: 0,
+  shake: 0, hitStop: 0, flashRed: 0,
+  spawnTimer: 0, bossIdx: 0, nextBossAt: 180, boss: null,
+  banner: "", bannerT: 0,
+  win: false, dmgDealt: 0, finalSpawned: false,
+};
+const cam = { x: 0, y: 0, sx: 0, sy: 0 };
+const WIN_TIME = 900;                      // 15:00 → final boss
+const BOSS_EVERY = 180;                    // her 3 dakikada bir boss
+
+function addShake(v) { G.shake = Math.min(26, G.shake + v); }
+function hitStop(v) { G.hitStop = Math.max(G.hitStop, v); }
+function banner(txt, t = 2.4) { G.banner = txt; G.bannerT = t; }
+
+/* ============ 6) OYUNCU ============ */
+const P = {
+  x: 0, y: 0, vx: 0, vy: 0, r: 13,
+  hp: 100, maxHp: 100, iframe: 0, aim: 0, walk: 0,
+  weapons: [], passives: {},
+  base: { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 },
+  st: null, speed: 175,
+};
+// Pasif seviyeleri → nihai çarpanlar
+function recomputeStats() {
+  const s = Object.assign({}, P.base);
+  for (const id in P.passives) {
+    const lv = P.passives[id]; if (!lv) continue;
+    PASSIVES[id].apply(s, lv);
+  }
+  P.st = s;
+}
+function resetPlayer() {
+  P.x = P.y = 0; P.vx = P.vy = 0; P.maxHp = 100; P.hp = 100;
+  P.iframe = 0; P.aim = -Math.PI / 2; P.walk = 0;
+  P.weapons = []; P.passives = {};
+  recomputeStats();
+  addWeapon("bolt");                        // başlangıç silahı
+}
+function updatePlayer(dt) {
+  const sp = P.speed * P.st.speedMul;
+  // yumuşak ivmelenme (game feel)
+  P.vx = lerp(P.vx, input.ax * sp, 1 - Math.pow(0.0005, dt));
+  P.vy = lerp(P.vy, input.ay * sp, 1 - Math.pow(0.0005, dt));
+  P.x += P.vx * dt; P.y += P.vy * dt;
+  const mv = Math.hypot(P.vx, P.vy);
+  if (mv > 12) { P.aim = Math.atan2(P.vy, P.vx); P.walk += dt * mv * 0.06; }
+  if (P.iframe > 0) P.iframe -= dt;
+  if (P.st.regen > 0 && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + P.st.regen * dt);
+}
+function hurtPlayer(dmg) {
+  if (P.iframe > 0 || G.state !== "PLAY") return;
+  const real = Math.max(1, dmg - P.st.armor);
+  P.hp -= real; P.iframe = 0.62;
+  G.flashRed = 0.35; addShake(7); hitStop(0.04);
+  for (let i = 0; i < 8; i++) particle(P.x, P.y, "#ff5566", 3, 150);
+  if (P.hp <= 0) { P.hp = 0; gameOver(false); }
+}
+
+/* ============ 7) DÜŞMANLAR, DALGA SİSTEMİ & BOSS ============ */
+const ETYPES = {
+  zombie: { shape: "blob",   r: 13, hp: 12,  speed: 40,  dmg: 8,  xp: 1, color: "#5fae4e", dark: "#2f6b28", eye: "#ffe066" },
+  spider: { shape: "tri",    r: 10, hp: 7,   speed: 105, dmg: 6,  xp: 1, color: "#e2557d", dark: "#7d2340", eye: "#fff" },
+  tank:   { shape: "hex",    r: 24, hp: 90,  speed: 26,  dmg: 18, xp: 5, color: "#8d9bb8", dark: "#414d67", eye: "#ff6a3d" },
+  wraith: { shape: "wraith", r: 15, hp: 45,  speed: 78,  dmg: 12, xp: 5, color: "#9a6bff", dark: "#432b7a", eye: "#c9f" },
+  boss:   { shape: "boss",   r: 46, hp: 1800,speed: 42,  dmg: 26, xp: 20, color: "#ff6b3d", dark: "#7a2410", eye: "#fff2b0" },
+};
+const BOSSES = [
+  { name: "GRAVE TITAN",  color: "#ff6b3d", dark: "#7a2410", scale: 1.00 },
+  { name: "PLAGUE MAW",   color: "#7de06a", dark: "#245c1f", scale: 1.10 },
+  { name: "VOID WARDEN",  color: "#9a6bff", dark: "#432b7a", scale: 1.20 },
+  { name: "IRON COLOSSUS",color: "#8d9bb8", dark: "#3d4761", scale: 1.32 },
+  { name: "OMEGA HORROR", color: "#ff3b6b", dark: "#7a0f2c", scale: 1.55 },
+];
+const MAX_ENEMIES = LOW_END ? 300 : 420;   // aynı anda ekranda olabilecek düşman tavanı
+
+let uid = 1;
+const enemies = new Pool(() => ({
+  uid: 0, x: 0, y: 0, vx: 0, vy: 0, kx: 0, ky: 0, type: "zombie", cfg: null,
+  hp: 1, maxHp: 1, r: 10, speed: 10, dmg: 1, xp: 1, flash: 0, dead: false,
+  elite: false, boss: false, isFinal: false, bossName: "", scale: 1, atkT: 0, wob: 0, contactCd: 0,
+  cdG: 0, cdZ: 0,
+}), MAX_ENEMIES);
+
+const telegraphs = new Pool(() => ({ x: 0, y: 0, r: 0, t: 0, dur: 1, dmg: 0, dead: false, kind: "slam" }), 40);
+
+// Zamanla artan zorluk katsayıları
+function diff() {
+  const m = G.time / 60;
+  return {
+    hp: 1 + m * 0.40 + m * m * 0.055,          // can katlanarak artar
+    spd: Math.min(1.70, 1 + m * 0.030),
+    dmg: 1 + m * 0.12,
+    cap: Math.min(MAX_ENEMIES, Math.floor(45 + m * 34)),   // aynı anda ekranda
+    rate: Math.max(0.10, 0.70 - m * 0.075),                // spawn aralığı (sn)
+    batch: 2 + Math.floor(m * 1.3),                        // her seferde kaç tane
+    eliteChance: clamp((m - 3) * 0.02, 0, 0.18),
+  };
+}
+// Zaman ilerledikçe yeni tipler devreye girer
+function pickType() {
+  const m = G.time / 60, r = Math.random();
+  if (m > 6 && r < 0.14) return "wraith";
+  if (m > 2.5 && r < 0.24) return "tank";
+  if (m > 0.6 && r < 0.50) return "spider";
+  return "zombie";
+}
+// Ekran görüş alanının hemen dışında, çember üzerinde doğur
+function spawnRadius() { return Math.hypot(VW, VH) * 0.5 + 70; }
+function spawnEnemy(type, ang, boss = false, final = false) {
+  const e = enemies.get(); if (!e) return null;
+  const d = diff(), cfg = ETYPES[type];
+  const R = spawnRadius();
+  const a = ang !== undefined ? ang : rnd(TAU);
+  e.uid = uid++; e.type = type; e.cfg = cfg; e.boss = boss; e.isFinal = final;
+  e.x = P.x + Math.cos(a) * R; e.y = P.y + Math.sin(a) * R;
+  e.vx = e.vy = e.kx = e.ky = 0; e.flash = 0; e.wob = rnd(TAU);
+  e.contactCd = 0; e.cdG = 0; e.cdZ = 0; e.atkT = 2.5;
+  e.elite = !boss && Math.random() < d.eliteChance;
+  e.scale = boss ? (BOSSES[Math.min(G.bossIdx, BOSSES.length - 1)].scale) : (e.elite ? 1.45 : 1);
+  e.r = cfg.r * e.scale;
+  e.maxHp = cfg.hp * d.hp * (e.elite ? 5 : 1) * (boss ? 1 + G.bossIdx * 0.85 : 1);
+  e.hp = e.maxHp;
+  e.speed = cfg.speed * d.spd * (e.elite ? 0.85 : 1) * (boss ? 0.72 : 1);
+  e.dmg = cfg.dmg * d.dmg * (e.elite ? 1.4 : 1);
+  e.xp = cfg.xp * (e.elite ? 20 : 1);
+  if (boss) {
+    const B = BOSSES[Math.min(G.bossIdx, BOSSES.length - 1)];
+    e.bossName = B.name;
+    e.cfg = Object.assign({}, cfg, { color: B.color, dark: B.dark });
+    G.boss = e;
+    G.bossIdx++;                              // sıradaki boss daha güçlü olur
+  }
+  return e;
+}
+function spawnWave(dt) {
+  const d = diff();
+  G.spawnTimer -= dt;
+  if (G.spawnTimer <= 0 && enemies.count < d.cap) {
+    G.spawnTimer = d.rate;
+    const n = Math.min(d.batch, d.cap - enemies.count);
+    // Sürü hissi: yarısı aynı yönden küme halinde gelsin
+    const clusterA = rnd(TAU), cluster = Math.random() < 0.5;
+    for (let i = 0; i < n; i++) {
+      const a = cluster ? clusterA + rnd(0.5, -0.5) : rnd(TAU);
+      spawnEnemy(pickType(), a);
+    }
+  }
+  // Boss zamanlaması: her 3 dakikada bir; 15:00'te final boss
+  if (!G.boss) {
+    if (G.time >= WIN_TIME && !G.finalSpawned) {
+      G.finalSpawned = true;
+      G.bossIdx = BOSSES.length - 1;                 // en güçlü boss
+      const b = spawnEnemy("boss", rnd(TAU), true, true);
+      if (b) { banner("FİNAL BOSS: " + b.bossName, 3.2); addShake(18); }
+      else { G.finalSpawned = false; }
+    } else if (G.time >= G.nextBossAt && G.time < WIN_TIME) {
+      const b = spawnEnemy("boss", rnd(TAU), true);
+      if (b) { G.nextBossAt += BOSS_EVERY; banner("BOSS: " + b.bossName, 3); addShake(14); }
+    }
+  }
+}
+function updateEnemies(dt) {
+  const A = enemies.active;
+  for (let i = 0; i < A.length; i++) {
+    const e = A[i];
+    if (e.flash > 0) e.flash -= dt;
+    if (e.contactCd > 0) e.contactCd -= dt;
+    if (e.cdG > 0) e.cdG -= dt;
+    if (e.cdZ > 0) e.cdZ -= dt;
+
+    // Oyuncuya yönel
+    const dx = P.x - e.x, dy = P.y - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    let sp = e.speed;
+    if (e.type === "spider") sp *= 1 + Math.sin(G.time * 6 + e.wob) * 0.22;  // seğirtme
+    e.vx = (dx / d) * sp; e.vy = (dy / d) * sp;
+
+    // Geri tepme (knockback) sönümlenmesi
+    e.x += (e.vx + e.kx) * dt; e.y += (e.vy + e.ky) * dt;
+    e.kx *= Math.pow(0.0015, dt); e.ky *= Math.pow(0.0015, dt);
+
+    // Oyuncuya temas hasarı
+    const rr = e.r + P.r;
+    if (d < rr && e.contactCd <= 0) { hurtPlayer(e.dmg); e.contactCd = 0.5; }
+
+    // Boss telegraf saldırıları
+    if (e.boss) {
+      e.atkT -= dt;
+      if (e.atkT <= 0) { bossAttack(e); e.atkT = rnd(4.6, 3.0); }
+    }
+    // Çok uzaklaşanları geri getir (sonsuz harita hissi + havuz tasarrufu)
+    if (d > spawnRadius() * 2.6) {
+      const a = rnd(TAU);
+      e.x = P.x + Math.cos(a) * spawnRadius(); e.y = P.y + Math.sin(a) * spawnRadius();
+    }
+  }
+  // Hash'i güncelle (hareket sonrası) — çarpışma ve ayrıştırma bunu kullanır
+  hash.clear();
+  for (let i = 0; i < A.length; i++) hash.insert(A[i]);
+  separate();
+  enemies.sweep();
+}
+// Basit ayrıştırma: aynı hücredeki düşmanlar birbirini iter (üst üste binmeyi azaltır)
+function separate() {
+  for (const bucket of hash.map.values()) {
+    const n = bucket.length; if (n < 2) continue;
+    for (let i = 0; i < n; i++) {
+      const a = bucket[i];
+      for (let j = i + 1; j < n; j++) {
+        const b = bucket[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const min = (a.r + b.r) * 0.82;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > 0.01 && d2 < min * min) {
+          const d = Math.sqrt(d2), push = (min - d) * 0.5;
+          const nx = dx / d * push, ny = dy / d * push;
+          const wa = b.boss ? 0 : 1, wb = a.boss ? 0 : 1;   // boss itilmez
+          a.x -= nx * wa; a.y -= ny * wa; b.x += nx * wb; b.y += ny * wb;
+        }
+      }
+    }
+  }
+}
+// Boss telegrafları: yere kırmızı alan çizilir, süre dolunca patlar
+function bossAttack(b) {
+  const roll = Math.random();
+  const A = P.st.area;
+  if (roll < 0.45) {                       // Hedefli çökertme
+    const t = telegraphs.get(); if (!t) return;
+    t.x = P.x + rnd(40, -40); t.y = P.y + rnd(40, -40);
+    t.r = 100 * b.scale; t.t = 0; t.dur = 1.15; t.dmg = b.dmg * 1.6; t.kind = "slam";
+  } else if (roll < 0.78) {                // Üçlü serpme
+    for (let i = 0; i < 3; i++) {
+      const t = telegraphs.get(); if (!t) break;
+      const a = rnd(TAU), rr = rnd(150, 40);
+      t.x = P.x + Math.cos(a) * rr; t.y = P.y + Math.sin(a) * rr;
+      t.r = 78 * b.scale; t.t = -i * 0.18; t.dur = 1.25; t.dmg = b.dmg; t.kind = "slam";
+    }
+  } else {                                  // Nova: bossun etrafı
+    const t = telegraphs.get(); if (!t) return;
+    t.x = b.x; t.y = b.y; t.r = 230 * b.scale; t.t = 0; t.dur = 1.5; t.dmg = b.dmg * 1.8; t.kind = "nova";
+    // yandaş çağır
+    for (let i = 0; i < 4; i++) spawnEnemy("spider", rnd(TAU));
+  }
+}
+function updateTelegraphs(dt) {
+  const A = telegraphs.active;
+  for (let i = 0; i < A.length; i++) {
+    const t = A[i]; t.t += dt;
+    if (t.t >= t.dur) {
+      // Patlama: oyuncu alan içindeyse hasar
+      if (dist(P.x, P.y, t.x, t.y) < t.r) hurtPlayer(t.dmg);
+      addShake(9); hitStop(0.03);
+      for (let k = 0; k < 18; k++) {
+        const a = rnd(TAU);
+        particle(t.x + Math.cos(a) * t.r * 0.6, t.y + Math.sin(a) * t.r * 0.6, "#ff7a4d", 4, 230);
+      }
+      t.dead = true;
+    }
+  }
+  telegraphs.sweep();
+}
+
+/* ============ 8) MERMİLER, ALANLAR, IŞINLAR, EFEKTLER ============ */
+const bullets = new Pool(() => ({
+  x: 0, y: 0, vx: 0, vy: 0, r: 4, dmg: 1, life: 1, pierce: 1, dead: false,
+  kind: "bolt", color: "#7ddcff", hits: [], homing: 0, target: null,
+  spin: 0, tx: 0, ty: 0, boom: 0, zone: null, big: false, cluster: 0,
+}), LOW_END ? 220 : 360);
+
+const zones = new Pool(() => ({
+  x: 0, y: 0, r: 30, dps: 10, life: 3, maxLife: 3, dead: false, color: "#ff8a3d", tick: 0,
+}), 40);
+
+// Patlama halkaları ayrı havuzda: yoğun roket ateşi Molotof'un ateş havuzlarını aç bırakmasın
+const blasts = new Pool(() => ({ x: 0, y: 0, r: 30, life: .25, maxLife: .25, color: "#ffb03a", dead: false }), 48);
+
+const beams = new Pool(() => ({ x: 0, y: 0, a: 0, len: 100, w: 8, life: .18, maxLife: .18, dead: false, color: "#9ef" }), 24);
+
+const pickups = new Pool(() => ({ x: 0, y: 0, vx: 0, vy: 0, kind: "xp1", val: 1, dead: false, t: 0, pulled: false }), LOW_END ? 340 : 480);
+
+const parts = new Pool(() => ({ x: 0, y: 0, vx: 0, vy: 0, life: .4, maxLife: .4, r: 3, color: "#fff", dead: false }), LOW_END ? 260 : 460);
+
+const texts = new Pool(() => ({ x: 0, y: 0, vy: -46, life: .7, maxLife: .7, txt: "", crit: false, dead: false }), 90);
+
+function shoot(x, y, ang, spd, dmg, pierce, r, kind, color, opt) {
+  const b = bullets.get(); if (!b) return null;
+  b.x = x; b.y = y; b.vx = Math.cos(ang) * spd; b.vy = Math.sin(ang) * spd;
+  b.r = r; b.dmg = dmg; b.pierce = pierce; b.life = 2.2; b.kind = kind; b.color = color;
+  b.hits.length = 0; b.homing = 0; b.target = null; b.spin = rnd(TAU);
+  b.boom = 0; b.big = false; b.cluster = 0; b.zone = null;
+  if (opt) Object.assign(b, opt);
+  return b;
+}
+function particle(x, y, color, r, spd) {
+  const p = parts.get(); if (!p) return;
+  const a = rnd(TAU), s = rnd(spd, spd * 0.25);
+  p.x = x; p.y = y; p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
+  p.r = r; p.color = color; p.life = p.maxLife = rnd(0.55, 0.22);
+}
+function addText(x, y, v, crit) {
+  if (texts.count > 60 && !crit) return;
+  const t = texts.get(); if (!t) return;
+  t.x = x + rnd(10, -10); t.y = y; t.vy = crit ? -70 : -50;
+  t.txt = v < 1 ? v.toFixed(1) : String(Math.round(v));
+  t.crit = crit; t.life = t.maxLife = crit ? 0.85 : 0.6;
+}
+function explode(x, y, r, dmg, color = "#ffb03a") {
+  const list = hash.query(x, y, r, qbuf);
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    if (e.dead) continue;
+    if (dist2(e.x, e.y, x, y) < (r + e.r) * (r + e.r)) hitEnemy(e, dmg, x, y, 150, true);
+  }
+  for (let i = 0; i < 16; i++) particle(x, y, color, rnd(5, 2), 260);
+  addShake(6); hitStop(0.035);
+  const b = blasts.get();                      // kısa ömürlü görsel patlama halkası
+  if (b) { b.x = x; b.y = y; b.r = r; b.life = b.maxLife = 0.25; b.color = color; }
+}
+// Roket patlaması — EVO'da küme bombalarına ayrılır
+function detonate(b) {
+  explode(b.x, b.y, b.boom, b.dmg, b.color);
+  for (let i = 0; i < b.cluster; i++) {
+    const a = rnd(TAU);
+    shoot(b.x, b.y, a, rnd(340, 170), b.dmg * 0.45, 1, 5, "rocket", "#ffd06a",
+      { life: rnd(0.55, 0.25), boom: b.boom * 0.6 });
+  }
+}
+function updateBullets(dt) {
+  const A = bullets.active;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    b.life -= dt;
+    // Güdümlü (roket) davranışı
+    if (b.homing > 0) {
+      if (!b.target || b.target.dead) b.target = findNearest(b.x, b.y, 700);
+      if (b.target) {
+        const want = Math.atan2(b.target.y - b.y, b.target.x - b.x);
+        const cur = Math.atan2(b.vy, b.vx);
+        let d = ((want - cur + Math.PI * 3) % TAU) - Math.PI;
+        const na = cur + clamp(d, -b.homing * dt, b.homing * dt);
+        const sp = Math.hypot(b.vx, b.vy);
+        b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
+      }
+    }
+    b.x += b.vx * dt; b.y += b.vy * dt; b.spin += dt * 14;
+
+    // Molotof: hedefe varınca yere ateş bırak
+    if (b.kind === "molotov" && (b.life <= 0 || dist2(b.x, b.y, b.tx, b.ty) < 220)) {
+      makeFire(b.x, b.y, b.zone); b.dead = true; continue;
+    }
+    if (b.life <= 0) {
+      if (b.boom > 0) detonate(b);
+      b.dead = true; continue;
+    }
+    // Çarpışma (spatial hash ile)
+    const list = hash.query(b.x, b.y, b.r + 30, qbuf);
+    for (let j = 0; j < list.length; j++) {
+      const e = list[j];
+      if (e.dead) continue;
+      const rr = e.r + b.r;
+      if (dist2(e.x, e.y, b.x, b.y) > rr * rr) continue;
+      if (b.hits.indexOf(e.uid) >= 0) continue;
+      b.hits.push(e.uid);
+      if (b.boom > 0) { detonate(b); b.dead = true; break; }
+      hitEnemy(e, b.dmg, b.x, b.y, b.big ? 220 : 110, b.big);
+      if (--b.pierce <= 0) { b.dead = true; break; }
+    }
+  }
+  bullets.sweep();
+}
+function makeFire(x, y, cfg) {
+  const z = zones.get(); if (!z) return;
+  z.x = x; z.y = y; z.r = cfg.r; z.dps = cfg.dps; z.life = z.maxLife = cfg.life;
+  z.color = cfg.color || "#ff7a2a"; z.tick = 0;
+  for (let i = 0; i < 10; i++) particle(x, y, "#ffae4d", 4, 130);
+}
+function updateZones(dt) {
+  const A = zones.active;
+  for (let i = 0; i < A.length; i++) {
+    const z = A[i];
+    z.life -= dt;
+    if (z.life <= 0) { z.dead = true; continue; }
+    z.tick -= dt;
+    if (z.tick <= 0) {                              // saniyede 4 tik
+      z.tick = 0.25;
+      const list = hash.query(z.x, z.y, z.r, qbuf);
+      for (let j = 0; j < list.length; j++) {
+        const e = list[j];
+        if (e.dead || e.cdZ > 0) continue;
+        if (dist2(e.x, e.y, z.x, z.y) < (z.r + e.r) * (z.r + e.r)) {
+          hitEnemy(e, z.dps * 0.25, z.x, z.y, 0, false);
+          e.cdZ = 0.2;
+        }
+      }
+    }
+  }
+  zones.sweep();
+  const B = blasts.active;
+  for (let i = 0; i < B.length; i++) { const b = B[i]; b.life -= dt; if (b.life <= 0) b.dead = true; }
+  blasts.sweep();
+}
+function updateFx(dt) {
+  let A = parts.active;
+  for (let i = 0; i < A.length; i++) {
+    const p = A[i];
+    p.life -= dt; if (p.life <= 0) { p.dead = true; continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= Math.pow(0.02, dt); p.vy *= Math.pow(0.02, dt);
+  }
+  parts.sweep();
+  A = texts.active;
+  for (let i = 0; i < A.length; i++) {
+    const t = A[i]; t.life -= dt; if (t.life <= 0) { t.dead = true; continue; }
+    t.y += t.vy * dt; t.vy += 90 * dt;
+  }
+  texts.sweep();
+  A = beams.active;
+  for (let i = 0; i < A.length; i++) { const b = A[i]; b.life -= dt; if (b.life <= 0) b.dead = true; }
+  beams.sweep();
+}
+
+/* ============ 9) SİLAHLAR, PASİFLER VE EVRİM (EVO) ============ */
+/* Her silah: stats(lv, evo) → o seviyedeki sayısal değerler
+             fire(w, s)     → ateş etme davranışı
+   evoWith  : evrim için gereken pasif (o pasif Sv.3+ ve silah Sv.5 olmalı) */
+const EVO_PASSIVE_LV = 3;
+const MAX_WEAPONS = 6, MAX_PASSIVES = 6, WEAPON_MAX_LV = 5;
+
+function findNearest(x, y, maxD) {
+  const A = enemies.active; let best = null, bd = maxD * maxD;
+  for (let i = 0; i < A.length; i++) {
+    const e = A[i]; if (e.dead) continue;
+    const d = dist2(e.x, e.y, x, y);
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+function findNearestN(x, y, maxD, n, out) {
+  out.length = 0;
+  const A = enemies.active;
+  for (let i = 0; i < A.length && out.length < n * 4; i++) {
+    const e = A[i]; if (e.dead) continue;
+    if (dist2(e.x, e.y, x, y) < maxD * maxD) out.push(e);
+  }
+  out.sort((a, b) => dist2(a.x, a.y, x, y) - dist2(b.x, b.y, x, y));
+  out.length = Math.min(out.length, n);
+  return out;
+}
+const _tbuf = [];
+
+const WEAPONS = {
+  /* --- 1) ENERJİ TABANCASI --- */
+  bolt: {
+    name: "Enerji Tabancası", evoName: "Fırtına Mızrağı", icon: "⚡", evoIcon: "🌩️", evoWith: "dmg",
+    desc: "En yakın düşmana enerji mermisi fırlatır.",
+    evoDesc: "Devasa delici mızraklar; her yöne şimşek yağar.",
+    stats(lv, evo) {
+      return evo
+        ? { cd: 0.30, dmg: 34, count: 4, spread: 0.5, speed: 640, pierce: 5, r: 9, color: "#a9e6ff" }
+        : { cd: 0.70 - 0.06 * (lv - 1), dmg: 12 + 5 * (lv - 1), count: lv >= 3 ? 2 : 1, spread: 0.14,
+            speed: 520, pierce: lv >= 5 ? 2 : 1, r: 5, color: "#7ddcff" };
+    },
+    fire(w, s) {
+      const t = findNearest(P.x, P.y, 760);
+      const base = t ? Math.atan2(t.y - P.y, t.x - P.x) : P.aim;
+      for (let i = 0; i < s.count; i++) {
+        const a = base + (i - (s.count - 1) / 2) * s.spread;
+        shoot(P.x, P.y, a, s.speed, dmgOf(s.dmg), s.pierce, s.r, "bolt", s.color, { big: !!w.evolved });
+      }
+    },
+  },
+  /* --- 2) DÖNER BIÇAKLAR (GUARDIAN) --- */
+  guardian: {
+    name: "Döner Bıçaklar", evoName: "Durdurulamaz Kalkan", icon: "🗡️", evoIcon: "🛡️", evoWith: "spd",
+    desc: "Etrafında dönen bıçaklar temas eden herkesi biçer.",
+    evoDesc: "Dev bir kalkan; sürekli hasar verir ve düşmanları savurur.",
+    orbit: true,
+    stats(lv, evo) {
+      return evo
+        ? { n: 8, rad: 128, dmg: 30, spin: 3.2, size: 20, knock: 380, cd: 0.35 }
+        : { n: 1 + Math.floor(lv / 1.4), rad: 74 + lv * 7, dmg: 8 + 4 * (lv - 1), spin: 2.1 + lv * 0.16, size: 11 + lv, knock: 120, cd: 0.5 };
+    },
+    update(w, s, dt) {
+      w.ang = (w.ang || 0) + s.spin * dt * (0.75 + P.st.atkSpeed * 0.25);
+      const rad = s.rad * P.st.area;
+      w.blades = w.blades || [];
+      for (let i = 0; i < s.n; i++) {
+        const a = w.ang + i / s.n * TAU;
+        const bx = P.x + Math.cos(a) * rad, by = P.y + Math.sin(a) * rad;
+        w.blades[i] = { x: bx, y: by, a };
+        const list = hash.query(bx, by, s.size + 30, qbuf);
+        for (let j = 0; j < list.length; j++) {
+          const e = list[j];
+          if (e.dead || e.cdG > 0) continue;
+          const rr = e.r + s.size;
+          if (dist2(e.x, e.y, bx, by) < rr * rr) {
+            hitEnemy(e, dmgOf(s.dmg), bx, by, s.knock, !!w.evolved);
+            e.cdG = s.cd;
+          }
+        }
+      }
+      w.blades.length = s.n;
+    },
+  },
+  /* --- 3) ROKET --- */
+  rocket: {
+    name: "Roketatar", evoName: "Küme Bombardımanı", icon: "🚀", evoIcon: "💥", evoWith: "area",
+    desc: "Güdümlü roket; çarptığında alan hasarı verir.",
+    evoDesc: "Aynı anda 4 roket; patlayınca küme bombalarına ayrılır.",
+    stats(lv, evo) {
+      return evo
+        ? { cd: 1.0, dmg: 55, count: 4, boom: 105, speed: 300, homing: 5.5, cluster: 4 }
+        : { cd: 2.2 - 0.18 * (lv - 1), dmg: 20 + 9 * (lv - 1), count: lv >= 4 ? 2 : 1, boom: 62 + lv * 6, speed: 280, homing: 3.4, cluster: 0 };
+    },
+    fire(w, s) {
+      const ts = findNearestN(P.x, P.y, 900, s.count, _tbuf);
+      for (let i = 0; i < s.count; i++) {
+        const t = ts[i] || ts[0];
+        const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : P.aim + rnd(1, -1);
+        const b = shoot(P.x, P.y, a, s.speed, dmgOf(s.dmg), 1, 7, "rocket", "#ffb03a",
+          { homing: s.homing, boom: s.boom * P.st.area, life: 3.2 });
+        if (b && s.cluster) b.cluster = s.cluster;
+      }
+    },
+  },
+  /* --- 4) LAZER --- */
+  laser: {
+    name: "Lazer Kesici", evoName: "Ölüm Işını", icon: "🔆", evoIcon: "☄️", evoWith: "atk",
+    desc: "Anlık ışın; hattaki tüm düşmanları deler.",
+    evoDesc: "Ekranı boydan boya yakan devasa ölüm ışını.",
+    stats(lv, evo) {
+      return evo
+        ? { cd: 0.7, dmg: 46, count: 3, w: 34, len: 1400, color: "#ff6bd6" }
+        : { cd: 1.9 - 0.16 * (lv - 1), dmg: 16 + 8 * (lv - 1), count: lv >= 4 ? 2 : 1, w: 10 + lv * 2, len: 620 + lv * 40, color: "#9ef1ff" };
+    },
+    fire(w, s) {
+      const ts = findNearestN(P.x, P.y, s.len, s.count, _tbuf);
+      for (let i = 0; i < s.count; i++) {
+        const t = ts[i]; if (!t) break;
+        const a = Math.atan2(t.y - P.y, t.x - P.x);
+        beamHit(P.x, P.y, a, s.len, s.w * P.st.area, dmgOf(s.dmg), s.color, !!w.evolved);
+      }
+    },
+  },
+  /* --- 5) MOLOTOF --- */
+  molotov: {
+    name: "Molotof", evoName: "Cehennem", icon: "🔥", evoIcon: "🌋", evoWith: "area",
+    desc: "Yere ateş havuzu bırakır, içindekiler yanar.",
+    evoDesc: "Devasa ve kalıcı lav gölleri.",
+    stats(lv, evo) {
+      return evo
+        ? { cd: 1.6, count: 3, dps: 70, r: 130, life: 6.5, color: "#ff4d2a" }
+        : { cd: 3.2 - 0.25 * (lv - 1), count: lv >= 4 ? 2 : 1, dps: 14 + 7 * (lv - 1), r: 56 + lv * 8, life: 3 + lv * 0.4, color: "#ff8a3d" };
+    },
+    fire(w, s) {
+      for (let i = 0; i < s.count; i++) {
+        const t = findNearest(P.x, P.y, 520);
+        const a = t ? Math.atan2(t.y - P.y, t.x - P.x) + rnd(0.6, -0.6) : rnd(TAU);
+        const d = t ? Math.min(420, dist(P.x, P.y, t.x, t.y)) : rnd(300, 120);
+        const tx = P.x + Math.cos(a) * d, ty = P.y + Math.sin(a) * d;
+        const b = shoot(P.x, P.y, a, d / 0.55, 0, 999, 6, "molotov", s.color, { life: 0.6, tx, ty });
+        if (b) b.zone = { r: s.r * P.st.area, dps: dmgOf(s.dps), life: s.life, color: s.color };
+      }
+    },
+  },
+  /* --- 6) KUNAI --- */
+  kunai: {
+    name: "Kunai Yağmuru", evoName: "Girdap Kunai", icon: "🔪", evoIcon: "🌀", evoWith: "mag",
+    desc: "Hızlı, delici bıçaklar fırlatır.",
+    evoDesc: "Her yöne saçılan sonsuz delici kunailer; kristalleri de çeker.",
+    stats(lv, evo) {
+      return evo
+        ? { cd: 0.55, dmg: 26, count: 10, speed: 900, pierce: 99, spread: TAU }
+        : { cd: 1.5 - 0.13 * (lv - 1), dmg: 11 + 5 * (lv - 1), count: 2 + Math.floor(lv / 2), speed: 780, pierce: 1 + Math.floor(lv / 2), spread: 0.34 };
+    },
+    fire(w, s) {
+      const t = findNearest(P.x, P.y, 900);
+      const base = t ? Math.atan2(t.y - P.y, t.x - P.x) : P.aim;
+      for (let i = 0; i < s.count; i++) {
+        const a = s.spread >= TAU ? base + i / s.count * TAU
+                                  : base + (i - (s.count - 1) / 2) * s.spread;
+        shoot(P.x, P.y, a, s.speed, dmgOf(s.dmg), s.pierce, 5, "kunai", "#dfe8ff", { life: 1.4 });
+      }
+      if (w.evolved) magnetBurst();
+    },
+  },
+};
+
+/* Pasif yetenekler */
+const PASSIVES = {
+  dmg:   { name: "Güç",            icon: "🗡️", max: 5, txt: l => `Tüm hasar +%${l * 20}`,      apply: (s, l) => s.dmg += 0.20 * l },
+  atk:   { name: "Hızlı Şarjör",   icon: "⏱️", max: 5, txt: l => `Saldırı hızı +%${l * 14}`,   apply: (s, l) => s.atkSpeed += 0.14 * l },
+  spd:   { name: "Koşu Botu",      icon: "👟", max: 5, txt: l => `Hareket hızı +%${l * 10}`,   apply: (s, l) => s.speedMul += 0.10 * l },
+  hp:    { name: "Zırh Plakası",   icon: "❤️", max: 5, txt: l => `Maksimum HP +${l * 25}`,     apply: () => {} },
+  mag:   { name: "Mıknatıs",       icon: "🧲", max: 5, txt: l => `Mıknatıs menzili +%${l * 35}`,apply: (s, l) => s.magnet += 0.35 * l },
+  area:  { name: "Alan Genişliği", icon: "🌐", max: 5, txt: l => `Etki alanı +%${l * 15}`,     apply: (s, l) => s.area += 0.15 * l },
+  armor: { name: "Zırh",           icon: "🛡️", max: 5, txt: l => `Gelen hasar -${l * 3}`,      apply: (s, l) => s.armor += 3 * l },
+  regen: { name: "Rejenerasyon",   icon: "✚",  max: 5, txt: l => `Saniyede ${(l * 0.7).toFixed(1)} HP yenile`, apply: (s, l) => s.regen += 0.7 * l },
+};
+
+// Nihai hasar = temel × güç çarpanı (kritik vuruş isabet anında hesaplanır)
+function dmgOf(base) { return base * P.st.dmg; }
+
+function addWeapon(id) {
+  const w = { id, lv: 1, timer: 0, evolved: false, ang: 0, blades: [] };
+  P.weapons.push(w); return w;
+}
+function getWeapon(id) { return P.weapons.find(w => w.id === id); }
+
+function updateWeapons(dt) {
+  for (let i = 0; i < P.weapons.length; i++) {
+    const w = P.weapons[i], def = WEAPONS[w.id];
+    const s = def.stats(w.lv, w.evolved);
+    if (def.orbit) { def.update(w, s, dt); continue; }
+    w.timer -= dt;
+    if (w.timer <= 0) {
+      w.timer = Math.max(0.05, s.cd / P.st.atkSpeed);
+      def.fire(w, s);
+    }
+  }
+}
+// Lazer: hat üzerindeki tüm düşmanlara anında hasar + görsel ışın
+function beamHit(x, y, a, len, w, dmg, color, big) {
+  const b = beams.get();
+  if (b) { b.x = x; b.y = y; b.a = a; b.len = len; b.w = w; b.color = color; b.life = b.maxLife = 0.2; }
+  const dx = Math.cos(a), dy = Math.sin(a);
+  const A = enemies.active;
+  for (let i = 0; i < A.length; i++) {
+    const e = A[i]; if (e.dead) continue;
+    const px = e.x - x, py = e.y - y;
+    const t = px * dx + py * dy;
+    if (t < 0 || t > len) continue;
+    const perp = Math.abs(px * dy - py * dx);
+    if (perp < w * 0.5 + e.r) hitEnemy(e, dmg, e.x, e.y, big ? 160 : 60, big);
+  }
+  addShake(big ? 5 : 2);
+}
+// Girdap Kunai EVO: tüm kristalleri anında çeker
+function magnetBurst() {
+  const A = pickups.active;
+  for (let i = 0; i < A.length; i++) A[i].pulled = true;
+}
+
+/* ============ 10) XP / SEVİYE / KART SEÇİMİ ============ */
+// Erken seviyeler hızlı gelsin, sonrası kademeli olarak zorlaşsın
+function xpForLevel(lv) { return Math.floor(5 + lv * 3.5 + Math.pow(lv, 1.42)); }
+
+function dropLoot(e) {
+  // XP kristali: değerine göre renk (Mavi 1 / Yeşil 5 / Altın 20)
+  let kind = "xp1", val = 1;
+  if (e.xp >= 20) { kind = "xp20"; val = 20; }
+  else if (e.xp >= 5) { kind = "xp5"; val = 5; }
+  if (e.boss) {
+    for (let i = 0; i < 12; i++) spawnPickup(e.x + rnd(60, -60), e.y + rnd(60, -60), "xp20", 20);
+    for (let i = 0; i < 6; i++) spawnPickup(e.x + rnd(70, -70), e.y + rnd(70, -70), "gold", 10);
+    spawnPickup(e.x, e.y + 20, "heal", 35);
+    return;
+  }
+  spawnPickup(e.x, e.y, kind, val);
+  if (Math.random() < (e.elite ? 1 : 0.05)) spawnPickup(e.x + rnd(14, -14), e.y + rnd(14, -14), "gold", e.elite ? 8 : rndi(4, 1));
+  if (Math.random() < 0.012) spawnPickup(e.x, e.y, "heal", 20);
+}
+function spawnPickup(x, y, kind, val) {
+  const p = pickups.get();
+  if (!p) { if (kind.startsWith("xp")) gainXp(val); return; }   // havuz doluysa direkt topla
+  p.x = x; p.y = y; p.kind = kind; p.val = val; p.t = rnd(TAU); p.pulled = false;
+  const a = rnd(TAU), s = rnd(55, 18);
+  p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
+}
+function updatePickups(dt) {
+  const A = pickups.active;
+  const magR = 112 * P.st.magnet;
+  const magR2 = magR * magR, pickR2 = (P.r + 16) * (P.r + 16);
+  for (let i = 0; i < A.length; i++) {
+    const p = A[i];
+    p.t += dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= Math.pow(0.02, dt); p.vy *= Math.pow(0.02, dt);
+    const d2 = dist2(p.x, p.y, P.x, P.y);
+    if (p.pulled || d2 < magR2) {
+      p.pulled = true;                                   // mıknatıs: hızlanarak süzülme
+      const d = Math.sqrt(d2) || 1;
+      const sp = clamp(760 - d * 1.1, 260, 900);
+      p.x += (P.x - p.x) / d * sp * dt;
+      p.y += (P.y - p.y) / d * sp * dt;
+    } else if (p.t > 6) {
+      // Yerde unutulan kristaller yavaşça oyuncuya sürüklenir (sahne temiz kalır)
+      const d = Math.sqrt(d2) || 1;
+      const sp = Math.min(300, (p.t - 6) * 55);
+      p.x += (P.x - p.x) / d * sp * dt;
+      p.y += (P.y - p.y) / d * sp * dt;
+    }
+    if (d2 < pickR2) {
+      collect(p); p.dead = true;
+    }
+  }
+  pickups.sweep();
+}
+function collect(p) {
+  if (p.kind === "gold") { G.gold += p.val; addText(p.x, p.y - 6, p.val, false); }
+  else if (p.kind === "heal") { P.hp = Math.min(P.maxHp, P.hp + p.val); for (let i = 0; i < 8; i++) particle(P.x, P.y, "#ff7a94", 3, 120); }
+  else gainXp(p.val);
+  particle(p.x, p.y, "#bfe9ff", 2, 90);
+}
+function gainXp(v) {
+  G.xp += v;
+  while (G.xp >= G.xpNext) {
+    G.xp -= G.xpNext; G.level++; G.pendingLevels++;
+    G.xpNext = xpForLevel(G.level);
+  }
+  if (G.pendingLevels > 0 && G.state === "PLAY") openLevelUp();
+}
+
+/* --- Kart havuzu oluşturma --- */
+function buildChoices() {
+  const evoOpts = [], upgOpts = [], newOpts = [], passOpts = [];
+  for (const w of P.weapons) {
+    const def = WEAPONS[w.id];
+    if (!w.evolved && w.lv >= WEAPON_MAX_LV) {
+      if ((P.passives[def.evoWith] || 0) >= EVO_PASSIVE_LV) evoOpts.push({ kind: "evo", id: w.id });
+    } else if (w.lv < WEAPON_MAX_LV) upgOpts.push({ kind: "weapon", id: w.id });
+  }
+  if (P.weapons.length < MAX_WEAPONS)
+    for (const id in WEAPONS) if (!getWeapon(id)) newOpts.push({ kind: "weapon", id, isNew: true });
+  const pCount = Object.keys(P.passives).length;
+  for (const id in PASSIVES) {
+    const lv = P.passives[id] || 0;
+    if (lv >= PASSIVES[id].max) continue;
+    if (lv === 0 && pCount >= MAX_PASSIVES) continue;
+    passOpts.push({ kind: "passive", id });
+  }
+
+  const out = [];
+  if (evoOpts.length) out.push(pick(evoOpts));                 // evrim varsa garanti gelsin
+  // Silah yükseltmeleri iki kez eklenir → build'in ilerlemesi için biraz daha sık gelir
+  const pool = upgOpts.concat(upgOpts, newOpts, passOpts);
+  while (out.length < 3 && pool.length) {
+    const c = pool.splice((Math.random() * pool.length) | 0, 1)[0];
+    if (out.some(o => o.kind === c.kind && o.id === c.id)) continue;
+    out.push(c);
+  }
+  // Her şey maksimumdaysa: tekrarsız anlık ödül kartları
+  const utils = ["heal", "gold", "bomb"];
+  for (let i = 0; out.length < 3 && i < utils.length; i++)
+    if (!out.some(o => o.kind === "util" && o.id === utils[i])) out.push({ kind: "util", id: utils[i] });
+  return out;
+}
+function cardInfo(c) {
+  if (c.kind === "evo") {
+    const d = WEAPONS[c.id];
+    return { ico: d.evoIcon, nm: d.evoName, lv: "EVRİM!", ds: d.evoDesc, cls: "evo" };
+  }
+  if (c.kind === "weapon") {
+    const d = WEAPONS[c.id], w = getWeapon(c.id);
+    return { ico: d.icon, nm: d.name, lv: w ? `Sv. ${w.lv} → ${w.lv + 1}` : "YENİ SİLAH",
+             ds: w ? upgradeText(c.id, w.lv) : d.desc, cls: "weapon" };
+  }
+  if (c.kind === "passive") {
+    const d = PASSIVES[c.id], lv = (P.passives[c.id] || 0) + 1;
+    return { ico: d.icon, nm: d.name, lv: `Sv. ${lv}/${d.max}`, ds: d.txt(lv), cls: "passive" };
+  }
+  const U = {
+    heal: { ico: "🍗", nm: "Yemek",         ds: "Canını tamamen doldur." },
+    gold: { ico: "💰", nm: "Altın Kesesi",  ds: "+50 altın kazan." },
+    bomb: { ico: "💣", nm: "Kutsal Bomba",  ds: "Ekrandaki tüm düşmanlara ağır hasar." },
+  }[c.id];
+  return { ico: U.ico, nm: U.nm, lv: "ANLIK", ds: U.ds, cls: "util" };
+}
+// Bir sonraki seviyede ne değişiyor? (kısa özet)
+function upgradeText(id, lv) {
+  const d = WEAPONS[id];
+  const a = d.stats(lv, false), b = d.stats(lv + 1, false);
+  const bits = [];
+  if (b.dmg && b.dmg !== a.dmg) bits.push(`Hasar ${a.dmg}→${b.dmg}`);
+  if (b.dps && b.dps !== a.dps) bits.push(`Saniyelik hasar ${a.dps}→${b.dps}`);
+  if (b.count > a.count) bits.push(`Adet ${a.count}→${b.count}`);
+  if (b.n && b.n > a.n) bits.push(`Bıçak ${a.n}→${b.n}`);
+  if (b.cd && b.cd < a.cd) bits.push(`Bekleme -%${Math.round((1 - b.cd / a.cd) * 100)}`);
+  if (b.pierce > a.pierce) bits.push(`Delme ${a.pierce}→${b.pierce}`);
+  if (lv + 1 >= WEAPON_MAX_LV) bits.push(`⭐ ${PASSIVES[d.evoWith].name} Sv.${EVO_PASSIVE_LV} ile EVRİM açılır`);
+  return bits.join(" · ") || "Güçlendirilir.";
+}
+function applyCard(c) {
+  if (c.kind === "evo") {
+    const w = getWeapon(c.id);
+    w.evolved = true; w.timer = 0;
+    banner("EVRİM: " + WEAPONS[c.id].evoName, 2.6);
+    addShake(12); for (let i = 0; i < 40; i++) particle(P.x, P.y, "#d3a4ff", 5, 320);
+  } else if (c.kind === "weapon") {
+    const w = getWeapon(c.id);
+    if (w) w.lv++; else addWeapon(c.id);
+  } else if (c.kind === "passive") {
+    P.passives[c.id] = (P.passives[c.id] || 0) + 1;
+    if (c.id === "hp") { P.maxHp += 25; P.hp += 25; }
+    recomputeStats();
+  } else if (c.id === "heal") { P.hp = P.maxHp; }
+  else if (c.id === "gold") { G.gold += 50; }
+  else if (c.id === "bomb") {                       // ekrandaki herkese ağır hasar
+    const A = enemies.active.slice();
+    for (const e of A) if (!e.dead) hitEnemy(e, 300 * P.st.dmg, P.x, P.y, 260, true);
+    addShake(18); for (let i = 0; i < 50; i++) particle(P.x, P.y, "#ffe08a", 5, 420);
+  }
+}
+
+/* --- Seviye atlama ekranı (DOM) --- */
+const elCards = document.getElementById("cards");
+const elLevelup = document.getElementById("levelup");
+const elLvSub = document.getElementById("lvSub");
+function openLevelUp() {
+  G.state = "LEVELUP";
+  const choices = buildChoices();
+  elCards.innerHTML = "";
+  elLvSub.textContent = `SEVİYE ${G.level}` + (G.pendingLevels > 1 ? ` · SIRADA ${G.pendingLevels - 1} SEÇİM DAHA` : "");
+  choices.forEach(c => {
+    const info = cardInfo(c);
+    const el = document.createElement("div");
+    el.className = "card " + info.cls;
+    el.innerHTML = `<div class="ico">${info.ico}</div><div class="nm">${info.nm}</div>
+                    <div class="lv">${info.lv}</div><div class="ds">${info.ds}</div>`;
+    el.addEventListener("click", () => chooseCard(c), { once: true });
+    elCards.appendChild(el);
+  });
+  elLevelup.classList.add("show");
+}
+function chooseCard(c) {
+  applyCard(c);
+  G.pendingLevels--;
+  elLevelup.classList.remove("show");
+  if (G.pendingLevels > 0) setTimeout(openLevelUp, 60);
+  else { G.state = "PLAY"; joy.active = false; }
+}
+
+/* ============ 11) ÇARPIŞMA & HASAR ============ */
+function hitEnemy(e, dmg, sx, sy, knock, big) {
+  const crit = Math.random() < P.st.crit;
+  const d = crit ? dmg * 2 : dmg;
+  e.hp -= d; G.dmgDealt += d;
+  e.flash = 0.09;                                   // FLASHED-WHITE efekti
+  addText(e.x, e.y - e.r - 4, d, crit);             // uçan hasar sayıları
+  if (knock && !e.boss) {
+    const dx = e.x - sx, dy = e.y - sy, dd = Math.hypot(dx, dy) || 1;
+    e.kx += dx / dd * knock; e.ky += dy / dd * knock;
+  }
+  if (big || crit) { addShake(crit ? 4 : 3); if (big) hitStop(0.05); }  // HIT-STOP
+  for (let i = 0; i < (big ? 5 : 2); i++) particle(e.x, e.y, crit ? "#fff2a0" : "#ffd0d0", 2.5, 170);
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e) {
+  if (e.dead) return;
+  e.dead = true; G.kills++;
+  dropLoot(e);
+  const col = e.cfg.color;
+  const n = e.boss ? 60 : e.elite ? 20 : 8;
+  for (let i = 0; i < n; i++) particle(e.x, e.y, i % 3 ? col : "#ffffff", e.boss ? 6 : 3, e.boss ? 420 : 220);
+  if (e.boss) {
+    G.boss = null; addShake(22); hitStop(0.12);
+    banner(e.bossName + " YOK EDİLDİ!", 2.4);
+    if (e.isFinal) gameOver(true);            // final boss → Bölüm Tamamlandı
+  } else if (e.elite) { addShake(5); }
+}
+
+/* ============ 12) ÇİZİM ============ */
+function worldToScreenX(x) { return x - cam.x + VW / 2 + cam.sx; }
+function worldToScreenY(y) { return y - cam.y + VH / 2 + cam.sy; }
+
+function drawBackground() {
+  const ox = -(((cam.x - cam.sx - VW / 2) % TILE) + TILE) % TILE;
+  const oy = -(((cam.y - cam.sy - VH / 2) % TILE) + TILE) % TILE;
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.fillStyle = gridPattern;
+  ctx.fillRect(0, 0, VW + TILE, VH + TILE);
+  ctx.restore();
+  // Vinyet: gradyan nesnesi yeniden kullanılır (her karede yeniden üretilmez)
+  if (!vignette) {
+    vignette = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.32,
+                                        VW / 2, VH / 2, Math.max(VW, VH) * 0.75);
+    vignette.addColorStop(0, "rgba(0,0,0,0)"); vignette.addColorStop(1, "rgba(0,0,0,.55)");
+  }
+  ctx.fillStyle = vignette; ctx.fillRect(0, 0, VW, VH);
+}
+function drawZones() {
+  const A = zones.active;
+  for (let i = 0; i < A.length; i++) {
+    const z = A[i];
+    const sx = worldToScreenX(z.x), sy = worldToScreenY(z.y);
+    if (sx < -z.r - 40 || sx > VW + z.r + 40 || sy < -z.r - 40 || sy > VH + z.r + 40) continue;
+    const k = z.life / z.maxLife;
+    // Ateş havuzu: additive harmanlanmış radyal gradyan (ölçümde en hızlı yol)
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = (0.55 + Math.sin(G.time * 9 + z.x) * 0.08) * Math.min(1, k * 4);
+    const g = ctx.createRadialGradient(sx, sy, z.r * 0.08, sx, sy, z.r);
+    g.addColorStop(0, "#fff2c0"); g.addColorStop(0.35, z.color); g.addColorStop(1, "rgba(120,20,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, z.r, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
+}
+// Patlama halkaları (roket / küme bombası)
+function drawBlasts() {
+  const A = blasts.active;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    const sx = worldToScreenX(b.x), sy = worldToScreenY(b.y);
+    if (sx < -b.r - 40 || sx > VW + b.r + 40 || sy < -b.r - 40 || sy > VH + b.r + 40) continue;
+    const k = b.life / b.maxLife;
+    ctx.globalAlpha = k * 0.85;
+    ctx.strokeStyle = b.color; ctx.lineWidth = 6 * k + 1;
+    ctx.beginPath(); ctx.arc(sx, sy, b.r * (1.6 - k * 0.6), 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+function drawTelegraphs() {
+  const A = telegraphs.active;
+  for (let i = 0; i < A.length; i++) {
+    const t = A[i];
+    if (t.t < 0) continue;
+    const k = clamp(t.t / t.dur, 0, 1);
+    const sx = worldToScreenX(t.x), sy = worldToScreenY(t.y);
+    ctx.save();
+    ctx.globalAlpha = 0.28 + k * 0.25;
+    ctx.fillStyle = "#ff2b3d";
+    ctx.beginPath(); ctx.arc(sx, sy, t.r, 0, TAU); ctx.fill();      // kırmızı tehlike alanı
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(255,90,90,.45)";
+    ctx.beginPath(); ctx.arc(sx, sy, t.r * k, 0, TAU); ctx.fill();  // dolum göstergesi
+    ctx.strokeStyle = "#ff5a5a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(sx, sy, t.r, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawPickups() {
+  const A = pickups.active;
+  for (let i = 0; i < A.length; i++) {
+    const p = A[i];
+    const sx = worldToScreenX(p.x), sy = worldToScreenY(p.y);
+    if (sx < -20 || sx > VW + 20 || sy < -20 || sy > VH + 20) continue;
+    const img = gemSprite(p.kind);
+    const bob = Math.sin(p.t * 5) * 2;
+    ctx.drawImage(img, sx - img.width / 2, sy - img.height / 2 + bob);
+  }
+}
+function drawEnemies() {
+  const A = enemies.active;
+  for (let i = 0; i < A.length; i++) {
+    const e = A[i];
+    if (e.dead) continue;
+    const sx = worldToScreenX(e.x), sy = worldToScreenY(e.y);
+    const m = e.r + 24;
+    if (sx < -m || sx > VW + m || sy < -m || sy > VH + m) continue;   // ekran dışını çizme
+    const wob = Math.sin(G.time * 8 + e.wob) * (e.boss ? 2 : 1.4);
+    const img = enemySprite(e.type, e.r, e.flash > 0);
+    if (e.boss || e.elite) {                                          // aura
+      ctx.globalAlpha = 0.25 + Math.sin(G.time * 4 + e.wob) * 0.08;
+      ctx.fillStyle = e.boss ? "#ff5a2a" : "#ffd23f";
+      ctx.beginPath(); ctx.arc(sx, sy, e.r * 1.35, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.drawImage(img, sx - img.width / 2, sy - img.height / 2 + wob);
+    // küçük can barı (sadece hasar almışsa, boss hariç)
+    if (!e.boss && e.hp < e.maxHp) {
+      const w = e.r * 1.8, h = 3;
+      ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(sx - w / 2, sy - e.r - 9, w, h);
+      ctx.fillStyle = e.elite ? "#ffd23f" : "#ff5566";
+      ctx.fillRect(sx - w / 2, sy - e.r - 9, w * clamp(e.hp / e.maxHp, 0, 1), h);
+    }
+  }
+}
+function drawBullets() {
+  const A = bullets.active;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    const sx = worldToScreenX(b.x), sy = worldToScreenY(b.y);
+    if (sx < -30 || sx > VW + 30 || sy < -30 || sy > VH + 30) continue;
+    const ang = Math.atan2(b.vy, b.vx);
+    ctx.save(); ctx.translate(sx, sy);
+    switch (b.kind) {
+      case "bolt":
+        ctx.rotate(ang);
+        ctx.fillStyle = b.color; ctx.shadowColor = b.color; ctx.shadowBlur = 10;
+        ctx.fillRect(-b.r * 2, -b.r * 0.5, b.r * 4, b.r);
+        break;
+      case "kunai":
+        ctx.rotate(ang);
+        ctx.fillStyle = b.color; ctx.shadowColor = "#9cf"; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.moveTo(b.r * 2, 0); ctx.lineTo(-b.r, b.r * .8); ctx.lineTo(-b.r, -b.r * .8); ctx.closePath(); ctx.fill();
+        break;
+      case "rocket":
+        ctx.rotate(ang);
+        ctx.fillStyle = "#ffe08a"; ctx.shadowColor = "#ff8a2a"; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.moveTo(b.r * 1.8, 0); ctx.lineTo(-b.r, b.r); ctx.lineTo(-b.r, -b.r); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "rgba(255,140,40,.7)";
+        ctx.beginPath(); ctx.arc(-b.r * 1.6, 0, b.r * (0.7 + Math.random() * 0.5), 0, TAU); ctx.fill();
+        break;
+      case "molotov":
+        ctx.rotate(b.spin);
+        ctx.fillStyle = "#ffb15c"; ctx.shadowColor = "#ff6a00"; ctx.shadowBlur = 10;
+        ctx.fillRect(-b.r * .6, -b.r, b.r * 1.2, b.r * 2);
+        break;
+    }
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+}
+function drawBeams() {
+  const A = beams.active;
+  for (let i = 0; i < A.length; i++) {
+    const b = A[i];
+    const k = b.life / b.maxLife;
+    const sx = worldToScreenX(b.x), sy = worldToScreenY(b.y);
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.a);
+    ctx.globalAlpha = k;
+    ctx.shadowColor = b.color; ctx.shadowBlur = 18;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(0, -b.w * k * 0.5, b.len, b.w * k);
+    ctx.fillStyle = "#fff"; ctx.globalAlpha = k * 0.9;
+    ctx.fillRect(0, -b.w * k * 0.18, b.len, b.w * k * 0.36);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+}
+function drawGuardians() {
+  for (const w of P.weapons) {
+    const def = WEAPONS[w.id];
+    if (!def.orbit || !w.blades) continue;
+    const s = def.stats(w.lv, w.evolved);
+    for (const bl of w.blades) {
+      if (!bl) continue;
+      const sx = worldToScreenX(bl.x), sy = worldToScreenY(bl.y);
+      ctx.save(); ctx.translate(sx, sy); ctx.rotate(bl.a + Math.PI / 4);
+      if (w.evolved) {
+        ctx.fillStyle = "rgba(120,200,255,.85)"; ctx.shadowColor = "#6cf"; ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.arc(0, 0, s.size, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#e8f7ff"; ctx.beginPath(); ctx.arc(0, 0, s.size * .5, 0, TAU); ctx.fill();
+      } else {
+        ctx.fillStyle = "#dfe9ff"; ctx.shadowColor = "#9cf"; ctx.shadowBlur = 8;
+        ctx.fillRect(-s.size * .18, -s.size, s.size * .36, s.size * 2);
+        ctx.fillStyle = "#8fa8d8"; ctx.fillRect(-s.size * .3, s.size * .55, s.size * .6, s.size * .35);
+      }
+      ctx.restore();
+    }
+  }
+  ctx.shadowBlur = 0;
+}
+function drawPlayer() {
+  const sx = worldToScreenX(P.x), sy = worldToScreenY(P.y);
+  const bob = Math.sin(P.walk) * 2;
+  // gölge
+  ctx.fillStyle = "rgba(0,0,0,.35)";
+  ctx.beginPath(); ctx.ellipse(sx, sy + P.r * 0.95, P.r * 0.9, P.r * 0.4, 0, 0, TAU); ctx.fill();
+  ctx.save();
+  ctx.translate(sx, sy + bob);
+  if (P.iframe > 0 && ((P.iframe * 20) | 0) % 2 === 0) ctx.globalAlpha = 0.45;   // hasar yanıp sönmesi
+  // gövde
+  ctx.fillStyle = "#1d2740"; ctx.beginPath(); ctx.arc(0, 0, P.r + 2, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#4ea8ff"; ctx.beginPath(); ctx.arc(0, 0, P.r, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#bfe4ff"; ctx.beginPath(); ctx.arc(0, -P.r * .25, P.r * .55, 0, TAU); ctx.fill();
+  // namlu / bakış yönü
+  ctx.rotate(P.aim);
+  ctx.fillStyle = "#e8f4ff"; ctx.fillRect(P.r * .4, -3, P.r * 1.05, 6);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  // oyuncu can barı
+  const w = 44, h = 5, hx = sx - w / 2, hy = sy - P.r - 14;
+  ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(hx - 1, hy - 1, w + 2, h + 2);
+  const k = clamp(P.hp / P.maxHp, 0, 1);
+  ctx.fillStyle = k > .5 ? "#4be07f" : k > .25 ? "#ffcc3d" : "#ff4d5e";
+  ctx.fillRect(hx, hy, w * k, h);
+}
+function drawParticles() {
+  const A = parts.active;
+  for (let i = 0; i < A.length; i++) {
+    const p = A[i];
+    const sx = worldToScreenX(p.x), sy = worldToScreenY(p.y);
+    if (sx < -10 || sx > VW + 10 || sy < -10 || sy > VH + 10) continue;
+    const k = p.life / p.maxLife;
+    ctx.globalAlpha = k;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(sx - p.r * k, sy - p.r * k, p.r * 2 * k, p.r * 2 * k);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawTexts() {
+  const A = texts.active;
+  ctx.textAlign = "center";
+  for (let i = 0; i < A.length; i++) {
+    const t = A[i];
+    const sx = worldToScreenX(t.x), sy = worldToScreenY(t.y);
+    if (sx < -40 || sx > VW + 40 || sy < -30 || sy > VH + 30) continue;
+    const k = t.life / t.maxLife;
+    ctx.globalAlpha = clamp(k * 1.6, 0, 1);
+    ctx.font = (t.crit ? "900 " : "800 ") + (t.crit ? 21 : 15) + "px Trebuchet MS, sans-serif";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.75)";
+    ctx.strokeText(t.txt, sx, sy);
+    ctx.fillStyle = t.crit ? "#fff06a" : "#ffe9a8";   // uçuk sarı hasar sayıları
+    ctx.fillText(t.txt, sx, sy);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawJoystick() {
+  if (!joy.active) return;
+  const dx = joy.x - joy.ox, dy = joy.y - joy.oy;
+  const d = Math.hypot(dx, dy) || 1;
+  const m = Math.min(d, joy.r);
+  const kx = joy.ox + dx / d * m, ky = joy.oy + dy / d * m;
+  ctx.save();
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = "#cfe3ff"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(joy.ox, joy.oy, joy.r, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = 0.14; ctx.fillStyle = "#cfe3ff";
+  ctx.beginPath(); ctx.arc(joy.ox, joy.oy, joy.r, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.65; ctx.fillStyle = "#eaf3ff";
+  ctx.beginPath(); ctx.arc(kx, ky, joy.r * 0.42, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ============ 13) HUD ============ */
+function drawHUD() {
+  const top = SAFE_TOP;
+  ctx.textBaseline = "middle";
+
+  // --- XP barı (üstte, tam genişlik) ---
+  const barH = 12, y = top + 6;
+  ctx.fillStyle = "rgba(10,12,22,.85)"; ctx.fillRect(0, top, VW, barH + 12);
+  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(10, y, VW - 20, barH);
+  const k = clamp(G.xp / G.xpNext, 0, 1);
+  const g = ctx.createLinearGradient(10, 0, VW - 10, 0);
+  g.addColorStop(0, "#4ea8ff"); g.addColorStop(1, "#9be7ff");
+  ctx.fillStyle = g; ctx.fillRect(10, y, (VW - 20) * k, barH);
+  ctx.strokeStyle = "rgba(255,255,255,.2)"; ctx.lineWidth = 1;
+  ctx.strokeRect(10.5, y + .5, VW - 21, barH - 1);
+  // Seviye rozeti
+  ctx.textAlign = "left";
+  ctx.font = "900 12px Trebuchet MS, sans-serif";
+  ctx.fillStyle = "#08101c"; ctx.fillRect(10, y, 58, barH);
+  ctx.fillStyle = "#ffd479"; ctx.fillText("SV. " + G.level, 16, y + barH / 2 + 1);
+
+  // --- Süre sayacı (ortada) ---
+  const rowY = top + 46;
+  ctx.textAlign = "center";
+  ctx.font = "900 26px Trebuchet MS, sans-serif";
+  ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.75)";
+  ctx.strokeText(fmtTime(G.time), VW / 2, rowY);
+  ctx.fillStyle = "#ffffff"; ctx.fillText(fmtTime(G.time), VW / 2, rowY);
+
+  // --- Sol panel: can / öldürme / altın (duraklat butonu sağda, çakışma yok) ---
+  ctx.textAlign = "left"; ctx.font = "800 12px Trebuchet MS, sans-serif";
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(8, rowY - 17, 116, 38);
+  ctx.fillStyle = "#7dffa8"; ctx.fillText("❤ " + Math.ceil(P.hp) + "/" + P.maxHp, 14, rowY - 7);
+  ctx.fillStyle = "#ff8f8f"; ctx.fillText("☠ " + G.kills, 14, rowY + 11);
+  ctx.fillStyle = "#ffd479"; ctx.fillText("💰 " + G.gold, 72, rowY + 11);
+
+  // --- Silah & pasif ikon satırları (akışkan: her satır bir öncekinin altına) ---
+  let ix = 8, iy = rowY + 40;
+  ctx.font = "16px sans-serif";
+  for (const w of P.weapons) {
+    const d = WEAPONS[w.id];
+    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(ix, iy - 13, 26, 26);
+    ctx.font = "16px sans-serif"; ctx.fillStyle = "#fff";
+    ctx.fillText(w.evolved ? d.evoIcon : d.icon, ix + 3, iy);
+    ctx.font = "900 9px Trebuchet MS, sans-serif"; ctx.fillStyle = w.evolved ? "#e0b3ff" : "#ffd479";
+    ctx.fillText(w.evolved ? "EVO" : "" + w.lv, ix + 17, iy + 9);
+    ix += 29;
+  }
+  if (P.weapons.length) iy += 28;
+  ix = 8;
+  let hasPassive = false;
+  for (const id in P.passives) {
+    if (!P.passives[id]) continue;
+    hasPassive = true;
+    ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(ix, iy - 11, 23, 22);
+    ctx.font = "13px sans-serif"; ctx.fillStyle = "#fff";
+    ctx.fillText(PASSIVES[id].icon, ix + 3, iy);
+    ctx.font = "900 9px Trebuchet MS, sans-serif"; ctx.fillStyle = "#8fc4ff";
+    ctx.fillText("" + P.passives[id], ix + 15, iy + 8);
+    ix += 26;
+  }
+  if (hasPassive) iy += 24;
+
+  // --- Boss can barı (ikon satırlarının altında) ---
+  if (G.boss) {
+    const bw = Math.min(VW - 40, 460), bx = (VW - bw) / 2, by = iy - 2;
+    ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(bx - 2, by - 2, bw + 4, 16);
+    ctx.fillStyle = "#3a1010"; ctx.fillRect(bx, by, bw, 12);
+    const bk = clamp(G.boss.hp / G.boss.maxHp, 0, 1);
+    const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    bg.addColorStop(0, "#ff2b3d"); bg.addColorStop(1, "#ff9d3d");
+    ctx.fillStyle = bg; ctx.fillRect(bx, by, bw * bk, 12);
+    ctx.textAlign = "center"; ctx.font = "900 11px Trebuchet MS, sans-serif";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.65)";
+    ctx.strokeText(G.boss.bossName, VW / 2, by + 7);
+    ctx.fillStyle = "#fff0e0"; ctx.fillText(G.boss.bossName, VW / 2, by + 7);
+    // ekran dışındaysa yön oku
+    const sx = worldToScreenX(G.boss.x), sy = worldToScreenY(G.boss.y);
+    if (sx < 0 || sx > VW || sy < 0 || sy > VH) {
+      const a = Math.atan2(G.boss.y - P.y, G.boss.x - P.x);
+      const rx = VW / 2 + Math.cos(a) * Math.min(VW, VH) * 0.38;
+      const ry = VH / 2 + Math.sin(a) * Math.min(VW, VH) * 0.38;
+      ctx.save(); ctx.translate(rx, ry); ctx.rotate(a);
+      ctx.fillStyle = "#ff5a3d";
+      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // --- Banner (boss uyarısı / evrim) ---
+  if (G.bannerT > 0) {
+    const a = clamp(G.bannerT, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.textAlign = "center";
+    ctx.font = "900 " + Math.round(Math.min(34, VW * 0.07)) + "px Trebuchet MS, sans-serif";
+    ctx.lineWidth = 5; ctx.strokeStyle = "rgba(0,0,0,.8)";
+    ctx.strokeText(G.banner, VW / 2, VH * 0.30);
+    ctx.fillStyle = "#ffd479"; ctx.fillText(G.banner, VW / 2, VH * 0.30);
+    ctx.globalAlpha = 1;
+  }
+  ctx.textBaseline = "alphabetic";
+}
+
+/* ============ 14) ANA DÖNGÜ ============ */
+const elMenu = document.getElementById("menu");
+const elPaused = document.getElementById("paused");
+const elOver = document.getElementById("over");
+const elPauseBtn = document.getElementById("pauseBtn");
+
+function resetAll() {
+  enemies.clear(); bullets.clear(); zones.clear(); blasts.clear(); beams.clear();
+  pickups.clear(); parts.clear(); texts.clear(); telegraphs.clear();
+  G.time = 0; G.kills = 0; G.gold = 0; G.level = 1; G.xp = 0; G.xpNext = xpForLevel(1);
+  G.pendingLevels = 0; G.shake = 0; G.hitStop = 0; G.flashRed = 0; G.dmgDealt = 0;
+  G.spawnTimer = 0; G.bossIdx = 0; G.nextBossAt = BOSS_EVERY; G.boss = null;
+  G.banner = ""; G.bannerT = 0; G.win = false; G.finalSpawned = false;
+  cam.x = cam.y = 0; cam.sx = cam.sy = 0;
+  resetPlayer();
+  joy.active = false;
+}
+function startGame() {
+  resetAll();
+  elMenu.classList.remove("show");
+  elOver.classList.remove("show");
+  elPaused.classList.remove("show");
+  elLevelup.classList.remove("show");
+  elPauseBtn.classList.add("show");
+  G.state = "PLAY";
+  banner("HAYATTA KAL!", 2);
+}
+function togglePause() {
+  if (G.state === "PLAY") { G.state = "PAUSED"; joy.active = false; showPauseInfo(); elPaused.classList.add("show"); }
+  else if (G.state === "PAUSED") { G.state = "PLAY"; elPaused.classList.remove("show"); }
+}
+function showPauseInfo() {
+  const ws = P.weapons.map(w => `${w.evolved ? WEAPONS[w.id].evoIcon : WEAPONS[w.id].icon} ${w.evolved ? WEAPONS[w.id].evoName : WEAPONS[w.id].name} ${w.evolved ? "EVO" : "Sv." + w.lv}`).join(" &nbsp;•&nbsp; ");
+  const ps = Object.keys(P.passives).filter(id => P.passives[id])
+    .map(id => `${PASSIVES[id].icon} ${PASSIVES[id].name} Sv.${P.passives[id]}`).join(" &nbsp;•&nbsp; ");
+  document.getElementById("pauseInv").innerHTML = ws + (ps ? "<br><br>" + ps : "");
+}
+function gameOver(win) {
+  G.state = "OVER"; G.win = win;
+  elPauseBtn.classList.remove("show");
+  document.getElementById("overTitle").textContent = win ? "BÖLÜM TAMAMLANDI!" : "OYUN BİTTİ";
+  document.getElementById("overSub").textContent = win
+    ? "Sürüyü püskürttün ve OMEGA HORROR'u yok ettin. Efsanevi bir hayatta kalma."
+    : "Sürü seni ele geçirdi. Bir dahakine daha iyi kartlar seç!";
+  const rows = [
+    ["Hayatta Kalma", fmtTime(G.time)],
+    ["Öldürülen Düşman", G.kills],
+    ["Toplanan Altın", G.gold],
+    ["Ulaşılan Seviye", G.level],
+    ["Toplam Hasar", Math.round(G.dmgDealt).toLocaleString("tr-TR")],
+    ["Silah Sayısı", P.weapons.length + (P.weapons.some(w => w.evolved) ? " (EVO!)" : "")],
+  ];
+  document.getElementById("overStats").innerHTML =
+    rows.map(r => `<div class="stat"><span>${r[0]}</span><b>${r[1]}</b></div>`).join("");
+  elOver.classList.add("show");
+}
+
+document.getElementById("startBtn").onclick = startGame;
+document.getElementById("againBtn").onclick = startGame;
+document.getElementById("resumeBtn").onclick = togglePause;
+document.getElementById("quitBtn").onclick = () => {
+  G.state = "MENU"; elPaused.classList.remove("show");
+  elPauseBtn.classList.remove("show"); elMenu.classList.add("show");
+};
+elPauseBtn.onclick = togglePause;
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  let rdt = (now - last) / 1000; last = now;
+  rdt = Math.min(rdt, 0.05);                 // sekme geri geldiğinde sıçramayı engelle
+
+  // HIT-STOP: sert vuruşlarda oyun ~0.05 sn donar, çizim devam eder
+  let dt = rdt;
+  if (G.hitStop > 0) { G.hitStop -= rdt; dt = 0; }
+
+  if (G.state === "PLAY") {
+    G.time += dt;
+    readInput();
+    updatePlayer(dt);
+    spawnWave(dt);
+    updateEnemies(dt);
+    updateWeapons(dt);
+    updateBullets(dt);
+    updateZones(dt);
+    updateTelegraphs(dt);
+    updatePickups(dt);
+    updateFx(dt);
+    enemies.sweep();                          // kare içinde ölenleri havuza iade et
+    if (G.bannerT > 0) G.bannerT -= dt;
+    if (G.flashRed > 0) G.flashRed -= dt;
+  } else {
+    // Duraklamada bile efektler yumuşakça sönsün
+    updateFx(Math.min(rdt, 0.02));
+  }
+
+  // Kamera: oyuncuyu merkezde tut + ekran sallantısı
+  cam.x = lerp(cam.x, P.x, 1 - Math.pow(0.0008, rdt));
+  cam.y = lerp(cam.y, P.y, 1 - Math.pow(0.0008, rdt));
+  if (G.shake > 0.1) {
+    G.shake *= Math.pow(0.02, rdt);
+    cam.sx = rnd(G.shake, -G.shake); cam.sy = rnd(G.shake, -G.shake);
+  } else { G.shake = 0; cam.sx = cam.sy = 0; }
+
+  /* ---- ÇİZİM ---- */
+  drawBackground();
+  drawZones();
+  drawBlasts();
+  drawTelegraphs();
+  drawPickups();
+  drawEnemies();
+  drawGuardians();
+  drawPlayer();
+  drawBullets();
+  drawBeams();
+  drawParticles();
+  drawTexts();
+
+  if (G.flashRed > 0) {                       // hasar alınca kırmızı ekran vurgusu
+    ctx.fillStyle = "rgba(255,20,40," + (G.flashRed * 0.5).toFixed(3) + ")";
+    ctx.fillRect(0, 0, VW, VH);
+  }
+  if (G.state !== "MENU") drawHUD();
+  drawJoystick();
+}
+
+resetAll();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
