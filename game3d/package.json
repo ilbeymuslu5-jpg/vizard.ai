@@ -1,0 +1,15 @@
+{
+  "name": "horde-survivor-3d",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": {
+    "@gltf-transform/core": "^4",
+    "@gltf-transform/extensions": "^4",
+    "@gltf-transform/functions": "^4",
+    "esbuild": "^0.28",
+    "meshoptimizer": "^0.25",
+    "sharp": "^0.34",
+    "three": "^0.185"
+  }
+}
