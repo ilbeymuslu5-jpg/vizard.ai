@@ -28,29 +28,34 @@ const Warrior = {
     const uri = window.OTAG_WARRIOR_URI || 'assets/warrior/otag-warrior.glb';
     if (!window.OTAG_WARRIOR_URI) console.info('[OTAĞ] OTAG_WARRIOR_URI gömülü değil, dosyadan fetch deneniyor:', uri);
     const done = gltf => {
-      let mesh = null;
-      gltf.scene.traverse(o => { if (o.isMesh) mesh = o; });
-      if (!mesh) { this.failed = true; this.failReason = 'GLB içinde mesh bulunamadı'; cb && cb(); return; }
-      this.geo = mesh.geometry;
-      this.geo.computeBoundingSphere();
-      this.baseMat = mesh.material;
-      this.baseMat.map.anisotropy = 4;
-      this.ready = true;
-      cb && cb();
+      try {
+        let mesh = null;
+        gltf.scene.traverse(o => { if (o.isMesh) mesh = o; });
+        if (!mesh) { this.failed = true; this.failReason = 'GLB içinde mesh bulunamadı'; cb && cb(); return; }
+        this.geo = mesh.geometry;
+        this.geo.computeBoundingSphere();
+        this.baseMat = mesh.material;
+        if (this.baseMat.map) this.baseMat.map.anisotropy = 4;
+        this.ready = true;
+        cb && cb();
+      } catch (e) { fail(e); }
     };
     const fail = e => {
-      this.failReason = (e && (e.message || e.type)) || String(e);
+      this.failReason = (e && (e.message || e.name || e.type)) || String(e);
       console.warn('Otağ modeli yüklenemedi, prosedürel modele dönülüyor:', e);
       this.failed = true; cb && cb();
     };
-    if (uri.startsWith('data:')) {
-      const bin = atob(uri.split(',')[1]);
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      loader.parse(arr.buffer, '', done, fail);
-    } else {
-      loader.load(uri, done, undefined, fail);
-    }
+    try {
+      if (uri.startsWith('data:')) {
+        const b64 = uri.slice(uri.indexOf(',') + 1);
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        loader.parse(arr.buffer, '', done, fail);
+      } else {
+        loader.load(uri, done, undefined, fail);
+      }
+    } catch (e) { fail(e); }
   },
 
   /* ---------------------------------------------------------- */

@@ -61,14 +61,37 @@ const Game = {
 
   /* hangi karakter yolunun aktif olduğunu köşede küçük bir etiketle gösterir —
      "modeli koydum ama değişmemiş" gibi durumlarda tarayıcının sessizce
-     yedeğe düştüğünü (ya da hiç WebGL olmadığını) doğrudan görmek için */
+     yedeğe düştüğünü (ya da hiç WebGL olmadığını) doğrudan görmek için.
+     Yedeğe düşülmüşse ayrıca ekranın ortasında, ekran görüntüsünde asla
+     kaçırılmayacak büyüklükte gerçek hata mesajını da gösterir. */
   showModelBadge() {
     const el = document.getElementById('modelBadge');
     if (!el) return;
     if (!this.is3d) { el.textContent = 'model: 2B yedek çizim (WebGL yok)'; el.className = 'flat'; }
     else if (typeof Warrior !== 'undefined' && Warrior.ready) { el.textContent = 'model: gerçek tarama (Warrior)'; el.className = 'ok'; }
-    else { el.textContent = 'model: prosedürel yedek (CharModel) — Warrior yüklenemedi'; el.className = 'fallback'; }
-    console.info('[OTAĞ] ' + el.textContent + (Warrior && Warrior.failReason ? ' — ' + Warrior.failReason : ''));
+    else {
+      const reason = (typeof Warrior !== 'undefined' && Warrior.failReason) || 'bilinmeyen sebep';
+      el.textContent = 'model: prosedürel yedek — Warrior yüklenemedi: ' + reason;
+      el.className = 'fallback';
+      this.showLoadError(reason);
+    }
+    console.info('[OTAĞ] ' + el.textContent);
+  },
+
+  showLoadError(reason) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);' +
+      'z-index:99;background:#3a0a0a;color:#ffd9c0;border:3px solid #ff5a3a;border-radius:10px;' +
+      'padding:22px 28px;max-width:min(600px,90vw);font-family:monospace;font-size:15px;' +
+      'line-height:1.6;box-shadow:0 0 40px rgba(0,0,0,.8);text-align:left';
+    box.innerHTML = '<b style="font-size:19px">⚠ 3B karakter modeli yüklenemedi</b><br><br>' +
+      'Sebep: <b>' + String(reason).replace(/</g, '&lt;') + '</b><br><br>' +
+      'window.THREE: ' + (typeof THREE !== 'undefined' ? 'var' : 'YOK') + '<br>' +
+      'THREE.GLTFLoader: ' + (typeof THREE !== 'undefined' && THREE.GLTFLoader ? 'var' : 'YOK') + '<br>' +
+      'OTAG_WARRIOR_URI uzunluğu: ' + (window.OTAG_WARRIOR_URI ? window.OTAG_WARRIOR_URI.length : 'tanımsız') + '<br>' +
+      'is3d: ' + this.is3d + '<br><br>' +
+      '<span style="opacity:.75">Bu kutunun ekran görüntüsünü at, gerçek sebebi bulalım.</span>';
+    document.body.appendChild(box);
   },
 
   applyDifficulty() {
