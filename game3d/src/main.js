@@ -164,6 +164,10 @@ const releaseSticks = () => {
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyI' || e.code === 'Tab') {
+    e.preventDefault();
+    G.state === 'INV' ? closeInventory() : openInventory();
+  }
   if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') doDash();
   if (e.code === 'Space' && (G.state === 'MENU' || G.state === 'OVER')) startGame();
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
@@ -312,6 +316,7 @@ const G = {
   shake: 0, hitStop: 0, flashRed: 0,
   spawnTimer: 0, bossIdx: 0, nextBossAt: 180, boss: null, finalSpawned: false,
   banner: '', bannerT: 0, dmgDealt: 0, win: false,
+  toast: null, prevState: 'PLAY',
 };
 const WIN_TIME = 900, BOSS_EVERY = 180;
 /* Yüksek seviyede saniyede binlerce isabet oluyor. Her isabet sallantı ve
@@ -420,18 +425,23 @@ const P = {
   base: { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 },
   st: null, model: null, hitPop: 0, inWater: false,
   dashCd: 0, dashT: 0, dashX: 0, dashZ: 0,
-  // Koşu içi teçhizat: yuva -> kademe (0 = yok). Düşen parçalarla yükselir.
-  gear: { helm: 0, chest: 0, gloves: 0, boots: 0, cloak: 0, shield: 0 },
+  // Koşu içi envanter: kuşanılanlar + çanta (ikisi de her koşuda sıfırlanır)
+  eq: { helm: null, chest: null, gloves: null, boots: null, cloak: null, shield: null },
+  bag: [],
 };
 function recomputeStats() {
   const s = Object.assign({}, P.base);
   for (const id in P.passives) { const lv = P.passives[id]; if (lv) PASSIVES[id].apply(s, lv); }
-  /* Teçhizat koşu SIRASINDA değiştiği için (parçalar düşman düşürüyor)
-     pasifler gibi burada toplanıyor; maks. can ayrı, gainGear() içinde. */
-  for (const slot in P.gear) {
-    const t = P.gear[slot]; if (!t) continue;
-    const st = GEAR[slot].st(t);
-    for (const k in st) if (k !== 'maxHp' && s[k] !== undefined) s[k] += st[k];
+  /* Kuşanılan eşyalar koşu SIRASINDA değiştiği için pasifler gibi burada
+     toplanıyor; maks. can ayrı, equipItem() içinde işleniyor.
+     Artılar ve eksiler aynı torbadan geçiyor — eksi bir stat basitçe
+     negatif değer, ayrı bir yol gerekmiyor. */
+  for (const slot in P.eq) {
+    const it = itemOf(P.eq[slot]); if (!it) continue;
+    for (const src of [it.plus, it.minus]) {
+      if (!src) continue;
+      for (const k in src) if (k !== 'maxHp' && s[k] !== undefined) s[k] += src[k];
+    }
   }
   P.st = s;
 }
@@ -440,7 +450,8 @@ function resetPlayer() {
   P.x = P.z = 0; P.vx = P.vz = 0; P.maxHp = 100; P.hp = 100;
   // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri + teçhizatı uygula
   Object.assign(P.base, BASE0);
-  for (const slot in P.gear) P.gear[slot] = 0;      // koşu sade başlar
+  for (const slot in P.eq) P.eq[slot] = null;       // koşu sade başlar
+  P.bag.length = 0;
   applyMeta();
   applyStartGear();                                  // kalıcı "miras" varsa
   P.hp = P.maxHp;
@@ -1371,94 +1382,88 @@ const painted = (geo, hex) => {
 
 /* Kademe paleti: parça biçimleri aynı kalır, malzeme ve süsleme değişir.
    Böylece 6 yuva × 4 kademe = 24 parça, 6 şekil fonksiyonuyla üretiliyor. */
-const TIER = [
-  { name: 'Deri',      col: 0x7d5a3a, trim: 0x5a3f28, metal: false },
-  { name: 'Demir',     col: 0x9aa3b0, trim: 0x6d7683, metal: true },
-  { name: 'Çelik',     col: 0xc0cde0, trim: 0xffd479, metal: true },
-  { name: 'Efsanevi',  col: 0xffd45e, trim: 0xfff3c0, metal: true },
-];
-const TIER_MAX = TIER.length;
-
-/* --- Parça biçimleri (t: 1..4) --- */
+/* Nadirlik: rozet rengi ve kasadan çıkma şansını belirler. */
+const RAR = {
+  common: { name: 'Yaygın',    col: '#96a0b4' },
+  rare:   { name: 'Nadir',     col: '#4ea8ff' },
+  epic:   { name: 'Destansı',  col: '#b475ff' },
+  legend: { name: 'Efsanevi',  col: '#ffd479' },
+};
+/* Parça biçimleri: (det 1..4 = süsleme yoğunluğu, C = {col, trim} renkler).
+   Aynı fonksiyon hem envanterdeki ikonu hem karakterin üstündeki modeli
+   besliyor, böylece gördüğün ikon giydiğin şeyle birebir aynı. */
 const SHAPE = {
-  // Miğfer: kafayı saran kubbe + siperlik; üst kademelerde burunluk, tepelik, boynuz
-  helm(t) {
-    /* Kafa neredeyse küre: y 1.6–1.7'de yarı genişlik 0.41, tepede 2.15.
-       Kubbe kafanın ÜST yarısını örtmeli — tamamını kaplayınca karakterin
-       yüzü kayboluyor ve yürüyen bir miğfere dönüşüyordu (ölçüldü: kubbe
-       y 1.30'a kadar iniyordu, yüz 1.40–1.75 arası). */
-    const C = TIER[t - 1], out = [];
-    out.push(painted(put(new THREE.SphereGeometry(0.46, 12, 8, 0, TAU, 0, Math.PI * (t === 1 ? 0.6 : 0.56)), 0, 0, -0.02), C.col));
+  helm(det, C) {
+    /* Kafa neredeyse küre: y 1.6–1.7'de yarı genişlik 0.41, tepe 2.15.
+       Kubbe kafanın yalnızca ÜST yarısını örtmeli; tamamını kaplayınca
+       karakterin yüzü kaybolup yürüyen bir miğfere dönüşüyordu. */
+    const out = [];
+    out.push(painted(put(new THREE.SphereGeometry(0.46, 12, 8, 0, TAU, 0, Math.PI * (det === 1 ? 0.6 : 0.56)), 0, 0, -0.02), C.col));
     out.push(painted(put(new THREE.CylinderGeometry(0.47, 0.5, 0.1, 14), 0, -0.08, -0.02), C.trim));
-    if (t >= 2) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.3, 0.1), 0, -0.24, 0.42), C.trim));     // burunluk
-    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.08, 0.13, 0.9), 0, 0.36, -0.02), C.trim));   // tepelik
-    if (t >= 4) for (const s of [-1, 1]) {                                                                 // kanat/boynuz
+    if (det >= 2) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.3, 0.1), 0, -0.24, 0.42), C.trim));    // burunluk
+    if (det >= 3) out.push(painted(put(new THREE.BoxGeometry(0.08, 0.13, 0.9), 0, 0.36, -0.02), C.trim));  // tepelik
+    if (det >= 4) for (const s of [-1, 1]) {                                                                // boynuz
       const h = new THREE.ConeGeometry(0.1, 0.52, 6);
       h.rotateZ(s * 0.8); h.rotateX(-0.15); h.translate(s * 0.44, 0.2, -0.05);
       out.push(painted(h, C.trim));
     }
     return out;
   },
-  // Göğüslük: gövdeyi saran kabuk + omuzluklar
-  chest(t) {
-    const C = TIER[t - 1], out = [];
-    const body = new THREE.CylinderGeometry(0.34, 0.4, 0.52, 12, 1, false);
-    out.push(painted(put(body, 0, 0, 0), C.col));
+  chest(det, C) {
+    const out = [];
+    out.push(painted(put(new THREE.CylinderGeometry(0.34, 0.4, 0.52, 12), 0, 0, 0), C.col));
     out.push(painted(put(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12), 0, 0.24, 0), C.trim));   // yaka
     out.push(painted(put(new THREE.CylinderGeometry(0.42, 0.42, 0.07, 12), 0, -0.24, 0), C.trim));  // kemer
     for (const s of [-1, 1]) {                                                                       // omuzluk
-      const r = t >= 3 ? 0.23 : 0.19;
+      const r = det >= 3 ? 0.23 : 0.19;
       out.push(painted(put(new THREE.SphereGeometry(r, 8, 6, 0, TAU, 0, Math.PI * 0.55), s * 0.33, 0.15, 0, 0, 0, s * 0.4), C.col));
-      if (t >= 2) out.push(painted(put(new THREE.TorusGeometry(r * 0.95, 0.032, 4, 10), s * 0.33, 0.14, 0, Math.PI / 2, 0, s * 0.4), C.trim));
+      if (det >= 2) out.push(painted(put(new THREE.TorusGeometry(r * 0.95, 0.032, 4, 10), s * 0.33, 0.14, 0, Math.PI / 2, 0, s * 0.4), C.trim));
     }
-    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.44, 0.03), 0, 0, 0.4), C.trim));   // göğüs şeridi
-    if (t >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.06, 0.42), C.trim)); // mücevher
+    if (det >= 3) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.44, 0.03), 0, 0, 0.4), C.trim));
+    if (det >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.06, 0.42), C.trim));
     return out;
   },
-  // Eldiven / kolluk: ön kolu saran bilezik + el plakası
-  gloves(t) {
-    const C = TIER[t - 1], out = [];
+  gloves(det, C) {
+    const out = [];
     out.push(painted(put(new THREE.CylinderGeometry(0.13, 0.15, 0.26, 8), 0, 0, 0, 0, 0, Math.PI / 2), C.col));
     out.push(painted(put(new THREE.TorusGeometry(0.145, 0.028, 4, 10), 0.1, 0, 0, 0, Math.PI / 2, 0), C.trim));
-    if (t >= 2) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.1, 0.16), -0.16, 0, 0), C.col));
-    if (t >= 3) out.push(painted(put(new THREE.ConeGeometry(0.07, 0.16, 4), 0.2, 0.05, 0, 0, 0, -Math.PI / 2), C.trim));
+    if (det >= 2) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.1, 0.16), -0.16, 0, 0), C.col));
+    if (det >= 3) out.push(painted(put(new THREE.ConeGeometry(0.07, 0.16, 4), 0.2, 0.05, 0, 0, 0, -Math.PI / 2), C.trim));
+    if (det >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.07, 0), -0.16, 0.09, 0), C.trim));
     return out;
   },
-  // Bot: ayağı saran gövde + bilek/dizlik
-  boots(t) {
-    const C = TIER[t - 1], out = [];
+  boots(det, C) {
+    const out = [];
     out.push(painted(put(new THREE.BoxGeometry(0.19, 0.13, 0.3), 0, -0.03, 0.02), C.col));
     out.push(painted(put(new THREE.CylinderGeometry(0.11, 0.13, 0.2, 8), 0, 0.11, -0.05), C.col));
     out.push(painted(put(new THREE.BoxGeometry(0.21, 0.05, 0.32), 0, -0.09, 0.02), C.trim));      // taban
-    if (t >= 2) out.push(painted(put(new THREE.TorusGeometry(0.12, 0.03, 4, 10), 0, 0.06, -0.04), C.trim));
-    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.2, 0.06), 0, 0.18, 0.06), C.trim));  // dizlik
-    if (t >= 4) out.push(painted(put(new THREE.ConeGeometry(0.05, 0.14, 4), 0, 0.06, 0.2, Math.PI / 2, 0, 0), C.trim));
+    if (det >= 2) out.push(painted(put(new THREE.TorusGeometry(0.12, 0.03, 4, 10), 0, 0.06, -0.04), C.trim));
+    if (det >= 3) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.2, 0.06), 0, 0.18, 0.06), C.trim));  // dizlik
+    if (det >= 4) out.push(painted(put(new THREE.ConeGeometry(0.05, 0.14, 4), 0, 0.06, 0.2, Math.PI / 2, 0, 0), C.trim));
     return out;
   },
-  // Pelerin: sırttan sarkan kabuk (açık yarısı öne bakar)
-  cloak(t) {
-    const C = TIER[t - 1], out = [];
-    const len = 0.6 + t * 0.09;
+  cloak(det, C) {
+    const out = [];
+    const len = 0.6 + det * 0.09;
     const shell = new THREE.CylinderGeometry(0.29, 0.4, len, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
     shell.translate(0, -len / 2 + 0.14, 0);
-    out.push(painted(shell, t >= 3 ? 0xa32340 : C.col));
+    out.push(painted(shell, C.col));
     /* Yaka YATAY kalmalı: rotateX(90°) ile yatırdıktan sonra hizalama dönüşü
        Y ekseninde olmalı. Z'de döndürülünce halka dikleşip boynun etrafında
        kafaya kadar çıkan bir çembere dönüşüyordu (ölçüldü: tepe y 1.62). */
     const collar = new THREE.TorusGeometry(0.29, 0.05, 5, 12, Math.PI * 1.2);
     collar.rotateX(Math.PI / 2); collar.rotateY(-Math.PI * 0.42); collar.translate(0, 0.15, 0);
     out.push(painted(collar, C.trim));
-    if (t >= 2) {
+    if (det >= 2) {
       const hem = new THREE.CylinderGeometry(0.405, 0.405, 0.07, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
       hem.translate(0, -len + 0.17, 0);
       out.push(painted(hem, C.trim));
     }
     return out;
   },
-  // Kalkan: kademeye göre siperlikten kule kalkanına
-  shield(t) {
-    const C = TIER[t - 1], out = [];
-    if (t <= 2) {
+  shield(det, C) {
+    const out = [];
+    if (det <= 2) {
       out.push(painted(put(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12), 0, 0, 0, Math.PI / 2, 0, 0), C.col));
       out.push(painted(put(new THREE.TorusGeometry(0.195, 0.03, 4, 14), 0, 0, 0), C.trim));
       out.push(painted(put(new THREE.SphereGeometry(0.075, 7, 5), 0, 0, 0.05), C.trim));
@@ -1469,15 +1474,15 @@ const SHAPE = {
       out.push(painted(tip, C.col));
       out.push(painted(put(new THREE.BoxGeometry(0.08, 0.6, 0.025), 0, -0.03, 0.05), C.trim));
       out.push(painted(put(new THREE.BoxGeometry(0.4, 0.08, 0.025), 0, 0.1, 0.05), C.trim));
-      if (t >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.1, 0.08), C.trim));
+      if (det >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.1, 0.08), C.trim));
     }
     return out;
   },
 };
 
-/* Kahramanın HER ZAMAN üstünde olan temel kıyafeti. Modelin kendisi
-   "base form" (kıyafetsiz temel gövde) olarak geldiği için tunik ve pantolon
-   oyun tarafında ekleniyor; zırhlar bunun üstüne biniyor. */
+/* Kahramanın HER ZAMAN üstünde olan temel kıyafeti. Model "base form"
+   (kıyafetsiz temel gövde) olarak geldiği için tunik ve pantolon oyun
+   tarafında ekleniyor; zırhlar bunun üstüne biniyor. */
 const OUTFIT = {
   torso: () => [
     painted(put(new THREE.CylinderGeometry(0.33, 0.38, 0.56, 12), 0, 0, 0), 0x8d7d5f),   // keten tunik
@@ -1492,37 +1497,173 @@ const OUTFIT = {
   ],
 };
 
+/* Yuvalar: hangi kemiğe, hangi konum/dönüşle bağlanacak.
+   pos/rot KARAKTER uzayında (dünya birimi, +Z ileri, +Y yukarı). */
 const GEAR = {
-  helm:   { name: 'Miğfer',    icon: '⛑️', bones: ['Head'],
-            pos: [0, 0.63, -0.11], rot: [0, 0, 0], shape: 'helm',
-            st: t => ({ armor: t + 1, maxHp: t * 12 }),
-            txt: t => `Zırh +${t + 1} · Maks. can +${t * 12}` },
-  chest:  { name: 'Göğüslük',  icon: '🎽', bones: ['Spine02'],
-            pos: [0, 0.19, -0.11], rot: [0.06, 0, 0], shape: 'chest',
-            st: t => ({ armor: t * 2, maxHp: t * 22 }),
-            txt: t => `Zırh +${t * 2} · Maks. can +${t * 22}` },
-  gloves: { name: 'Kolluk',    icon: '🧤', bones: ['LeftForeArm', 'RightForeArm'], mirror: true,
-            pos: [0.09, -0.05, -0.1], rot: [0, 0, 0], shape: 'gloves',
-            st: t => ({ dmg: t * 0.05, atkSpeed: t * 0.04 }),
-            txt: t => `Hasar +%${t * 5} · Saldırı hızı +%${t * 4}` },
-  boots:  { name: 'Bot',       icon: '🥾', bones: ['LeftFoot', 'RightFoot'], mirror: true,
-            pos: [0.03, -0.01, -0.09], rot: [0, 0, 0], shape: 'boots',
-            st: t => ({ speedMul: t * 0.05, armor: Math.floor(t / 2) }),
-            txt: t => `Hareket hızı +%${t * 5}` + (t >= 2 ? ` · Zırh +${Math.floor(t / 2)}` : '') },
-  cloak:  { name: 'Pelerin',   icon: '🧥', bones: ['Spine02'],
-            pos: [0, 0.22, -0.26], rot: [0.1, 0, 0], shape: 'cloak',
-            st: t => ({ magnet: t * 0.16, regen: t * 0.18 }),
-            txt: t => `Mıknatıs +%${t * 16} · ${(t * 0.18).toFixed(2)} HP/sn` },
-  shield: { name: 'Kalkan',    icon: '🛡️', bones: ['LeftHand'],
-            pos: [0.11, 0, -0.1], rot: [0, 0.45, 0], shape: 'shield',
-            st: t => ({ armor: t * 2, maxHp: t * 10 }),
-            txt: t => `Zırh +${t * 2} · Maks. can +${t * 10}` },
+  helm:   { name: 'Miğfer',   icon: '⛑️', bones: ['Head'],
+            pos: [0, 0.63, -0.11], rot: [0, 0, 0] },
+  chest:  { name: 'Göğüslük', icon: '🎽', bones: ['Spine02'],
+            pos: [0, 0.19, -0.11], rot: [0.06, 0, 0] },
+  gloves: { name: 'Kolluk',   icon: '🧤', bones: ['LeftForeArm', 'RightForeArm'], mirror: true,
+            pos: [0.09, -0.05, -0.1], rot: [0, 0, 0] },
+  boots:  { name: 'Bot',      icon: '🥾', bones: ['LeftFoot', 'RightFoot'], mirror: true,
+            pos: [0.03, -0.01, -0.09], rot: [0, 0, 0] },
+  cloak:  { name: 'Pelerin',  icon: '🧥', bones: ['Spine02'],
+            pos: [0, 0.22, -0.26], rot: [0.1, 0, 0] },
+  shield: { name: 'Kalkan',   icon: '🛡️', bones: ['LeftHand'],
+            pos: [0.11, 0, -0.1], rot: [0, 0.45, 0] },
 };
 const GEAR_SLOTS = Object.keys(GEAR);
-const gearName = (slot, t) => TIER[t - 1].name + ' ' + GEAR[slot].name;
-/* Seviyeye göre düşebilecek en yüksek kademe: kahraman koşu boyunca
-   sade -> deri -> demir -> çelik -> efsanevi diye ilerlesin. */
-const tierForLevel = lv => lv >= 20 ? 4 : lv >= 12 ? 3 : lv >= 6 ? 2 : 1;
+
+/* ---------- EŞYALAR ----------
+   Her eşyanın ARTILARI ve bazılarının EKSİLERİ var. Kural: güçlü artı
+   genelde bir bedelle geliyor; her nadirlikte bedelsiz ("temiz") seçenekler
+   de var, böylece "hep en yüksek nadirliği tak" diye tek doğru cevap olmuyor.
+   det: biçim süsleme yoğunluğu · col/trim: modelin renkleri */
+const ITEMS = {
+  helm: [
+    { id: 'hoodH',   name: 'Deri Başlık',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
+      plus: { armor: 1 } },
+    { id: 'ironH',   name: 'Demir Miğfer',   rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
+      plus: { armor: 3, maxHp: 15 }, minus: { speedMul: -0.03 } },
+    { id: 'visorH',  name: 'Kapalı Tolga',   rar: 'rare',   det: 2, col: 0xc0cde0, trim: 0x7d8ba0,
+      plus: { armor: 6, maxHp: 25 }, minus: { magnet: -0.15 } },
+    { id: 'crownH',  name: 'Savaş Tacı',     rar: 'rare',   det: 3, col: 0xd8c27a, trim: 0xffd479,
+      plus: { dmg: 0.1, crit: 0.04 } },
+    { id: 'dragonH', name: 'Ejder Kaskı',    rar: 'epic',   det: 4, col: 0xa8452e, trim: 0xffb03a,
+      plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 } },
+    { id: 'haloH',   name: 'Kutsal Hale',    rar: 'legend', det: 4, col: 0xf3eddc, trim: 0xffd479,
+      plus: { armor: 5, maxHp: 40, regen: 0.8 } },
+  ],
+  chest: [
+    { id: 'padC',    name: 'Pamuklu Zırh',   rar: 'common', det: 1, col: 0x8a7550, trim: 0x63523a,
+      plus: { armor: 2, maxHp: 18 } },
+    { id: 'chainC',  name: 'Zincir Zırh',    rar: 'common', det: 2, col: 0x99a2af, trim: 0x6d7683,
+      plus: { armor: 5, maxHp: 30 }, minus: { speedMul: -0.06 } },
+    { id: 'scaleC',  name: 'Pullu Zırh',     rar: 'rare',   det: 2, col: 0x6f9a7d, trim: 0x47705a,
+      plus: { armor: 7, maxHp: 45 }, minus: { atkSpeed: -0.06 } },
+    { id: 'rangerC', name: 'Avcı Yeleği',    rar: 'rare',   det: 1, col: 0x54704a, trim: 0x8a6b3c,
+      plus: { speedMul: 0.1, crit: 0.05, maxHp: 15 } },
+    { id: 'lionC',   name: 'Aslan Göğüslüğü',rar: 'epic',   det: 3, col: 0xc6d2e4, trim: 0xffd479,
+      plus: { armor: 11, maxHp: 70 }, minus: { speedMul: -0.1 } },
+    { id: 'phoenixC',name: 'Anka Zırhı',     rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffd479,
+      plus: { armor: 9, maxHp: 60, regen: 1 } },
+  ],
+  gloves: [
+    { id: 'wrapG',   name: 'Bez Sargı',      rar: 'common', det: 1, col: 0xa89678, trim: 0x8a7a5e,
+      plus: { atkSpeed: 0.05 } },
+    { id: 'leatherG',name: 'Deri Kolluk',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
+      plus: { dmg: 0.06, armor: 1 } },
+    { id: 'ironG',   name: 'Demir Kolluk',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
+      plus: { dmg: 0.12, armor: 3 }, minus: { atkSpeed: -0.05 } },
+    { id: 'swiftG',  name: 'Çevik Eldiven',  rar: 'rare',   det: 2, col: 0x4e8f9a, trim: 0x9ef1ff,
+      plus: { atkSpeed: 0.15 }, minus: { dmg: -0.05 } },
+    { id: 'clawG',   name: 'Cinnet Pençesi', rar: 'epic',   det: 3, col: 0x6d2a3a, trim: 0xff5566,
+      plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 } },
+    { id: 'titanG',  name: 'Titan Yumruğu',  rar: 'legend', det: 4, col: 0xc9a24a, trim: 0xfff0b8,
+      plus: { dmg: 0.22, atkSpeed: 0.12, area: 0.1 } },
+  ],
+  boots: [
+    { id: 'sandalB', name: 'Sandalet',       rar: 'common', det: 1, col: 0x8a6b45, trim: 0x63502f,
+      plus: { speedMul: 0.05 } },
+    { id: 'leatherB',name: 'Deri Bot',       rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
+      plus: { speedMul: 0.08, armor: 1 } },
+    { id: 'ironB',   name: 'Demir Dizlik',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
+      plus: { armor: 4, maxHp: 20 }, minus: { speedMul: -0.05 } },
+    { id: 'windB',   name: 'Rüzgar Botu',    rar: 'rare',   det: 2, col: 0x7fd8c8, trim: 0xdff7ff,
+      plus: { speedMul: 0.16 }, minus: { armor: -2 } },
+    { id: 'quakeB',  name: 'Sarsıntı Botu',  rar: 'epic',   det: 3, col: 0x7a5230, trim: 0xff8a3d,
+      plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 } },
+    { id: 'hermesB', name: 'Hermes Kanadı',  rar: 'legend', det: 4, col: 0xe8e2cf, trim: 0xffd479,
+      plus: { speedMul: 0.22, atkSpeed: 0.08 } },
+  ],
+  cloak: [
+    { id: 'raggedK', name: 'Yırtık Pelerin', rar: 'common', det: 1, col: 0x6b6152, trim: 0x50483d,
+      plus: { magnet: 0.12 } },
+    { id: 'woolK',   name: 'Yün Pelerin',    rar: 'common', det: 1, col: 0x6f5f47, trim: 0x8b7a5c,
+      plus: { magnet: 0.2, regen: 0.2 } },
+    { id: 'shadowK', name: 'Gölge Pelerini', rar: 'rare',   det: 2, col: 0x33304a, trim: 0x6e63a8,
+      plus: { speedMul: 0.1, crit: 0.05 }, minus: { armor: -2 } },
+    { id: 'royalK',  name: 'Kraliyet Pelerini', rar: 'rare', det: 3, col: 0xa32340, trim: 0xffc94d,
+      plus: { maxHp: 30, regen: 0.5 } },
+    { id: 'vampK',   name: 'Vampir Pelerini',rar: 'epic',   det: 3, col: 0x4a1526, trim: 0xd12b4a,
+      plus: { regen: 1.4, dmg: 0.08 }, minus: { maxHp: -25 } },
+    { id: 'starK',   name: 'Yıldız Mantosu', rar: 'legend', det: 4, col: 0x2b3d78, trim: 0x9ec9ff,
+      plus: { magnet: 0.6, area: 0.15, regen: 0.6 } },
+  ],
+  shield: [
+    { id: 'woodS',   name: 'Ahşap Siperlik', rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
+      plus: { armor: 2 } },
+    { id: 'ironS',   name: 'Demir Siperlik', rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
+      plus: { armor: 4, maxHp: 15 }, minus: { atkSpeed: -0.04 } },
+    { id: 'kiteS',   name: 'Şövalye Kalkanı',rar: 'rare',   det: 3, col: 0xc0cde0, trim: 0xffd479,
+      plus: { armor: 7, maxHp: 35 }, minus: { speedMul: -0.06 } },
+    { id: 'spikeS',  name: 'Dikenli Kalkan', rar: 'rare',   det: 3, col: 0x7a6b5c, trim: 0xb0483a,
+      plus: { armor: 5, dmg: 0.1 } },
+    { id: 'towerS',  name: 'Kule Kalkanı',   rar: 'epic',   det: 4, col: 0x8fa0bb, trim: 0xffd479,
+      plus: { armor: 12, maxHp: 55 }, minus: { speedMul: -0.12, atkSpeed: -0.06 } },
+    { id: 'aegisS',  name: 'Aegis',          rar: 'legend', det: 4, col: 0xf0e6c8, trim: 0xffd479,
+      plus: { armor: 10, maxHp: 50, regen: 0.6 } },
+  ],
+};
+// id -> {item, slot} arama tablosu
+const ITEM_BY_ID = {};
+for (const slot of GEAR_SLOTS) for (const it of ITEMS[slot]) ITEM_BY_ID[it.id] = { it, slot };
+const itemOf = id => (ITEM_BY_ID[id] || {}).it || null;
+const slotOfItem = id => (ITEM_BY_ID[id] || {}).slot || null;
+
+/* İstatistik adları (envanterde okunur metin için) */
+// Türkçe yazımda işaret yüzdenin ÖNÜNE gelir: "-%15" (yanlış: "%-15")
+const pc = v => `${v < 0 ? '-' : '+'}%${Math.abs(Math.round(v * 100))}`;
+const nm = v => `${v < 0 ? '-' : '+'}${Math.abs(v)}`;
+const STAT_TXT = {
+  armor:    v => `Zırh ${nm(v)}`,
+  maxHp:    v => `Maks. can ${nm(v)}`,
+  dmg:      v => `Hasar ${pc(v)}`,
+  atkSpeed: v => `Saldırı hızı ${pc(v)}`,
+  speedMul: v => `Hareket hızı ${pc(v)}`,
+  magnet:   v => `Mıknatıs ${pc(v)}`,
+  regen:    v => `Rejen ${v < 0 ? '-' : '+'}${Math.abs(v).toFixed(2)} HP/sn`,
+  crit:     v => `Kritik ${pc(v)}`,
+  area:     v => `Etki alanı ${pc(v)}`,
+};
+const statLines = (o, sign) => Object.keys(o || {}).map(k => (sign || '') + STAT_TXT[k](o[k]));
+
+/* Kasadan çıkacak nadirlik: seviye yükseldikçe iyi eşya şansı artıyor.
+   Yüzdeler toplanarak eşiklere çevriliyor (0-100). */
+function rollRarity(lv) {
+  const legend = Math.min(12, 1 + lv * 0.35);
+  const epic   = Math.min(26, 5 + lv * 0.9);
+  const rare   = Math.min(42, 18 + lv * 1.2);
+  const r = Math.random() * 100;
+  if (r < legend) return 'legend';
+  if (r < legend + epic) return 'epic';
+  if (r < legend + epic + rare) return 'rare';
+  return 'common';
+}
+// Şansları arayüzde göstermek için (kasa açılırken)
+function rarityOdds(lv) {
+  const legend = Math.min(12, 1 + lv * 0.35);
+  const epic   = Math.min(26, 5 + lv * 0.9);
+  const rare   = Math.min(42, 18 + lv * 1.2);
+  return { legend, epic, rare, common: Math.max(0, 100 - legend - epic - rare) };
+}
+/* Kasadan bir eşya çıkar. Aynı eşyanın kopyası varsa bir kez yeniden
+   deneniyor — çantanın aynı şeyle dolmasını yumuşatıyor. */
+function rollItem(lv) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const rar = rollRarity(lv);
+    const pool = [];
+    for (const slot of GEAR_SLOTS) for (const it of ITEMS[slot]) if (it.rar === rar) pool.push(it);
+    const pick0 = pool[(Math.random() * pool.length) | 0];
+    if (!pick0) continue;
+    if (attempt === 0 && (P.bag.indexOf(pick0.id) >= 0 || P.eq[slotOfItem(pick0.id)] === pick0.id)) continue;
+    return pick0;
+  }
+  const slot = GEAR_SLOTS[(Math.random() * GEAR_SLOTS.length) | 0];
+  return ITEMS[slot][(Math.random() * ITEMS[slot].length) | 0];
+}
+
 
 /* --- Teçhizatın 3B tarafı --- */
 const gearMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -1602,56 +1743,57 @@ function addPiece(holder, geo) {
 function refreshGearVisuals() {
   for (const slot of GEAR_SLOTS) {
     const holders = gearNodes[slot]; if (!holders) continue;
-    const t = P.gear[slot] | 0;
+    const it = itemOf(P.eq[slot]);
     for (const holder of holders) {
       while (holder.children.length) {
         const c = holder.children.pop();
         if (c.geometry) c.geometry.dispose();
       }
-      if (!t) continue;
-      const geo = mergeGeometries(SHAPE[GEAR[slot].shape](t), false);
+      if (!it) continue;
+      const geo = mergeGeometries(SHAPE[slot](it.det, it), false);
       if (geo) addPiece(holder, geo);
     }
   }
-  // Göğüslük giyilince tunik gövdesi altında kalır; z-kavgası olmasın diye gizle
-  if (outfitNodes[0]) outfitNodes[0].visible = !P.gear.chest;
-  if (outfitNodes[2]) outfitNodes[2].visible = !P.gear.boots;
-  if (outfitNodes[3]) outfitNodes[3].visible = !P.gear.boots;
+  // Göğüslük/bot giyilince temel kıyafet altında kalır; z-kavgası olmasın diye gizle
+  if (outfitNodes[0]) outfitNodes[0].visible = !P.eq.chest;
+  if (outfitNodes[2]) outfitNodes[2].visible = !P.eq.boots;
+  if (outfitNodes[3]) outfitNodes[3].visible = !P.eq.boots;
 }
 
-function gearStat(slot, t, key) { return t ? (GEAR[slot].st(t)[key] || 0) : 0; }
-/* Kademeyi doğrudan ayarla (her iki yöne). Maks. can farkı burada işlenir,
-   çünkü teçhizat koşu ortasında değişiyor ve can barı anında güncellenmeli. */
-function setGearTier(slot, tier) {
-  const cur = P.gear[slot] | 0;
-  if (tier === cur) return false;
-  const d = gearStat(slot, tier, 'maxHp') - gearStat(slot, cur, 'maxHp');
-  P.gear[slot] = tier;
+/* ---------- ENVANTER ----------
+   Çanta ve kuşanılanlar KOŞUYA ÖZEL: her koşuda sıfırdan toplanıyor
+   (roguelike döngüsü). Kalıcı olan tek şey koleksiyon kaydı (META.seen). */
+const BAG_MAX = 20;
+function itemStatSum(it, key) {
+  if (!it) return 0;
+  return (it.plus && it.plus[key] || 0) + (it.minus && it.minus[key] || 0);
+}
+/* Bir yuvaya eşya tak/çıkar. Maks. can farkı burada işleniyor çünkü envanter
+   koşu ortasında değişiyor ve can barı anında güncellenmeli. */
+function equipItem(slot, id) {
+  const cur = P.eq[slot], next = id || null;
+  if (cur === next) return false;
+  const d = itemStatSum(itemOf(next), 'maxHp') - itemStatSum(itemOf(cur), 'maxHp');
+  // yerinden çıkan eşya çantaya döner
+  if (cur) { const i = P.bag.indexOf(cur); if (i < 0 && P.bag.length < BAG_MAX) P.bag.push(cur); }
+  if (next) { const i = P.bag.indexOf(next); if (i >= 0) P.bag.splice(i, 1); }
+  P.eq[slot] = next;
   if (d) { P.maxHp = Math.max(1, P.maxHp + d); P.hp = clamp(P.hp + Math.max(0, d), 1, P.maxHp); }
   recomputeStats();
   refreshGearVisuals();
   return true;
 }
-/* Oyun içi kazanım: kademe yalnızca YÜKSELİR ve koleksiyona işlenir. */
-function gainGear(slot, tier) {
-  if (tier <= (P.gear[slot] | 0)) return false;
-  setGearTier(slot, tier);
-  META.seen[slot] = Math.max(META.seen[slot] | 0, tier);
-  metaSave();
-  return true;
-}
-/* Düşen parçanın hangi yuvaya gideceği: EN GERİ kalmış yuva seçilir, böylece
-   kahraman dengeli gelişir ve tek bir yuvaya yığılma olmaz. */
-function pickGearDrop() {
-  const cap = tierForLevel(G.level);
-  let best = null, bestT = 99;
-  for (const slot of GEAR_SLOTS) {
-    const t = P.gear[slot] | 0;
-    if (t >= cap) continue;
-    if (t < bestT || (t === bestT && Math.random() < 0.5)) { bestT = t; best = slot; }
-  }
-  if (!best) return null;
-  return { slot: best, tier: Math.min(cap, bestT + 1) };
+/* Çantaya eşya ekle. Yuva boşsa kendiliğinden kuşanılır; doluysa çantada
+   bekler (oyuncu envanterden karşılaştırıp değiştirir). */
+function addItem(id) {
+  const slot = slotOfItem(id);
+  if (!slot) return null;
+  META.seen[id] = 1; metaSave();                 // koleksiyon kaydı
+  if (!P.eq[slot]) { equipItem(slot, id); return 'equipped'; }
+  if (P.bag.indexOf(id) >= 0) { G.gold += 25; return 'dupe'; }   // kopya: altına çevrilir
+  if (P.bag.length >= BAG_MAX) { G.gold += 25; return 'full'; }
+  P.bag.push(id);
+  return 'bagged';
 }
 
 // Döner bıçak mesh havuzu
@@ -1728,26 +1870,22 @@ function spawnPickup(x, z, kind, val, gear) {
   const p = pickups.get();
   if (!p) { if (kind.startsWith('xp')) gainXp(val); return; }
   p.x = x; p.z = z; p.kind = kind; p.val = val; p.t = rnd(TAU); p.pulled = false;
-  p.slot = gear ? gear.slot : ''; p.tier = gear ? gear.tier : 0;
+  p.slot = ''; p.tier = 0;
   const a = rnd(TAU), s = rnd(2.8, 0.9);
   p.vx = Math.cos(a) * s; p.vz = Math.sin(a) * s;
 }
-/* Teçhizat düşürme: elit ve boss garanti, sıradan düşman seyrek.
-   Kademe oyuncunun seviyesine bağlı (tierForLevel), yani kahraman koşu
-   ilerledikçe deri -> demir -> çelik -> efsanevi diye gelişir. */
-function dropGear(x, z, n) {
-  for (let i = 0; i < n; i++) {
-    const g = pickGearDrop();
-    if (!g) { spawnPickup(x + rnd(1, -1), z + rnd(1, -1), 'gold', 15); continue; }
-    spawnPickup(x + rnd(1, -1), z + rnd(1, -1), 'gear', 0, g);
-  }
+/* KASA düşürme. Ana kaynak SEVİYE ATLAMAK; boss ve elitler ek kasa verir.
+   Kasayı toplayınca içinden yüzdelik şansla bir eşya çıkıyor (rollItem). */
+function dropChest(x, z, n) {
+  for (let i = 0; i < n; i++)
+    spawnPickup(x + rnd(1.4, -1.4), z + rnd(1.4, -1.4), 'chest', 0);
 }
 function dropLoot(e) {
   if (e.boss) {
     for (let i = 0; i < 12; i++) spawnPickup(e.x + rnd(3, -3), e.z + rnd(3, -3), 'xp20', 20);
     for (let i = 0; i < 6; i++) spawnPickup(e.x + rnd(3.5, -3.5), e.z + rnd(3.5, -3.5), 'gold', 10);
     spawnPickup(e.x, e.z + 1, 'heal', 35);
-    dropGear(e.x, e.z, 2);
+    dropChest(e.x, e.z, 2);
     return;
   }
   let kind = 'xp1', val = 1;
@@ -1755,8 +1893,8 @@ function dropLoot(e) {
   spawnPickup(e.x, e.z, kind, val);
   if (Math.random() < (e.elite ? 1 : 0.05)) spawnPickup(e.x + rnd(.7, -.7), e.z + rnd(.7, -.7), 'gold', e.elite ? 8 : rndi(4, 1));
   if (Math.random() < 0.012) spawnPickup(e.x, e.z, 'heal', 20);
-  if (e.elite) dropGear(e.x, e.z, 1);
-  else if (Math.random() < 0.012) dropGear(e.x, e.z, 1);
+  if (e.elite && Math.random() < 0.35) dropChest(e.x, e.z, 1);
+  else if (Math.random() < 0.004) dropChest(e.x, e.z, 1);
 }
 function updatePickups(dt) {
   const A = pickups.active;
@@ -1780,14 +1918,14 @@ function updatePickups(dt) {
       p.x += (P.x - p.x) / d * sp * dt; p.z += (P.z - p.z) / d * sp * dt;
     }
     if (d2 < pickR2) { collect(p); p.dead = true; continue; }
-    if (p.kind === 'gear') {
+    if (p.kind === 'chest') {
       if (ng < GEAR_DROP_MAX) {
         _v3.set(p.x, 0.42 + Math.sin(p.t * 3.4) * 0.1, p.z);
         _q.setFromAxisAngle(_AXIS_Y, p.t * 1.1);
         _s3.setScalar(1);
         _m4.compose(_v3, _q, _s3);
         gearDropMesh.setMatrixAt(ng, _m4);
-        _col.setHex(TIER[clamp(p.tier, 1, TIER_MAX) - 1].col);
+        _col.setHex(0xffb84d);                    // altın sandık
         gearDropMesh.setColorAt(ng, _col);
         ng++;
       }
@@ -1810,20 +1948,17 @@ function updatePickups(dt) {
   pickups.sweep();
 }
 function collect(p) {
-  if (p.kind === 'gear') {
-    /* Düşerken seçilen yuva bu arada dolmuş olabilir; toplama anında
-       yeniden karar veriliyor, yoksa parça boşa gidiyordu. */
-    let slot = p.slot, tier = p.tier;
-    if (!slot || tier <= (P.gear[slot] | 0)) {
-      const g = pickGearDrop();
-      if (g) { slot = g.slot; tier = g.tier; } else slot = '';
-    }
-    if (slot && gainGear(slot, tier)) {
-      const C = TIER[tier - 1];
-      banner(GEAR[slot].icon + ' ' + gearName(slot, tier), 1.7);
-      SFX.levelup(); addShake(0.25);
-      for (let i = 0; i < 22; i++) particle(P.x, 1.1, P.z, '#' + C.trim.toString(16).padStart(6, '0'), 4, 9);
-    } else { G.gold += 20; addText(p.x, 1, p.z, 20, false); }   // zaten tam: altına çevir
+  if (p.kind === 'chest') {
+    /* Kasa açılışı: nadirlik yüzdelik şansla belirleniyor (rollItem),
+       çıkan eşya boş yuvaya kendiliğinden takılıyor, dolu yuvada çantaya
+       düşüyor — karşılaştırmayı oyuncu envanterden yapıyor. */
+    const it = rollItem(G.level);
+    const res = addItem(it.id);
+    const R = RAR[it.rar];
+    banner(GEAR[slotOfItem(it.id)].icon + ' ' + it.name, 2);
+    G.toast = { name: it.name, rar: it.rar, res, t: 2.6 };
+    SFX.levelup(); addShake(0.3);
+    for (let i = 0; i < 26; i++) particle(p.x, 0.9, p.z, R.col, 4, 10);
     SFX.pickup();
     return;
   }
@@ -1835,7 +1970,10 @@ function collect(p) {
 }
 function gainXp(v) {
   G.xp += v;
-  while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.level++; G.pendingLevels++; G.xpNext = xpForLevel(G.level); }
+  while (G.xp >= G.xpNext) {
+    G.xp -= G.xpNext; G.level++; G.pendingLevels++; G.xpNext = xpForLevel(G.level);
+    dropChest(P.x, P.z, 1);          // her seviyede bir kasa
+  }
   if (G.pendingLevels > 0 && G.state === 'PLAY') openLevelUp();
 }
 function buildChoices() {
@@ -2031,7 +2169,8 @@ function drawOverlay() {
   }
 
   if (G.flashRed > 0) { ctx.fillStyle = `rgba(255,20,40,${(G.flashRed * 0.5).toFixed(3)})`; ctx.fillRect(0, 0, VW, VH); }
-  if (G.state !== 'MENU' && G.state !== 'LOADING') { drawHUD(); updateDashBtn(); }
+  if (G.state !== 'MENU' && G.state !== 'LOADING') { drawHUD(); updateDashBtn(); updateBagBtn(); }
+  if (G.toast && G.toast.t > 0) drawToast();
   drawJoystick();
 }
 function drawHUD() {
@@ -2091,14 +2230,14 @@ function drawHUD() {
      olduğunu tek bakışta göstermek için — boş yuvalar sönük duruyor. */
   ix = 8;
   for (const slot of GEAR_SLOTS) {
-    const t = P.gear[slot] | 0;
-    ctx.fillStyle = t ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.28)';
+    const it = itemOf(P.eq[slot]);
+    ctx.fillStyle = it ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.28)';
     ctx.fillRect(ix, iy - 10, 21, 20);
-    if (t) {
-      ctx.fillStyle = '#' + TIER[t - 1].col.toString(16).padStart(6, '0');
+    if (it) {                                   // alt çizgi nadirliği gösterir
+      ctx.fillStyle = RAR[it.rar].col;
       ctx.fillRect(ix, iy + 7, 21, 3);
     }
-    ctx.globalAlpha = t ? 1 : 0.32;
+    ctx.globalAlpha = it ? 1 : 0.32;
     ctx.font = '12px sans-serif'; ctx.fillStyle = '#fff';
     ctx.fillText(GEAR[slot].icon, ix + 2, iy);
     ctx.globalAlpha = 1;
@@ -2143,7 +2282,35 @@ function drawHUD() {
   }
   ctx.textBaseline = 'alphabetic';
 }
+/* Kasadan çıkan eşyanın bildirimi: nadirlik rengiyle, nereye gittiğiyle. */
+function drawToast() {
+  const T = G.toast;
+  const a = clamp(T.t, 0, 1);
+  const w = Math.min(VW - 40, 320), x = (VW - w) / 2, y = VH * 0.62;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(8,10,18,.82)';
+  ctx.fillRect(x, y, w, 44);
+  ctx.fillStyle = RAR[T.rar].col;
+  ctx.fillRect(x, y, 4, 44);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '900 15px Trebuchet MS, sans-serif';
+  ctx.fillStyle = RAR[T.rar].col;
+  ctx.fillText(T.name, x + w / 2, y + 15);
+  ctx.font = '700 11px Trebuchet MS, sans-serif';
+  ctx.fillStyle = '#9aa4bd';
+  ctx.fillText(T.res === 'equipped' ? 'KUŞANILDI'
+             : T.res === 'bagged' ? 'ÇANTAYA EKLENDİ — envanterden değiştir'
+             : T.res === 'dupe' ? 'ZATEN VAR — altına çevrildi'
+             : 'ÇANTA DOLU — altına çevrildi', x + w / 2, y + 32);
+  ctx.restore();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
 // Atılma butonunun bekleme halkasını güncelle
+function updateBagBtn() {
+  if (!elBagBtn) return;
+  elBagBtn.classList.toggle('alert', P.bag.length > 0);
+}
 function updateDashBtn() {
   const k = P.dashCd > 0 ? 1 - P.dashCd / DASH_CD : 1;
   elDashBtn.style.background = k >= 1
@@ -2216,8 +2383,9 @@ const HEIR_ORDER = ['chest', 'boots', 'helm', 'gloves', 'shield', 'cloak'];
 function applyStartGear() {
   for (let i = 0; i < Math.min(META.heir, HEIR_ORDER.length); i++) {
     const slot = HEIR_ORDER[i];
-    P.gear[slot] = 1;
-    P.maxHp += gearStat(slot, 1, 'maxHp');
+    const it = ITEMS[slot][0];                     // yuvanın en basit eşyası
+    P.eq[slot] = it.id;
+    P.maxHp += itemStatSum(it, 'maxHp');
   }
   recomputeStats();
 }
@@ -2229,9 +2397,8 @@ function metaLoad() {
     if (typeof d.bank === 'number') META.bank = Math.max(0, d.bank | 0);
     if (d.up) for (const k in META.up)
       if (typeof d.up[k] === 'number') META.up[k] = clamp(d.up[k] | 0, 0, UPGRADES[k].max);
-    // Koleksiyon: artık var olmayan yuvalar sessizce elenir
-    if (d.seen) for (const slot of GEAR_SLOTS)
-      if (typeof d.seen[slot] === 'number') META.seen[slot] = clamp(d.seen[slot] | 0, 0, TIER_MAX);
+    // Koleksiyon: artık var olmayan eşyalar sessizce elenir
+    if (d.seen) for (const id in d.seen) if (ITEM_BY_ID[id]) META.seen[id] = 1;
     if (typeof d.heir === 'number') META.heir = clamp(d.heir | 0, 0, HEIR_MAX);
   } catch (e) { /* erişilemiyor: bellekte devam */ }
 }
@@ -2315,27 +2482,168 @@ function renderGear() {
   heir.appendChild(hrow);
   elGear.appendChild(heir);
 
-  // --- Koleksiyon: hangi yuvada en yükseğe kadar çıktın ---
+  // --- Koleksiyon: hangi eşyaları buldun ---
   for (const slot of GEAR_SLOTS) {
-    const def = GEAR[slot], seen = META.seen[slot] | 0;
+    const def = GEAR[slot];
+    const found = ITEMS[slot].filter(i => META.seen[i.id]).length;
     const row = document.createElement('div');
     row.className = 'gslot';
     row.innerHTML = `<div class="ghead"><span>${def.icon} ${def.name}</span>
-      <small>${seen ? def.txt(seen) : 'Henüz bulunmadı'}</small></div>`;
+      <small>${found}/${ITEMS[slot].length} bulundu</small></div>`;
     const list = document.createElement('div');
     list.className = 'gitems';
-    for (let t = 1; t <= TIER_MAX; t++) {
-      const found = seen >= t;
+    for (const it of ITEMS[slot]) {
+      const seen = !!META.seen[it.id];
       const b = document.createElement('div');
-      b.className = 'gitem' + (found ? ' on' : ' locked');
-      b.title = gearName(slot, t) + ' — ' + def.txt(t);
-      b.innerHTML = `<span class="gi">${found ? def.icon : '🔒'}</span>` +
-        `<span class="gn">${TIER[t - 1].name}</span>`;
+      b.className = 'gitem' + (seen ? ' on' : ' locked');
+      if (seen) b.style.borderColor = RAR[it.rar].col;
+      b.title = seen ? it.name + ' — ' + statLines(it.plus).concat(statLines(it.minus)).join(' · ') : 'Henüz bulunmadı';
+      b.innerHTML = `<span class="gi">${seen ? def.icon : '🔒'}</span>` +
+        `<span class="gn"${seen ? ` style="color:${RAR[it.rar].col}"` : ''}>${seen ? it.name : '???'}</span>`;
       list.appendChild(b);
     }
     row.appendChild(list);
     elGear.appendChild(row);
   }
+}
+
+/* ============ 11.5) ENVANTER ============
+   Koşu içi çanta + kuşanılanlar. Açıkken oyun duraklar; çantadaki eşyaya
+   dokunmak kuşanır, kuşanılana dokunmak çıkarır (çantaya geri düşer). */
+const elInv = document.getElementById('inv');
+const elInvSlots = document.getElementById('invSlots');
+const elInvBag = document.getElementById('invBag');
+const elInvOdds = document.getElementById('invOdds');
+/* İkonlar 2B canvas'a çiziliyor: harici dosya yok, data: URL yok (katı CSP
+   altında da çalışır) ve renkler modeldekiyle birebir aynı kaynaktan geliyor. */
+function drawItemIcon(cv, slot, it) {
+  const d = cv.getContext('2d');
+  const S = cv.width;
+  d.clearRect(0, 0, S, S);
+  if (!it) return;
+  const col = '#' + it.col.toString(16).padStart(6, '0');
+  const trim = '#' + it.trim.toString(16).padStart(6, '0');
+  const u = S / 100;
+  d.save(); d.translate(S / 2, S / 2);
+  d.lineJoin = 'round'; d.lineWidth = 2.2 * u;
+  d.strokeStyle = 'rgba(20,14,26,.9)';
+  const P2 = () => new Path2D();
+  const fill = (path, c) => { d.fillStyle = c; d.fill(path); d.stroke(path); };
+  if (slot === 'helm') {
+    const p1 = P2(); p1.arc(0, 2 * u, 30 * u, Math.PI, 0); p1.lineTo(30 * u, 14 * u); p1.lineTo(-30 * u, 14 * u); p1.closePath();
+    fill(p1, col);
+    const p2 = P2(); p2.rect(-34 * u, 12 * u, 68 * u, 9 * u); fill(p2, trim);
+    if (it.det >= 2) { const p3 = P2(); p3.rect(-4 * u, 14 * u, 8 * u, 20 * u); fill(p3, trim); }
+    if (it.det >= 3) { const p4 = P2(); p4.rect(-3 * u, -36 * u, 6 * u, 14 * u); fill(p4, trim); }
+    if (it.det >= 4) {
+      const p5 = P2(); p5.moveTo(-28 * u, -6 * u); p5.lineTo(-46 * u, -30 * u); p5.lineTo(-20 * u, -18 * u); p5.closePath(); fill(p5, trim);
+      const p6 = P2(); p6.moveTo(28 * u, -6 * u); p6.lineTo(46 * u, -30 * u); p6.lineTo(20 * u, -18 * u); p6.closePath(); fill(p6, trim);
+    }
+  } else if (slot === 'chest') {
+    const p1 = P2();
+    p1.moveTo(-24 * u, -26 * u); p1.lineTo(24 * u, -26 * u); p1.lineTo(30 * u, 30 * u); p1.lineTo(-30 * u, 30 * u); p1.closePath();
+    fill(p1, col);
+    const r = it.det >= 3 ? 16 : 12;
+    const p3 = P2(); p3.arc(-28 * u, -20 * u, r * u, Math.PI, 0); p3.closePath(); fill(p3, col);
+    const p4 = P2(); p4.arc(28 * u, -20 * u, r * u, Math.PI, 0); p4.closePath(); fill(p4, col);
+    const p2 = P2(); p2.rect(-32 * u, 18 * u, 64 * u, 11 * u); fill(p2, trim);
+    if (it.det >= 3) { const p5 = P2(); p5.rect(-4 * u, -24 * u, 8 * u, 42 * u); fill(p5, trim); }
+  } else if (slot === 'gloves') {
+    const p1 = P2(); p1.rect(-26 * u, -15 * u, 52 * u, 30 * u); fill(p1, col);
+    const p2 = P2(); p2.rect(-32 * u, -19 * u, 11 * u, 38 * u); fill(p2, trim);
+    if (it.det >= 2) { const p3 = P2(); p3.rect(20 * u, -21 * u, 17 * u, 42 * u); fill(p3, col); }
+    if (it.det >= 3) { const p4 = P2(); p4.moveTo(37 * u, -9 * u); p4.lineTo(49 * u, 0); p4.lineTo(37 * u, 9 * u); p4.closePath(); fill(p4, trim); }
+  } else if (slot === 'boots') {
+    const p1 = P2();
+    p1.moveTo(-14 * u, -32 * u); p1.lineTo(12 * u, -32 * u); p1.lineTo(12 * u, 8 * u);
+    p1.lineTo(34 * u, 8 * u); p1.lineTo(34 * u, 22 * u); p1.lineTo(-14 * u, 22 * u); p1.closePath();
+    fill(p1, col);
+    const p2 = P2(); p2.rect(-18 * u, 21 * u, 56 * u, 11 * u); fill(p2, trim);
+    if (it.det >= 2) { const p3 = P2(); p3.rect(-16 * u, -10 * u, 30 * u, 8 * u); fill(p3, trim); }
+    if (it.det >= 3) { const p4 = P2(); p4.rect(-17 * u, -36 * u, 32 * u, 10 * u); fill(p4, trim); }
+  } else if (slot === 'cloak') {
+    const p1 = P2();
+    p1.moveTo(-20 * u, -28 * u); p1.lineTo(20 * u, -28 * u); p1.lineTo(34 * u, 32 * u); p1.lineTo(-34 * u, 32 * u); p1.closePath();
+    fill(p1, col);
+    const p2 = P2();
+    p2.moveTo(-23 * u, -30 * u); p2.quadraticCurveTo(0, -14 * u, 23 * u, -30 * u);
+    p2.lineTo(23 * u, -19 * u); p2.quadraticCurveTo(0, -3 * u, -23 * u, -19 * u); p2.closePath();
+    fill(p2, trim);
+    if (it.det >= 2) { const p3 = P2(); p3.rect(-34 * u, 23 * u, 68 * u, 9 * u); fill(p3, trim); }
+  } else {                                   // kalkan
+    if (it.det <= 2) {
+      const p1 = P2(); p1.arc(0, 0, 30 * u, 0, Math.PI * 2); fill(p1, col);
+      const p2 = P2(); p2.arc(0, 0, 9 * u, 0, Math.PI * 2); fill(p2, trim);
+    } else {
+      const p1 = P2();
+      p1.moveTo(-26 * u, -30 * u); p1.lineTo(26 * u, -30 * u); p1.lineTo(26 * u, 10 * u);
+      p1.lineTo(0, 34 * u); p1.lineTo(-26 * u, 10 * u); p1.closePath();
+      fill(p1, col);
+      const p2 = P2(); p2.rect(-5 * u, -28 * u, 10 * u, 54 * u); fill(p2, trim);
+      const p3 = P2(); p3.rect(-24 * u, -10 * u, 48 * u, 10 * u); fill(p3, trim);
+    }
+  }
+  d.restore();
+}
+function itemCell(slot, it, equipped) {
+  const el = document.createElement('button');
+  el.className = 'icell' + (equipped ? ' eq' : '');
+  if (it) el.style.borderColor = RAR[it.rar].col;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 72; cv.className = 'ico';
+  el.appendChild(cv);
+  drawItemIcon(cv, slot, it);
+  const nm = document.createElement('div');
+  nm.className = 'inm';
+  nm.textContent = it ? it.name : 'Boş';
+  if (it) nm.style.color = RAR[it.rar].col;
+  el.appendChild(nm);
+  if (it) {
+    const st = document.createElement('div');
+    st.className = 'ist';
+    st.innerHTML = statLines(it.plus).map(t => `<span class="p">${t}</span>`).join('') +
+                   statLines(it.minus).map(t => `<span class="m">${t}</span>`).join('');
+    el.appendChild(st);
+  }
+  return el;
+}
+function renderInventory() {
+  if (!elInv) return;
+  elInvSlots.innerHTML = ''; elInvBag.innerHTML = '';
+  for (const slot of GEAR_SLOTS) {
+    const it = itemOf(P.eq[slot]);
+    const wrap = document.createElement('div');
+    wrap.className = 'islot';
+    wrap.innerHTML = `<div class="ilbl">${GEAR[slot].icon} ${GEAR[slot].name}</div>`;
+    const cell = itemCell(slot, it, !!it);
+    cell.onclick = () => { if (it) { equipItem(slot, null); renderInventory(); SFX.pickup(); } };
+    wrap.appendChild(cell);
+    elInvSlots.appendChild(wrap);
+  }
+  if (!P.bag.length) {
+    elInvBag.innerHTML = '<div class="iempty">Çanta boş — seviye atladıkça kasa düşer, kasadan eşya çıkar.</div>';
+  } else {
+    for (const id of P.bag.slice()) {
+      const it = itemOf(id), slot = slotOfItem(id);
+      const cell = itemCell(slot, it, false);
+      cell.onclick = () => { equipItem(slot, id); renderInventory(); SFX.levelup(); };
+      elInvBag.appendChild(cell);
+    }
+  }
+  const o = rarityOdds(G.level);
+  elInvOdds.innerHTML = `Sv. ${G.level} kasa şansı: ` +
+    ['common', 'rare', 'epic', 'legend'].map(k =>
+      `<b style="color:${RAR[k].col}">${RAR[k].name} %${o[k].toFixed(0)}</b>`).join(' · ');
+}
+function openInventory() {
+  if (G.state !== 'PLAY' && G.state !== 'PAUSED') return;
+  G.prevState = G.state; G.state = 'INV';
+  releaseSticks(); renderInventory();
+  elInv.classList.add('show');
+}
+function closeInventory() {
+  elInv.classList.remove('show');
+  G.state = G.prevState === 'PAUSED' ? 'PAUSED' : 'PLAY';
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -2356,7 +2664,7 @@ function resetAll() {
   G.time = 0; G.kills = 0; G.gold = 0; G.level = 1; G.xp = 0; G.xpNext = xpForLevel(1);
   G.pendingLevels = 0; G.shake = 0; G.hitStop = 0; G.flashRed = 0; G.dmgDealt = 0;
   G.spawnTimer = 0; G.bossIdx = 0; G.nextBossAt = BOSS_EVERY; G.boss = null;
-  G.finalSpawned = false; G.banner = ''; G.bannerT = 0; G.win = false;
+  G.finalSpawned = false; G.banner = ''; G.bannerT = 0; G.win = false; G.toast = null;
   resetPlayer();
   camTarget.set(0, 0, 0);
   releaseSticks();
@@ -2365,12 +2673,15 @@ function startGame() {
   resetAll();
   elMenu.classList.remove('show'); elOver.classList.remove('show');
   elPaused.classList.remove('show'); elLevelup.classList.remove('show');
+  if (elInv) elInv.classList.remove('show');
   elPauseBtn.classList.add('show');
   elDashBtn.classList.add('show');
+  if (elBagBtn) elBagBtn.classList.add('show');
   G.state = 'PLAY';
   banner('HAYATTA KAL!', 2);
 }
 function togglePause() {
+  if (G.state === 'INV') { closeInventory(); return; }
   if (G.state === 'PLAY') { G.state = 'PAUSED'; releaseSticks(); showPauseInfo(); elPaused.classList.add('show'); }
   else if (G.state === 'PAUSED') { G.state = 'PLAY'; elPaused.classList.remove('show'); }
 }
@@ -2381,10 +2692,12 @@ function showPauseInfo() {
 }
 function gameOver(win) {
   G.state = 'OVER'; G.win = win;
+  if (elInv) elInv.classList.remove('show');
   META.bank += G.gold; metaSave(); renderShop();      // toplanan altın kalıcı
   win ? SFX.win() : SFX.over();
   elPauseBtn.classList.remove('show');
   elDashBtn.classList.remove('show');
+  if (elBagBtn) elBagBtn.classList.remove('show');
   document.getElementById('overTitle').textContent = win ? 'BÖLÜM TAMAMLANDI!' : 'OYUN BİTTİ';
   document.getElementById('overSub').textContent = win
     ? 'Sürüyü püskürttün ve OMEGA HORROR\'u yok ettin. Efsanevi bir hayatta kalma.'
@@ -2404,11 +2717,19 @@ document.getElementById('againBtn').onclick = startGame;
 document.getElementById('resumeBtn').onclick = togglePause;
 document.getElementById('quitBtn').onclick = () => {
   G.state = 'MENU'; elPaused.classList.remove('show');
-  elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show'); elMenu.classList.add('show');
+  elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show');
+  if (elBagBtn) elBagBtn.classList.remove('show');
+  elMenu.classList.add('show');
 };
 elPauseBtn.onclick = togglePause;
 const elDashBtn = document.getElementById('dashBtn');
 elDashBtn.addEventListener('pointerdown', e => { e.stopPropagation(); doDash(); });
+const elBagBtn = document.getElementById('bagBtn');
+if (elBagBtn) elBagBtn.addEventListener('pointerdown', e => { e.stopPropagation(); openInventory(); });
+const elInvClose = document.getElementById('invClose');
+if (elInvClose) elInvClose.onclick = closeInventory;
+const elInvBtn = document.getElementById('invBtn');
+if (elInvBtn) elInvBtn.onclick = () => { elPaused.classList.remove('show'); openInventory(); };
 
 /* ============ 13) MODEL YÜKLEME + ANA DÖNGÜ ============ */
 let WORLD = null;
@@ -2567,6 +2888,7 @@ function frame(now) {
     enemies.sweep();
     if (G.bannerT > 0) G.bannerT -= dt;
     if (G.flashRed > 0) G.flashRed -= dt;
+    if (G.toast && G.toast.t > 0) G.toast.t -= dt;
   } else {
     updateFx(Math.min(rdt, 0.02));
     if (G.state === 'MENU' || G.state === 'LOADING') {
@@ -2616,8 +2938,9 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   addWeapon, getWeapon, recomputeStats, applyCard, spawnEnemy, gainXp, hitEnemy,
                   buildChoices, cardInfo, openLevelUp, startGame, input, joy, joyL, joyR, mouseAim,
                   camera, scene, hurtPlayer, THREE, readInput, aimAngle,
-                  GEAR, GEAR_SLOTS, TIER, TIER_MAX, META, gearNodes, gearBones,
-                  refreshGearVisuals, renderGear, renderShop, gainGear, setGearTier, pickGearDrop,
-                  tierForLevel, gearName, dropGear, metaSave, spawnPickup,
+                  GEAR, GEAR_SLOTS, ITEMS, ITEM_BY_ID, RAR, META, gearNodes, gearBones,
+                  refreshGearVisuals, renderGear, renderShop, renderInventory,
+                  equipItem, addItem, itemOf, slotOfItem, rollItem, rollRarity, rarityOdds,
+                  openInventory, closeInventory, dropChest, metaSave, spawnPickup,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

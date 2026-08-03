@@ -68,7 +68,7 @@ export function initTestPanel() {
     g.META.bank = Math.max(g.META.bank, 99999);
     for (const id in g.META.up) g.META.up[id] = 5;      // kalıcı yükseltmeler tam
     g.META.heir = 6;                                    // her koşuya deri setle başla
-    for (const slot of g.GEAR_SLOTS) g.META.seen[slot] = g.TIER_MAX;  // koleksiyon dolu
+    for (const slot of g.GEAR_SLOTS) for (const it of g.ITEMS[slot]) g.META.seen[it.id] = 1;
     g.renderShop();
   }
   unlockAll();
@@ -88,12 +88,22 @@ export function initTestPanel() {
 
   // --- eylemler ---
   const A = {
-    // Kademeyi tur tur gez: 0 (yok) -> 1..4 -> 0
-    gearNext(slot) { g.setGearTier(slot, ((g.P.gear[slot] | 0) + 1) % (g.TIER_MAX + 1)); },
-    gearBest() { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, g.TIER_MAX); },
-    gearNone() { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, 0); },
-    gearTier(t) { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, t); },
-    gearDrop() { g.dropGear(g.P.x + 1.2, g.P.z, 3); },   // yere 3 parça bırak
+    // Yuvadaki eşyayı tur tur gez: yok -> 1..6 -> yok
+    gearNext(slot) {
+      const list = g.ITEMS[slot];
+      const i = list.findIndex(x => x.id === g.P.eq[slot]);
+      g.equipItem(slot, i + 1 >= list.length ? null : list[i + 1].id);
+    },
+    gearRar(rar) {                       // her yuvaya o nadirlikten bir eşya tak
+      for (const slot of g.GEAR_SLOTS) {
+        const it = g.ITEMS[slot].filter(x => x.rar === rar).pop();
+        if (it) g.equipItem(slot, it.id);
+      }
+    },
+    gearNone() { for (const slot of g.GEAR_SLOTS) g.equipItem(slot, null); },
+    bagFill() { for (let i = 0; i < 8; i++) g.addItem(g.rollItem(g.G.level).id); },
+    chestDrop() { g.dropChest(g.P.x + 1.2, g.P.z, 5); },   // yere 5 kasa bırak
+    inv() { g.openInventory(); },
     weapon(id) {
       const w = g.getWeapon(id);
       if (!w) g.addWeapon(id);
@@ -139,7 +149,8 @@ export function initTestPanel() {
       try { localStorage.removeItem('hordeSurvivor3D.meta'); } catch (e) {}
       g.META.bank = 0; g.META.heir = 0; g.META.seen = {};
       for (const id in g.META.up) g.META.up[id] = 0;
-      for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, 0);
+      for (const slot of g.GEAR_SLOTS) g.equipItem(slot, null);
+      g.P.bag.length = 0;
       g.renderShop();
     },
     unlock() { unlockAll(); g.renderGear(); },   // kilitliden geri dönüş yolu
@@ -149,10 +160,9 @@ export function initTestPanel() {
   const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   function render() {
     const gearRow = g.GEAR_SLOTS.map(slot => {
-      const t = g.P.gear[slot] | 0;
-      const nm = t ? g.TIER[t - 1].name : 'yok';
-      return `<button class="b half${t ? ' on' : ''}" data-a="gearNext" data-x="${slot}">` +
-             `${g.GEAR[slot].icon} ${esc(g.GEAR[slot].name)}: ${nm}</button>`;
+      const it = g.itemOf(g.P.eq[slot]);
+      return `<button class="b half${it ? ' on' : ''}" data-a="gearNext" data-x="${slot}">` +
+             `${g.GEAR[slot].icon} ${esc(it ? it.name : g.GEAR[slot].name + ': yok')}</button>`;
     }).join('');
     const wRow = Object.keys(g.WEAPONS).map(id => {
       const w = g.getWeapon(id), d = g.WEAPONS[id];
@@ -167,11 +177,14 @@ export function initTestPanel() {
       <h4>TEÇHİZAT <span style="color:#5a6379">(tıkla: kademe gez)</span></h4>
       <div class="row">${gearRow}</div>
       <div class="row" style="margin-top:4px">
-        ${[1, 2, 3, 4].map(t => `<button class="b" data-a="gearTier" data-x="${t}">${g.TIER[t - 1].name}</button>`).join('')}
+        ${['common', 'rare', 'epic', 'legend'].map(r =>
+          `<button class="b" data-a="gearRar" data-x="${r}">${g.RAR[r].name}</button>`).join('')}
       </div>
       <div class="row" style="margin-top:4px">
         <button class="b half" data-a="gearNone">Hepsini çıkar</button>
-        <button class="b half" data-a="gearDrop">Yere 3 parça bırak</button>
+        <button class="b half" data-a="bagFill">Çantaya 8 eşya</button>
+        <button class="b half" data-a="chestDrop">Yere 5 kasa</button>
+        <button class="b half" data-a="inv">Envanteri aç</button>
       </div>
 
       <h4>SİLAHLAR <span style="color:#5a6379">(tıkla: +1 sv → EVO)</span></h4>
@@ -230,7 +243,7 @@ export function initTestPanel() {
         const runOnly = ['weapon', 'allMax', 'allEvo', 'weaponsClear', 'passivesMax',
                          'passivesClear', 'god', 'heal', 'levelCard', 'level5',
                          'spawn', 'boss', 'finalBoss', 'killAll', 'time', 'freeze',
-                         'gearNext', 'gearBest', 'gearNone', 'gearTier', 'gearDrop'];
+                         'gearNext', 'gearRar', 'gearNone', 'bagFill', 'chestDrop', 'inv'];
         if (runOnly.indexOf(el.dataset.a) >= 0 && !playing()) { g.startGame(); }
         fn(el.dataset.x !== undefined ? (isNaN(+el.dataset.x) ? el.dataset.x : +el.dataset.x) : undefined);
         if (g.recomputeStats) g.recomputeStats();

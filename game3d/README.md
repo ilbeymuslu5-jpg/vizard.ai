@@ -236,45 +236,63 @@ biniyor. Ayrıca modelin malzeme rengi `0xd7dde8` (çelik tonu) idi — eski mod
 gümüş zırhlıydı ve beyaza doymasın diye böyleydi; ten renkli yeni modeli
 soldurduğu için `0xffffff` yapıldı.
 
-### Sistem
-6 yuva × 4 kademe. Biçim fonksiyonu yuva başına tek; kademe malzemeyi ve
-süslemeyi değiştiriyor, yani 24 parça 6 fonksiyondan üretiliyor.
+### Sistem: envanter + kasa
+6 yuva, yuva başına 6 **isimli eşya** — toplam 36. Kademe yok; her eşyanın
+kendi kimliği, nadirliği ve stat profili var.
 
-| Yuva | Kemik | Bonus (kademe t) |
-|---|---|---|
-| ⛑️ Miğfer | `Head` | Zırh +t+1 · Can +12t |
-| 🎽 Göğüslük | `Spine02` | Zırh +2t · Can +22t |
-| 🧤 Kolluk | `Left/RightForeArm` | Hasar +%5t · Saldırı hızı +%4t |
-| 🥾 Bot | `Left/RightFoot` | Hız +%5t · Zırh +⌊t/2⌋ |
-| 🧥 Pelerin | `Spine02` | Mıknatıs +%16t · Rejen 0.18t |
-| 🛡️ Kalkan | `LeftHand` | Zırh +2t · Can +10t |
+| Nadirlik | Renk |
+|---|---|
+| Yaygın | gri |
+| Nadir | mavi |
+| Destansı | mor |
+| Efsanevi | altın |
 
-Kademeler: **Deri → Demir → Çelik → Efsanevi**.
+**Artılar ve eksiler.** 36 eşyanın **19'u temiz** (yalnızca artı), **17'sinde
+bir bedel var**. Kural: güçlü artı genelde bir eksiyle geliyor, ama her
+nadirlikte bedelsiz seçenekler de bulunuyor — böylece "en yüksek nadirliği tak"
+tek doğru cevap olmuyor. Örnek:
 
-### İlerleme
-- Parçalar **düşmandan düşer**: elit %100, boss 2 parça, sıradan düşman %1.2.
-- Düşen parçanın kademesi **seviyeye** bağlı (`tierForLevel`): sv<6 deri,
-  <12 demir, <20 çelik, sonrası efsanevi. Böylece kahraman koşu boyunca
-  gözle görülür şekilde gelişiyor.
-- Düşen parça **en geri kalmış yuvaya** gider, yani tek yuvaya yığılma olmaz.
-- Toplama anında yuva yeniden seçiliyor: düşerken hedeflenen yuva bu arada
-  dolmuş olabilir, sabit tutulsaydı parça boşa gidiyordu.
-- Yuva zaten tamsa parça altına çevriliyor.
+- *Cinnet Pençesi* (destansı): Hasar +%25, Kritik +%8 · **Zırh −3**
+- *Kule Kalkanı* (destansı): Zırh +12, Can +55 · **Hız −%12, Saldırı hızı −%6**
+- *Titan Yumruğu* (efsanevi): Hasar +%22, Saldırı hızı +%12, Etki alanı +%10 — bedelsiz
 
-Ölçülen eğri (tüm yuvalar dolduğunda):
+Eksiler ayrı bir yolla değil, aynı toplama torbasından geçiyor: negatif değer
+zaten negatif toplanıyor, `recomputeStats()` içinde `plus` ve `minus` aynı
+döngüde işleniyor.
 
-| Seviye | Teçhizat | Maks. can | Zırh |
-|---|---|---|---|
-| — | sade | 100 | 0 |
-| 1 | deri | 144 | 6 |
-| 8 | demir | 188 | 12 |
-| 14 | çelik | 232 | 17 |
-| 25 | efsanevi | 276 | 23 |
+### Kasa: seviye atladıkça düşer
+- **Her seviye atlamada 1 kasa** düşer (`gainXp` içinde).
+- Boss 2 kasa, elit %35, sıradan düşman %0.4.
+- Kasa toplanınca içinden **yüzdelik şansla** bir eşya çıkar; şanslar
+  seviyeyle iyileşir ve envanterde yazıyor:
 
-### Menü
-Teçhizat dükkânı yerine **koleksiyon** (hangi yuvada en yükseğe çıktın) ve
-**Miras**: altınla alınan kalıcı yükseltme, her koşuya N yuva deri teçhizatla
-başlatır.
+| Seviye | Yaygın | Nadir | Destansı | Efsanevi |
+|---|---|---|---|---|
+| 1 | %74 | %19 | %6 | %1 |
+| 10 | %52 | %30 | %14 | %5 |
+| 25 | %22 | %42 | %26 | %10 |
+
+Doğrulama: 4000 kasa açıldı, gerçek dağılım ilan edilen oranlarla örtüşüyor
+(sv1 → %73/19/6/1, sv25 → %22/43/25/10).
+
+Çıkan eşya **boş yuvaya kendiliğinden** takılıyor; yuva doluysa çantaya
+düşüyor ve karşılaştırmayı oyuncu envanterden yapıyor. Kopya veya çanta
+doluysa altına çevriliyor.
+
+### Envanter
+🎒 düğmesi (veya **I** tuşu, ya da duraklat ekranından) açar; açıkken oyun
+durur. Kuşanılanlar üstte, çanta altta; her hücrede eşyanın ikonu, adı,
+nadirlik rengi ve **yeşil artıları / kırmızı eksileri** görünür. Çantada
+bekleyen eşya varsa 🎒 düğmesi yanıp söner.
+
+İkonlar 2B canvas'a **çizim komutlarıyla** üretiliyor: harici dosya yok,
+`data:` URL yok (katı CSP altında da çalışır) ve renkler modeldeki eşyayla
+aynı kaynaktan geldiği için envanterde gördüğün şey karakterin üstündekiyle
+birebir aynı.
+
+Envanter ve çanta **koşuya özel** (roguelike döngüsü). Kalıcı olan tek şey
+koleksiyon kaydı: menüdeki KOLEKSİYON sekmesi hangi eşyaları bulduğunu
+gösterir.
 
 ### Yerleşim: ölçmeden yapılamıyor
 Parçalar kemiğe bağlı; `pos`/`rot` karakter uzayında yazılıp kemiğin dönüşü
@@ -311,7 +329,7 @@ Panel `🧪` düğmesi veya **T** tuşu ile açılır:
 
 | Bölüm | Neler var |
 |---|---|
-| Teçhizat | Her yuvanın kademesini gez · doğrudan Deri/Demir/Çelik/Efsanevi · yere parça bırak |
+| Teçhizat | Yuvadaki eşyayı gez · nadirliğe göre set tak · çantayı doldur · yere kasa bırak · envanteri aç |
 | Silahlar | Silaha tıkla: +1 seviye → Sv.5'te EVO · "Hepsi Sv.5" · "Hepsi EVO" |
 | Pasifler | Hepsi tam / sıfırla |
 | Oyuncu | Ölümsüz, canı doldur, +1 Sv (kart ekranı), +5 Sv (kartsız) |
