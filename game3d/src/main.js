@@ -1385,6 +1385,27 @@ function updateKnightAnim(dt, speed) {
   mixer.timeScale = t < 0.04 ? 0 : lerp(0.55, 1.45, t);
   mixer.update(dt);
 }
+/* Doku GLB'ye gömülü DEĞİL: three.js gömülü görselleri blob: URL ile yükler ve
+   katı CSP altındaki sayfalarda bu engellenip model renksiz kalıyordu.
+   createImageBitmap bir kaynak isteği olmadığı için CSP'den etkilenmez. */
+function loadKnightTexture() {
+  const b64 = window.__KNIGHT_TEX_B64;
+  if (!b64 || typeof createImageBitmap !== 'function') return Promise.resolve(null);
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return createImageBitmap(new Blob([buf], { type: 'image/jpeg' }))
+    .then(bmp => {
+      const t = new THREE.Texture(bmp);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.flipY = false;                    // glTF UV yönü
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.needsUpdate = true;
+      return t;
+    })
+    .catch(e => { console.error('doku', e); return null; });
+}
+
 function loadKnight() {
   return new Promise(resolve => {
     const b64 = window.__KNIGHT_B64;
@@ -1394,7 +1415,8 @@ function loadKnight() {
     for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);      // model meshopt ile sıkıştırıldı
-    loader.parse(buf.buffer, '', gltf => {
+    loader.parse(buf.buffer, '', async gltf => {
+      const map = await loadKnightTexture();
       const m = gltf.scene;
       const box = new THREE.Box3().setFromObject(m);
       const size = box.getSize(new THREE.Vector3());
@@ -1428,7 +1450,6 @@ function loadKnight() {
       m.traverse(o => {
         if (o.isMesh || o.isSkinnedMesh) {
           o.frustumCulled = false;
-          const map = o.material.map;
           o.material = new THREE.MeshLambertMaterial({
             map,
             color: 0xd7dde8,                 // hafif çelik tonu: beyaza doymayı önler

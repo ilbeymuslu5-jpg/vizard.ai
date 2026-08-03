@@ -39,10 +39,9 @@ const jpeg = await sharp(Buffer.from(first.getImage()))
   .jpeg({ quality: Q, mozjpeg: true })
   .toBuffer();
 
+/* Doku GLB'ye GÖMÜLMÜYOR (bkz. transfer_rig.mjs): blob: URL + katı CSP sorunu. */
 for (const mat of root.listMaterials()) {
-  const base = mat.getBaseColorTexture() || first;
-  base.setImage(jpeg).setMimeType('image/jpeg').setURI('');
-  mat.setBaseColorTexture(base);
+  mat.setBaseColorTexture(null);
   // Emissive, baseColor'ın birebir kopyasıydı: kaldır. Rengin sönük kalmaması için
   // oyun tarafında ölçülü bir emissive katkısı veriliyor.
   mat.setEmissiveTexture(null);
@@ -53,7 +52,7 @@ for (const mat of root.listMaterials()) {
 }
 
 // Kullanılmayan doku/örnekleyici/uzantıları at, anahtar kareleri seyrelt, meshopt uygula
-await doc.transform(resample(), dedup(), prune());
+await doc.transform(resample(), dedup(), prune({ keepAttributes: true }));
 for (const ext of root.listExtensionsUsed())
   if (ext.extensionName === 'KHR_materials_specular') ext.dispose();
 
@@ -67,6 +66,7 @@ console.log(`sıkıştırmasız ${(rawSize / 1024).toFixed(0)} KB -> meshopt uyg
 const out = await io.writeBinary(doc);
 const dst = path.join(DIR, '..', 'knight.glb');
 fs.writeFileSync(dst, out);
+fs.writeFileSync(path.join(DIR, '..', 'knight_tex.jpg'), jpeg);
 console.log(`\n${path.basename(dst)}: ${(out.byteLength / 1024).toFixed(0)} KB ` +
             `(base64 ~${(out.byteLength * 4 / 3 / 1024).toFixed(0)} KB)`);
 console.log(`doku: ${TEX}px JPEG ${(jpeg.length / 1024).toFixed(0)} KB · ` +

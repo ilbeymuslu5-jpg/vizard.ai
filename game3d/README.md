@@ -39,6 +39,21 @@ Sonuç: **259 KB**, 14k üçgen, 2 animasyon. Model meshopt ile sıkıştırıld
 oyun tarafında `MeshoptDecoder` paketlenir (~29 KB). Model **+Z yönüne bakar**
 (`MODEL_YAW = 0`).
 
+### Doku neden GLB'nin dışında?
+three.js, GLB'ye gömülü görselleri `blob:` URL üzerinden yükler. Katı bir
+Content-Security-Policy altında (Artifact sayfaları) bu istek engelleniyor,
+`GLTFLoader` dokuyu yükleyemiyor ve karakter düz gri kalıyordu — `file://`
+testlerinde CSP olmadığı için sorun görünmüyordu.
+
+Bu yüzden doku GLB'ye gömülmez; ayrı bir JPEG olarak (`knight_tex.jpg`)
+`window.__KNIGHT_TEX_B64` içine base64 gömülür ve oyun tarafında
+`createImageBitmap` ile çözülür. Bu bir kaynak isteği olmadığı için CSP'den
+etkilenmez.
+
+Dikkat: doku materyalden çıkarıldığında `prune()` UV koordinatlarını
+"kullanılmıyor" sayıp siliyor. Bu yüzden `prune({ keepAttributes: true })`
+kullanılıyor.
+
 ### Okunurluk
 Oyun mesafesinde karakter ~60 piksel; gümüş zırh siluetin çoğunu kaplayıp soluk
 bir lekeye dönüşüyordu. Ters kabuk (inverted hull) koyu dış çizgi eklendi.

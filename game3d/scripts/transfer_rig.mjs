@@ -159,15 +159,19 @@ const newMat = neu.getRoot().listMaterials()[0];
 const newBase = newMat.getBaseColorTexture();
 const jpeg = await sharp(Buffer.from(newBase.getImage()))
   .resize(TEX, TEX, { fit: 'fill' }).jpeg({ quality: 86, mozjpeg: true }).toBuffer();
+/* Doku GLB'ye GÖMÜLMÜYOR: three.js gömülü görselleri blob: URL ile yüklüyor ve
+   katı CSP altındaki sayfalarda (Artifact) bu engelleniyordu. Doku ayrı dosya
+   olarak yazılıp oyun tarafında createImageBitmap ile çözülüyor. */
 for (const mat of rig.getRoot().listMaterials()) {
-  const t = mat.getBaseColorTexture();
-  t.setImage(jpeg).setMimeType('image/jpeg').setURI('');
+  mat.setBaseColorTexture(null);
   mat.setEmissiveTexture(null); mat.setEmissiveFactor([0, 0, 0]);
   mat.setAlphaMode('OPAQUE'); mat.setMetallicFactor(0); mat.setRoughnessFactor(1);
   mat.setDoubleSided(false);
 }
 
-await rig.transform(resample(), dedup(), prune());
+// keepAttributes: doku GLB dışına alındığı için prune UV koordinatlarını
+// "kullanılmıyor" sayıp siliyordu; model dokusuz kalıyordu.
+await rig.transform(resample(), dedup(), prune({ keepAttributes: true }));
 for (const ext of rig.getRoot().listExtensionsUsed())
   if (ext.extensionName === 'KHR_materials_specular') ext.dispose();
 await rig.transform(meshopt({ encoder: MeshoptEncoder, level: 'high' }));
@@ -175,6 +179,7 @@ await rig.transform(meshopt({ encoder: MeshoptEncoder, level: 'high' }));
 const out = await io.writeBinary(rig);
 const dst = path.join(DIR, '..', 'knight.glb');
 fs.writeFileSync(dst, out);
+fs.writeFileSync(path.join(DIR, '..', 'knight_tex.jpg'), jpeg);
 console.log(`\n${path.basename(dst)}: ${(out.byteLength/1024).toFixed(0)} KB · ` +
   `${Math.round(triCount(rig))} üçgen · ${rig.getRoot().listAnimations().length} animasyon · ` +
   `${rig.getRoot().listSkins().length} iskelet · doku ${TEX}px ${(jpeg.length/1024).toFixed(0)} KB`);
