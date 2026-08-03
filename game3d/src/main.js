@@ -8,6 +8,7 @@
    ============================================================== */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { buildWorld, ARENA, biomeAt } from './world.js';
 
 /* ============ 0) YARDIMCILAR ============ */
@@ -224,15 +225,15 @@ function updatePlayer(dt) {
   if (P.iframe > 0) P.iframe -= dt;
   if (P.hitPop > 0) P.hitPop -= dt * 4;
   if (P.st.regen > 0 && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + P.st.regen * dt);
-  // Modeli yerleştir + prosedürel animasyon (model rigli olmadığı için)
+  // Modeli yerleştir; bacakları iskelet animasyonu sürer
   if (P.model) {
-    const bob = Math.sin(P.walk * 6) * 0.055 * Math.min(1, mv / 4);
-    P.model.position.set(P.x, bob, P.z);
+    const idleBob = mv < 0.5 ? Math.sin(G.time * 2.2) * 0.03 : 0;   // dururken nefes alma
+    P.model.position.set(P.x, MODEL_Y + idleBob, P.z);
     P.model.rotation.y = P.yaw + MODEL_YAW;
-    P.model.rotation.z = Math.sin(P.walk * 6) * 0.05 * Math.min(1, mv / 5);
     const pop = 1 + Math.max(0, P.hitPop) * 0.13;
     P.model.scale.setScalar(MODEL_SCALE * pop);
     P.model.visible = !(P.iframe > 0 && ((P.iframe * 20) | 0) % 2 === 0);
+    updateKnightAnim(dt, mv);
   }
 }
 function hurtPlayer(dmg) {
@@ -1366,7 +1367,23 @@ document.getElementById('quitBtn').onclick = () => {
 elPauseBtn.onclick = togglePause;
 
 /* ============ 13) MODEL YÜKLEME + ANA DÖNGÜ ============ */
-let MODEL_SCALE = 1, MODEL_YAW = 0;
+let MODEL_SCALE = 1, MODEL_YAW = 0, MODEL_Y = 0;   // model +Z yönüne bakar
+let mixer = null, actWalk = null, actRun = null;
+
+/* Yürüme/koşma harmanı. Modelde bekleme (idle) klibi yok; oyuncu dururken
+   animasyon dondurulup yerine hafif bir nefes salınımı veriliyor. */
+function updateKnightAnim(dt, speed) {
+  if (!mixer) return;
+  const maxSp = P.speed * P.st.speedMul;
+  const t = clamp(speed / Math.max(0.001, maxSp), 0, 1);
+  if (actRun && actWalk) {
+    const runW = clamp((t - 0.45) / 0.55, 0, 1);
+    actWalk.setEffectiveWeight(1 - runW);
+    actRun.setEffectiveWeight(runW);
+  }
+  mixer.timeScale = t < 0.04 ? 0 : lerp(0.55, 1.45, t);
+  mixer.update(dt);
+}
 function loadKnight() {
   return new Promise(resolve => {
     const b64 = window.__KNIGHT_B64;
@@ -1374,23 +1391,42 @@ function loadKnight() {
     const bin = atob(b64);
     const buf = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    new GLTFLoader().parse(buf.buffer, '', gltf => {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);      // model meshopt ile sıkıştırıldı
+    loader.parse(buf.buffer, '', gltf => {
       const m = gltf.scene;
       const box = new THREE.Box3().setFromObject(m);
       const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      // ayaklar y=0'a otursun, merkez x/z'de hizalansın
-      m.position.set(-center.x, -box.min.y, -center.z);
+      MODEL_SCALE = 2.2 / size.y;                  // ~2.2 dünya birimi boy
+      // Not: iskeletli meshlerde mesh düğümünün dönüşümü yok sayılır; hizalamayı
+      // dıştaki kapsayıcıda yapıyoruz.
+      MODEL_Y = -box.min.y * MODEL_SCALE;
       const holder = new THREE.Group();
       holder.add(m);
-      MODEL_SCALE = 2.2 / size.y;              // ~2.2 dünya birimi boy
       holder.scale.setScalar(MODEL_SCALE);
       m.traverse(o => {
-        if (o.isMesh) {
+        if (o.isMesh || o.isSkinnedMesh) {
           o.frustumCulled = false;
-          o.material = new THREE.MeshLambertMaterial({ map: o.material.map });
+          const map = o.material.map;
+          // Rengi koru: dokunun kendi rengi gölgede de sönmesin diye ölçülü
+          // bir emissive katkısı veriliyor (kaynak model fullbright emissive idi).
+          o.material = new THREE.MeshLambertMaterial({
+            map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.34,
+          });
         }
       });
+      // Animasyonlar: "Walking" / "Running"
+      if (gltf.animations && gltf.animations.length) {
+        mixer = new THREE.AnimationMixer(m);
+        const byName = {};
+        for (const c of gltf.animations) byName[c.name.toLowerCase()] = c;
+        const walkClip = byName.walking || gltf.animations[0];
+        const runClip = byName.running || walkClip;
+        actWalk = mixer.clipAction(walkClip);
+        actRun = mixer.clipAction(runClip);
+        actWalk.play(); actRun.play();
+        actWalk.setEffectiveWeight(1); actRun.setEffectiveWeight(0);
+      }
       scene.add(holder);
       resolve(holder);
     }, err => { console.error('model', err); resolve(null); });
@@ -1460,4 +1496,6 @@ function frame(now) {
 window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS, PASSIVES,
                   addWeapon, getWeapon, recomputeStats, applyCard, spawnEnemy, gainXp, hitEnemy,
                   buildChoices, cardInfo, openLevelUp, startGame, input, joy, camera, scene,
-                  hurtPlayer, THREE, get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
+                  hurtPlayer, THREE,
+                  get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
+                  get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
