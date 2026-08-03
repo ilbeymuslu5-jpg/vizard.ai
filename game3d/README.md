@@ -13,29 +13,40 @@ Tek dosyalık `../horde-survivor-3d.html` bu klasörden üretilir.
 
 ## Model hazırlığı
 
-Oyuncu modeli Meshy'den gelen **animasyonlu** GLB'dir: 24 eklemli iskelet ve
-iki klip — `Walking` (1.03 sn) ve `Running` (0.63 sn). Geometri zaten oyuna
-uygun (10.3k üçgen); ağırlığın tamamı dokulardaydı.
+Oyuncu modeli **iki Meshy ihracının birleşimidir**:
 
-`scripts/prepare_animated.mjs` şunları yapar:
-- Kaynakta **iki adet 2048² PNG** vardı ve ikisi bayt bayt aynıydı (baseColor
-  ve emissive olarak aynı doku). Biri atılır, kalan 512px JPEG'e indirilir.
-- `alphaMode: BLEND` → `OPAQUE` (dokuda gerçek saydamlık yok; BLEND gereksiz
-  sıralama sorunu çıkarıyordu).
-- İskelet ve animasyonlar korunur, anahtar kareler seyreltilir, meshopt ile
-  sıkıştırılır (784 KB → 296 KB).
+| kaynak | katkı |
+|---|---|
+| `Meshy_Merged_Animations.glb` | 24 eklemli iskelet + `Walking` / `Running` klipleri |
+| `Front_View_Knight_texture.glb` | yüksek detaylı geometri (524k üçgen) ve PBR dokular |
 
-        node scripts/prepare_animated.mjs kaynak.glb 512 85   # -> knight.glb
+İkinci model **rigsizdi**, birincisi ise daha düşük detaylıydı. UV yerleşimleri
+farklı olduğu için doku takası mümkün değildi; bunun yerine `scripts/transfer_rig.mjs`
+**iskelet ağırlıklarını aktarıyor**:
 
-Model meshopt ile sıkıştırıldığı için oyun tarafında `MeshoptDecoder`
-paketlenir (~29 KB). Model **+Z yönüne bakar**, bu yüzden `MODEL_YAW = 0`.
+1. Yeni model 524k → 14k üçgene sadeleştirilir (meshoptimizer)
+2. Tek tip ölçek + kaydırma ile animasyonlu modelin bind uzayına hizalanır
+   (ayaklar ve boy eşlenir)
+3. Her yeni vertex için en yakın 4 rigli vertex bulunup `JOINTS_0`/`WEIGHTS_0`
+   ters mesafe ağırlığıyla harmanlanır. İki mesh aynı karakter olduğu için en
+   uzak eşleşme modelin boyunun ~%4'ü kadar kalıyor.
+4. Animasyonlu belgenin mesh'i yeni geometri ve doku ile değiştirilir; iskelet,
+   düğüm hiyerarşisi ve animasyonlar aynen korunur
 
-Rengi korumak için Meshy'nin fullbright emissive kurulumu yerine, dokunun
-kendisi ölçülü bir `emissiveMap` (yoğunluk 0.34) olarak da verilir; böylece
-gölgede kalan yüzeyler sönükleşmez ama model sahne ışığından tamamen kopmaz.
+        node scripts/transfer_rig.mjs animasyonlu.glb yeni.glb 14000 512
 
-### Eski statik model (kullanılmıyor)
-İlk gönderilen rigsiz GLB 10.7 MB / 552k üçgendi ve **yan yana 4 kopya**
-içeriyordu. `scripts/extract_one.mjs` (bağlı bileşen analizi) +
-`scripts/optimize_model.mjs` (meshoptimizer sadeleştirme, KTX2 → JPEG) ile
-269 KB'a indirilmişti; animasyonlu sürüm gelince devre dışı kaldı.
+Sonuç: **259 KB**, 14k üçgen, 2 animasyon. Model meshopt ile sıkıştırıldığından
+oyun tarafında `MeshoptDecoder` paketlenir (~29 KB). Model **+Z yönüne bakar**
+(`MODEL_YAW = 0`).
+
+### Okunurluk
+Oyun mesafesinde karakter ~60 piksel; gümüş zırh siluetin çoğunu kaplayıp soluk
+bir lekeye dönüşüyordu. Ters kabuk (inverted hull) koyu dış çizgi eklendi.
+Geometri kuantalandığı için offset'in birimi model birimi değil — kalınlık
+uniform olarak verilip tarayıcıda ölçülerek `0.0005`'e ayarlandı.
+
+### Kullanılmayan betikler
+`extract_one.mjs` + `optimize_model.mjs`: ilk gönderilen rigsiz GLB 10.7 MB /
+552k üçgendi ve **yan yana 4 kopya** içeriyordu; bağlı bileşen analiziyle tek
+şövalye ayıklanıp 269 KB'a indirilmişti. `prepare_animated.mjs`: animasyonlu
+modeli tek başına hazırlar (aynı 2048² dokunun iki kopyasını teke indirir).
