@@ -84,18 +84,50 @@
     align-items:center; justify-content:center; cursor:pointer;
   }
   #pauseBtn.show{ display:flex; }
+  #dashBtn{
+    position:fixed; z-index:6; right:calc(env(safe-area-inset-right,0px) + 18px);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 26px);
+    width:74px; height:74px; border-radius:50%; border:2px solid rgba(140,205,255,.5);
+    background:rgba(16,18,30,.7); color:#cfe8ff; font-size:30px; display:none;
+    align-items:center; justify-content:center; cursor:pointer; touch-action:none;
+    transition:opacity .12s ease;
+  }
+  #dashBtn.show{ display:flex; }
+  #dashBtn:active{ transform:scale(.93); }
   .spinner{ width:44px; height:44px; border:4px solid rgba(255,255,255,.15);
     border-top-color:#ffb347; border-radius:50%; animation:spin .9s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .biomes{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:520px; }
   .biome{ font-size:11px; font-weight:700; letter-spacing:.5px; padding:5px 10px; border-radius:20px;
     border:1px solid rgba(255,255,255,.14); color:#cfd8ea; }
+
+  /* ========== KALICI YÜKSELTME DÜKKANI ========== */
+  .shopWrap{ width:100%; max-width:460px; background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px 12px 10px; }
+  .shopHead{ display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; font-weight:800; letter-spacing:2px; color:#8f99b4; margin-bottom:8px; }
+  .shopHead #bank{ color:#ffd479; font-size:14px; letter-spacing:0; }
+  #shop{ display:flex; flex-direction:column; gap:6px; }
+  .upg{ display:flex; align-items:center; gap:9px; background:rgba(0,0,0,.28);
+    border-radius:9px; padding:7px 9px; }
+  .upg .ico{ font-size:18px; width:22px; text-align:center; }
+  .upg .nm{ flex:1; text-align:left; font-size:12.5px; font-weight:700; }
+  .upg .nm small{ display:block; font-weight:400; color:#8b95ad; font-size:10.5px; }
+  .upg .dots{ display:flex; gap:3px; }
+  .upg .dot{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.16); }
+  .upg .dot.on{ background:#5dffa0; box-shadow:0 0 6px rgba(93,255,160,.6); }
+  .buy{ border:none; border-radius:7px; padding:6px 10px; font-size:11.5px; font-weight:800;
+    cursor:pointer; background:linear-gradient(180deg,#ffd479,#ff9a3c); color:#12121c;
+    min-width:62px; font-variant-numeric:tabular-nums; }
+  .buy:disabled{ background:rgba(255,255,255,.09); color:#6f7896; cursor:default; }
+  .buy.max{ background:rgba(93,255,160,.18); color:#5dffa0; }
 </style>
 
 <canvas id="gl"></canvas>
 <canvas id="fx"></canvas>
 <div id="safeProbe"></div>
 <button id="pauseBtn">II</button>
+<button id="dashBtn" aria-label="Atılma">⚡</button>
 
 <div id="loading" class="overlay show">
   <div class="spinner"></div>
@@ -115,7 +147,12 @@
     <span class="biome" style="border-color:#ff5a1f">🌋 Volkanik Çorak Arazi</span>
   </div>
   <button class="btn" id="startBtn">OYUNA BAŞLA</button>
-  <div class="hint">MOBİL: ekrana dokun ve sürükle &nbsp;•&nbsp; PC: WASD / Yön Tuşları &nbsp;•&nbsp; P: Duraklat</div>
+  <div class="shopWrap">
+    <div class="shopHead"><span>KALICI YÜKSELTMELER</span><span id="bank">💰 0</span></div>
+    <div id="shop"></div>
+    <div class="hint" style="margin-top:6px">Koşularda topladığın altın kalıcıdır — her koşuya daha güçlü başlarsın.</div>
+  </div>
+  <div class="hint">MOBİL: dokun ve sürükle, ⚡ ile atıl &nbsp;•&nbsp; PC: WASD &nbsp;•&nbsp; Boşluk/Shift: atılma &nbsp;•&nbsp; P: duraklat</div>
 </div>
 
 <div id="levelup" class="overlay">

@@ -116,3 +116,44 @@ Ağaç/kaya/sütun/fıçı gibi katı nesneler `COLLIDERS` dizisine (x, z, yarı
 kaydedilir; oyuncu bunların içinden geçemez (bkz. bir alttaki performans
 notu — `resolveProps`). Düşmanlar bilinçli olarak geçebilir, yoksa
 yüzlercesi ağaç diplerinde yığılıp sürü akışını bozar.
+
+
+## Oyun geliştirmeleri (ölçüme dayalı)
+
+### XP eğrisi: seviye atlama ekranı sürekli araya giriyordu
+10. dakika koşullarında gerçekçi bir build ile ölçüm:
+
+| | eski eğri | yeni eğri |
+|---|---|---|
+| 36 saniyede atlanan seviye | 30 → 52 (22 seviye) | 30 → 33 (3 seviye) |
+| kart seçimi | ~1,3 saniyede bir | ~10 saniyede bir |
+| kart ekranında geçen süre | %15 (300 ms robot tepkisiyle) | %0–2 |
+
+`5 + 3.5·lv + lv^1.42` yerine
+`6 + 5·lv + 0.35·lv² + max(0, lv−12)^2.6`. İlk 12 seviye neredeyse
+değişmedi (x1.2), 30. seviyede ~10 kat pahalı. Erken tempo ölçümle
+doğrulandı: 50. saniyede Sv.3 (öncesi 55. saniyede Sv.3).
+
+### Altının karşılığı: kalıcı yükseltmeler
+Altın toplanıyordu ama hiçbir işe yaramıyordu (bir koşuda 2000+ birikiyor).
+Artık koşu sonunda kasaya yazılıyor ve menüdeki beş kalıcı yükseltmeye
+harcanıyor (dayanıklılık, keskinlik, çeviklik, çekim, zırh — her biri 5
+kademe, artan maliyet). `localStorage` sandbox bağlamlarda erişilemeyebildiği
+için tüm erişimler korumalı; erişilemezse o oturum boyu bellekte tutulur.
+
+### Ses (prosedürel WebAudio, harici dosya yok)
+Osilatör + filtrelenmiş gürültüyle üretilen efektler: ateş, isabet, ölüm,
+patlama, hasar, toplama, atılma, seviye, boss, zafer/yenilgi.
+Menüde AudioContext açılmaz (tarayıcı etkileşim bekler), "OYUNA BAŞLA" ile
+kurulur. Sallantı/hit-stop ile aynı ders: her efektin bekleme süresi ve
+global eşzamanlı ses sınırı var — ölçümde yoğun anda 5 saniyede ~85 ses
+düğümü (limitsiz olsa binlerce).
+
+### Atılma (dash)
+Kısa hız patlaması + dokunulmazlık, 2,4 sn bekleme. Mobilde sağ alttaki ⚡
+butonu (bekleme dolumu konik gradyanla gösterilir), PC'de Boşluk/Shift.
+Sürüyle çevrildiğinde kaçış imkânı verir.
+
+### Bekleme duruşu
+Modelde idle klibi olmadığı için karakter dururken yarı adımda donuyordu;
+artık çok yavaş (0.18x) adımlama + nefes salınımı ile "hazır duruş" okunuyor.

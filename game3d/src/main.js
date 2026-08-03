@@ -118,6 +118,7 @@ fx2d.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') doDash();
   if (e.code === 'Space' && (G.state === 'MENU' || G.state === 'OVER')) startGame();
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
@@ -247,6 +248,83 @@ function hitStop(v, force) {
 }
 const banner = (t, s = 2.4) => { G.banner = t; G.bannerT = s; };
 
+
+/* ============ SES (prosedürel WebAudio — harici dosya yok) ============
+   Yüksek seviyede saniyede binlerce isabet oluyor; her biri ses çalarsa
+   binlerce osilatör açılır. Bu yüzden her efektin bekleme süresi ve global
+   eşzamanlı ses sınırı var (sallantı/hit-stop ile aynı ders). */
+const SFX = (() => {
+  let ac = null, master = null, voices = 0;
+  const cd = {};                                   // efekt başına bekleme
+  const now = () => ac.currentTime;
+  function init() {
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      ac = new AC();
+      master = ac.createGain();
+      master.gain.value = 0.5;
+      master.connect(ac.destination);
+    } catch (e) { ac = null; }
+  }
+  function ok(key, wait) {
+    if (!ac || voices > 14) return false;
+    const t = performance.now();
+    if (cd[key] && t < cd[key]) return false;
+    cd[key] = t + wait;
+    return true;
+  }
+  function env(node, vol, dur) {
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0, now());
+    g.gain.linearRampToValueAtTime(vol, now() + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, now() + dur);
+    node.connect(g); g.connect(master);
+    voices++;
+    setTimeout(() => { voices--; }, dur * 1000 + 60);
+    return g;
+  }
+  function tone(freq, dur, vol, type, slideTo) {
+    const o = ac.createOscillator();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, now());
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, now() + dur);
+    env(o, vol, dur);
+    o.start(); o.stop(now() + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q) {
+    const n = Math.floor(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, n, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const f = ac.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q || 1;
+    src.connect(f);
+    env(f, vol, dur);
+    src.start();
+  }
+  return {
+    init,
+    resume() { if (ac && ac.state === 'suspended') ac.resume(); },
+    shoot() { if (ok('shoot', 70)) tone(680, 0.07, 0.05, 'square', 320); },
+    hit()   { if (ok('hit', 55))   noise(0.05, 0.05, 1800, 2); },
+    kill()  { if (ok('kill', 70))  tone(180, 0.11, 0.06, 'triangle', 70); },
+    boom()  { if (ok('boom', 110)) { noise(0.25, 0.12, 320, 0.7); tone(90, 0.24, 0.09, 'sine', 40); } },
+    hurt()  { if (ok('hurt', 160)) tone(240, 0.22, 0.12, 'sawtooth', 80); },
+    pickup(){ if (ok('pickup', 45)) tone(1180, 0.05, 0.035, 'sine', 1560); },
+    dash()  { if (ok('dash', 120)) noise(0.18, 0.09, 900, 0.8); },
+    levelup() { if (ok('levelup', 260)) [523, 659, 784, 1046].forEach((f, i) =>
+                  setTimeout(() => ac && tone(f, 0.16, 0.07, 'triangle'), i * 65)); },
+    boss()  { if (ok('boss', 900)) { tone(70, 1.1, 0.16, 'sawtooth', 45); noise(0.9, 0.09, 180, 0.6); } },
+    win()   { if (ok('win', 900)) [523, 659, 784, 1046, 1318].forEach((f, i) =>
+                  setTimeout(() => ac && tone(f, 0.3, 0.09, 'triangle'), i * 130)); },
+    over()  { if (ok('over', 900)) [440, 349, 262].forEach((f, i) =>
+                  setTimeout(() => ac && tone(f, 0.4, 0.1, 'sawtooth'), i * 190)); },
+  };
+})();
+
 /* ============ 5) OYUNCU ============ */
 const P = {
   x: 0, z: 0, vx: 0, vz: 0, r: 0.62, y: 0,
@@ -254,6 +332,7 @@ const P = {
   weapons: [], passives: {},
   base: { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 },
   st: null, model: null, hitPop: 0, inWater: false,
+  dashCd: 0, dashT: 0, dashX: 0, dashZ: 0,
 };
 function recomputeStats() {
   const s = Object.assign({}, P.base);
@@ -262,15 +341,26 @@ function recomputeStats() {
 }
 function resetPlayer() {
   P.x = P.z = 0; P.vx = P.vz = 0; P.maxHp = 100; P.hp = 100;
-  P.iframe = 0; P.yaw = 0; P.walk = 0; P.hitPop = 0;
+  // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri uygula
+  P.base.dmg = 1; P.base.speedMul = 1; P.base.magnet = 1; P.base.armor = 0;
+  applyMeta();
+  P.hp = P.maxHp;
+  P.iframe = 0; P.yaw = 0; P.walk = 0; P.hitPop = 0; P.dashCd = 0; P.dashT = 0;
   P.weapons = []; P.passives = {};
   recomputeStats(); addWeapon('bolt');
 }
 function updatePlayer(dt) {
+  if (P.dashCd > 0) P.dashCd -= dt;
   const sp = P.speed * P.st.speedMul;
-  const k = 1 - Math.pow(0.0005, dt);
-  P.vx = lerp(P.vx, input.ax * sp, k);
-  P.vz = lerp(P.vz, input.az * sp, k);
+  if (P.dashT > 0) {
+    P.dashT -= dt;
+    P.vx = P.dashX * DASH_SPEED; P.vz = P.dashZ * DASH_SPEED;
+    if (Math.random() < 0.6) particle(P.x, 0.5, P.z, '#cfe8ff', 2.5, 3);
+  } else {
+    const k = 1 - Math.pow(0.0005, dt);
+    P.vx = lerp(P.vx, input.ax * sp, k);
+    P.vz = lerp(P.vz, input.az * sp, k);
+  }
   // Suda hareket biraz yavaşlar (ve iz bırakır)
   P.inWater = isWater(P.x, P.z);
   const wSlow = P.inWater ? 0.78 : 1;
@@ -348,10 +438,25 @@ function updateRipples(dt) {
   rippleMesh.material.opacity = 0.5;
 }
 
+/* Atılma: kısa süreli hız patlaması + dokunulmazlık. Sürüyle çevrildiğinde
+   kaçış imkânı verir; bekleme süresi HUD'da gösterilir. */
+const DASH_CD = 2.4, DASH_TIME = 0.18, DASH_SPEED = 42;
+function doDash() {
+  if (G.state !== 'PLAY' || P.dashCd > 0) return;
+  let dx = input.ax, dz = input.az;
+  if (Math.hypot(dx, dz) < 0.1) { dx = Math.sin(P.yaw); dz = Math.cos(P.yaw); }
+  const m = Math.hypot(dx, dz) || 1;
+  P.dashX = dx / m; P.dashZ = dz / m;
+  P.dashT = DASH_TIME; P.dashCd = DASH_CD;
+  P.iframe = Math.max(P.iframe, DASH_TIME + 0.12);
+  SFX.dash(); addShake(0.18);
+  for (let i = 0; i < 14; i++) particle(P.x, 0.6, P.z, '#bfe4ff', 3, 8);
+}
+
 function hurtPlayer(dmg) {
   if (P.iframe > 0 || G.state !== 'PLAY') return;
   P.hp -= Math.max(1, dmg - P.st.armor);
-  P.iframe = 0.62; G.flashRed = 0.35; addShake(0.42, true); hitStop(0.04, true);
+  P.iframe = 0.62; G.flashRed = 0.35; addShake(0.42, true); hitStop(0.04, true); SFX.hurt();
   for (let i = 0; i < 10; i++) particle(P.x, 0.8, P.z, '#ff5566', 3, 6);
   if (P.hp <= 0) { P.hp = 0; gameOver(false); }
 }
@@ -557,10 +662,10 @@ function spawnWave(dt) {
     if (G.time >= WIN_TIME && !G.finalSpawned) {
       G.finalSpawned = true; G.bossIdx = BOSSES.length - 1;
       const b = spawnEnemy(null, rnd(TAU), true, true);
-      if (b) { banner('FİNAL BOSS: ' + b.bossName, 3.2); addShake(0.9, true); } else G.finalSpawned = false;
+      if (b) { banner('FİNAL BOSS: ' + b.bossName, 3.2); addShake(0.9, true); SFX.boss(); } else G.finalSpawned = false;
     } else if (G.time >= G.nextBossAt && G.time < WIN_TIME) {
       const b = spawnEnemy(null, rnd(TAU), true);
-      if (b) { G.nextBossAt += BOSS_EVERY; banner('BOSS: ' + b.bossName, 3); addShake(0.7, true); }
+      if (b) { G.nextBossAt += BOSS_EVERY; banner('BOSS: ' + b.bossName, 3); addShake(0.7, true); SFX.boss(); }
     }
   }
 }
@@ -779,6 +884,7 @@ const texts = new Pool(() => ({ x: 0, y: 0, z: 0, vy: 2.2, life: .7, maxLife: .7
 
 function shoot(x, z, ang, spd, dmg, pierce, r, kind, color, opt) {
   const b = bullets.get(); if (!b) return null;
+  SFX.shoot();
   b.x = x; b.z = z; b.y = 0.95;
   b.vx = Math.sin(ang) * spd; b.vz = Math.cos(ang) * spd;
   b.r = r; b.dmg = dmg; b.pierce = pierce; b.life = 2.2; b.kind = kind; b.color = color;
@@ -808,6 +914,7 @@ function explode(x, z, r, dmg, colorHex = 0xffb03a) {
     if (e.dead) continue;
     if (dist2(e.x, e.z, x, z) < (r + e.r) * (r + e.r)) hitEnemy(e, dmg, x, z, 7, true);
   }
+  SFX.boom();
   for (let i = 0; i < 16; i++) particle(x, 0.6, z, '#ffb03a', rnd(5, 2), 11);
   addShake(0.35); hitStop(0.035);
   const b = blasts.get();
@@ -1166,7 +1273,11 @@ function beamHit(x, z, a, len, w, dmg, colorHex, big) {
 }
 
 /* ============ 9) XP / SEVİYE / KARTLAR ============ */
-const xpForLevel = lv => Math.floor(5 + lv * 3.5 + Math.pow(lv, 1.42));
+/* Ölçüm: eski eğriyle 10. dakikada ~1.3 saniyede bir seviye atlanıyordu ve
+   sürenin %15'i kart ekranında geçiyordu (insan tepkisiyle çok daha fazlası).
+   Erken tempo aynı kalsın diye ilk 12 seviye neredeyse değişmedi; sonrasında
+   üstel terim devreye girip seviye başına süreyi ~10 saniyeye çıkarıyor. */
+const xpForLevel = lv => Math.floor(6 + lv * 5 + lv * lv * 0.35 + Math.pow(Math.max(0, lv - 12), 2.6));
 function spawnPickup(x, z, kind, val) {
   const p = pickups.get();
   if (!p) { if (kind.startsWith('xp')) gainXp(val); return; }
@@ -1226,6 +1337,7 @@ function collect(p) {
   if (p.kind === 'gold') { G.gold += p.val; addText(p.x, 1, p.z, p.val, false); }
   else if (p.kind === 'heal') { P.hp = Math.min(P.maxHp, P.hp + p.val); for (let i = 0; i < 8; i++) particle(P.x, 1, P.z, '#ff7a94', 3, 5); }
   else gainXp(p.val);
+  SFX.pickup();
   particle(p.x, 0.6, p.z, '#bfe9ff', 2, 4);
 }
 function gainXp(v) {
@@ -1312,6 +1424,7 @@ const elCards = document.getElementById('cards');
 const elLevelup = document.getElementById('levelup');
 function openLevelUp() {
   G.state = 'LEVELUP';
+  SFX.levelup();
   elCards.innerHTML = '';
   document.getElementById('lvSub').textContent = `SEVİYE ${G.level}` + (G.pendingLevels > 1 ? ` · SIRADA ${G.pendingLevels - 1} SEÇİM DAHA` : '');
   buildChoices().forEach(c => {
@@ -1343,12 +1456,14 @@ function hitEnemy(e, dmg, sx, sz, knock, big) {
     e.kx += dx / dd * knock; e.kz += dz / dd * knock;
   }
   if (big || crit) { addShake(crit ? 0.22 : 0.16); if (big) hitStop(0.05); }
+  SFX.hit();
   for (let i = 0; i < (big ? 5 : 2); i++) particle(e.x, 0.7, e.z, crit ? '#fff2a0' : '#ffd0d0', 2.5, 7);
   if (e.hp <= 0) killEnemy(e);
 }
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true; G.kills++;
+  SFX.kill();
   dropLoot(e);
   const col = e.boss ? '#ff8a5a' : '#' + (e.cfg.color).toString(16).padStart(6, '0');
   const n = e.boss ? 60 : e.elite ? 20 : 8;
@@ -1423,7 +1538,7 @@ function drawOverlay() {
   }
 
   if (G.flashRed > 0) { ctx.fillStyle = `rgba(255,20,40,${(G.flashRed * 0.5).toFixed(3)})`; ctx.fillRect(0, 0, VW, VH); }
-  if (G.state !== 'MENU' && G.state !== 'LOADING') drawHUD();
+  if (G.state !== 'MENU' && G.state !== 'LOADING') { drawHUD(); updateDashBtn(); }
   drawJoystick();
 }
 function drawHUD() {
@@ -1516,6 +1631,15 @@ function drawHUD() {
   }
   ctx.textBaseline = 'alphabetic';
 }
+// Atılma butonunun bekleme halkasını güncelle
+function updateDashBtn() {
+  const k = P.dashCd > 0 ? 1 - P.dashCd / DASH_CD : 1;
+  elDashBtn.style.background = k >= 1
+    ? 'radial-gradient(circle, rgba(90,190,255,.45), rgba(16,18,30,.7))'
+    : `conic-gradient(rgba(90,190,255,.4) ${k * 360}deg, rgba(16,18,30,.7) 0deg)`;
+  elDashBtn.style.opacity = k >= 1 ? '1' : '0.55';
+}
+
 function drawJoystick() {
   if (!joy.active) return;
   const dx = joy.x - joy.ox, dy = joy.y - joy.oy, d = Math.hypot(dx, dy) || 1;
@@ -1528,6 +1652,70 @@ function drawJoystick() {
   ctx.globalAlpha = .65; ctx.fillStyle = '#eaf3ff';
   ctx.beginPath(); ctx.arc(joy.ox + dx / d * m, joy.oy + dy / d * m, joy.r * .42, 0, TAU); ctx.fill();
   ctx.restore();
+}
+
+
+/* ============ KALICI İLERLEME (altının karşılığı) ============
+   Koşularda toplanan altın kalıcı olarak saklanır ve menüdeki yükseltmelere
+   harcanır. localStorage bazı gömülü/sandbox bağlamlarda erişilemez olabilir,
+   bu yüzden her erişim korumalı; erişilemezse bellekte tutulur (o oturum boyu). */
+const UPGRADES = {
+  hp:     { icon: '❤️', name: 'Dayanıklılık', desc: 'Başlangıç canı +15', max: 5, cost: l => 60 + l * 90 },
+  dmg:    { icon: '🗡️', name: 'Keskinlik',    desc: 'Tüm hasar +%6',     max: 5, cost: l => 80 + l * 120 },
+  spd:    { icon: '👟', name: 'Çeviklik',     desc: 'Hareket hızı +%4',  max: 5, cost: l => 70 + l * 100 },
+  magnet: { icon: '🧲', name: 'Çekim',        desc: 'Mıknatıs +%15',     max: 5, cost: l => 50 + l * 70 },
+  armor:  { icon: '🛡️', name: 'Zırh',         desc: 'Gelen hasar -1',    max: 5, cost: l => 90 + l * 140 },
+};
+const META_KEY = 'hordeSurvivor3D.meta';
+const META = { bank: 0, up: { hp: 0, dmg: 0, spd: 0, magnet: 0, armor: 0 } };
+function metaLoad() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (typeof d.bank === 'number') META.bank = Math.max(0, d.bank | 0);
+    if (d.up) for (const k in META.up)
+      if (typeof d.up[k] === 'number') META.up[k] = clamp(d.up[k] | 0, 0, UPGRADES[k].max);
+  } catch (e) { /* erişilemiyor: bellekte devam */ }
+}
+function metaSave() {
+  try { localStorage.setItem(META_KEY, JSON.stringify(META)); } catch (e) { /* yok say */ }
+}
+// Kalıcı yükseltmeleri oyuncuya uygula (koşu başında)
+function applyMeta() {
+  P.maxHp += META.up.hp * 15;
+  P.base.dmg = 1 + META.up.dmg * 0.06;
+  P.base.speedMul = 1 + META.up.spd * 0.04;
+  P.base.magnet = 1 + META.up.magnet * 0.15;
+  P.base.armor = META.up.armor;
+}
+const elShop = document.getElementById('shop');
+const elBank = document.getElementById('bank');
+function renderShop() {
+  elBank.textContent = '💰 ' + META.bank;
+  elShop.innerHTML = '';
+  for (const id in UPGRADES) {
+    const u = UPGRADES[id], lv = META.up[id], maxed = lv >= u.max;
+    const cost = maxed ? 0 : u.cost(lv);
+    const row = document.createElement('div');
+    row.className = 'upg';
+    row.innerHTML = `<div class="ico">${u.icon}</div>
+      <div class="nm">${u.name}<small>${u.desc}</small></div>
+      <div class="dots">${Array.from({ length: u.max }, (_, i) =>
+        `<div class="dot${i < lv ? ' on' : ''}"></div>`).join('')}</div>`;
+    const btn = document.createElement('button');
+    btn.className = 'buy' + (maxed ? ' max' : '');
+    btn.textContent = maxed ? 'TAM' : '💰 ' + cost;
+    btn.disabled = maxed || META.bank < cost;
+    btn.onclick = () => {
+      if (META.up[id] >= u.max || META.bank < u.cost(META.up[id])) return;
+      META.bank -= u.cost(META.up[id]);
+      META.up[id]++;
+      metaSave(); renderShop(); SFX.levelup();
+    };
+    row.appendChild(btn);
+    elShop.appendChild(row);
+  }
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -1558,6 +1746,7 @@ function startGame() {
   elMenu.classList.remove('show'); elOver.classList.remove('show');
   elPaused.classList.remove('show'); elLevelup.classList.remove('show');
   elPauseBtn.classList.add('show');
+  elDashBtn.classList.add('show');
   G.state = 'PLAY';
   banner('HAYATTA KAL!', 2);
 }
@@ -1572,7 +1761,10 @@ function showPauseInfo() {
 }
 function gameOver(win) {
   G.state = 'OVER'; G.win = win;
+  META.bank += G.gold; metaSave(); renderShop();      // toplanan altın kalıcı
+  win ? SFX.win() : SFX.over();
   elPauseBtn.classList.remove('show');
+  elDashBtn.classList.remove('show');
   document.getElementById('overTitle').textContent = win ? 'BÖLÜM TAMAMLANDI!' : 'OYUN BİTTİ';
   document.getElementById('overSub').textContent = win
     ? 'Sürüyü püskürttün ve OMEGA HORROR\'u yok ettin. Efsanevi bir hayatta kalma.'
@@ -1582,18 +1774,21 @@ function gameOver(win) {
     ['Toplanan Altın', G.gold], ['Ulaşılan Seviye', G.level],
     ['Toplam Hasar', Math.round(G.dmgDealt).toLocaleString('tr-TR')],
     ['Silah Sayısı', P.weapons.length + (P.weapons.some(w => w.evolved) ? ' (EVO!)' : '')],
+    ['Kasadaki Altın', META.bank],
   ];
   document.getElementById('overStats').innerHTML = rows.map(r => `<div class="stat"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
   elOver.classList.add('show');
 }
-document.getElementById('startBtn').onclick = startGame;
+document.getElementById('startBtn').onclick = () => { SFX.init(); SFX.resume(); startGame(); };
 document.getElementById('againBtn').onclick = startGame;
 document.getElementById('resumeBtn').onclick = togglePause;
 document.getElementById('quitBtn').onclick = () => {
   G.state = 'MENU'; elPaused.classList.remove('show');
-  elPauseBtn.classList.remove('show'); elMenu.classList.add('show');
+  elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show'); elMenu.classList.add('show');
 };
 elPauseBtn.onclick = togglePause;
+const elDashBtn = document.getElementById('dashBtn');
+elDashBtn.addEventListener('pointerdown', e => { e.stopPropagation(); doDash(); });
 
 /* ============ 13) MODEL YÜKLEME + ANA DÖNGÜ ============ */
 let MODEL_SCALE = 1, MODEL_YAW = 0, MODEL_Y = 0;   // model +Z yönüne bakar
@@ -1611,7 +1806,9 @@ function updateKnightAnim(dt, speed) {
     actWalk.setEffectiveWeight(1 - runW);
     actRun.setEffectiveWeight(runW);
   }
-  mixer.timeScale = t < 0.04 ? 0 : lerp(0.55, 1.45, t);
+  // Bekleme klibi yok: dururken tamamen dondurmak yerine çok yavaş bir
+  // adımlama bırakılıyor, nefes salınımıyla birlikte "hazır duruş" okunuyor.
+  mixer.timeScale = t < 0.04 ? 0.18 : lerp(0.55, 1.45, t);
   mixer.update(dt);
 }
 /* Doku GLB'ye gömülü DEĞİL: three.js gömülü görselleri blob: URL ile yükler ve
@@ -1770,6 +1967,7 @@ function frame(now) {
 
 (async function boot() {
   resize();
+  metaLoad(); renderShop();
   buildWorld(scene);
   buildPropGrid();
   initRipples();
