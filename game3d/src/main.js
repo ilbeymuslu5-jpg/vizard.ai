@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { buildWorld, ARENA, biomeAt } from './world.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildWorld, ARENA, biomeAt, isWater, COLLIDERS } from './world.js';
 
 /* ============ 0) YARDIMCILAR ============ */
 const TAU = Math.PI * 2;
@@ -61,6 +62,7 @@ function resize() {
   camera.top = VIEW_H / 2; camera.bottom = -VIEW_H / 2;
   camera.left = -VIEW_H / 2 * aspect; camera.right = VIEW_H / 2 * aspect;
   camera.updateProjectionMatrix();
+  const cr = VIEW_H * 1.1 + 8; CULL_R2 = cr * cr;
   fx2d.width = Math.round(VW * DPR); fx2d.height = Math.round(VH * DPR);
   fx2d.style.width = VW + 'px'; fx2d.style.height = VH + 'px';
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -72,9 +74,13 @@ if (window.visualViewport) visualViewport.addEventListener('resize', resize);
 
 // Dünya → ekran izdüşümü (2B katmandaki yazılar için)
 const _pv = new THREE.Vector3();
+/* Kare başına yüzlerce kez çağrılıyor; dizi döndürmek yerine paylaşılan
+   alanlara yazıyoruz (çöp toplayıcı baskısı = takılma). */
+let PX = 0, PY = 0;
 function project(x, y, z) {
   _pv.set(x, y, z).project(camera);
-  return [(_pv.x * 0.5 + 0.5) * VW, (-_pv.y * 0.5 + 0.5) * VH];
+  PX = (_pv.x * 0.5 + 0.5) * VW;
+  PY = (-_pv.y * 0.5 + 0.5) * VH;
 }
 /* Verilen yöndeki EN KISA "ekran dışı" mesafe.
    İzometride görünür alan döndürülmüş bir dikdörtgendir; sabit bir yarıçap
@@ -174,6 +180,41 @@ class SpatialHash {
   }
 }
 const hash = new SpatialHash(3);
+
+/* Sahne nesneleri (ağaç, kaya, fıçı, sütun) için statik çarpışma ızgarası.
+   Yalnızca oyuncu itilir; düşmanların takılıp yığılmaması için onlar geçebilir. */
+const PROP_CELL = 6;
+const propGrid = new Map();
+function buildPropGrid() {
+  propGrid.clear();
+  for (const c of COLLIDERS) {
+    const k = (Math.floor(c.x / PROP_CELL) & 0xffff) << 16 | (Math.floor(c.z / PROP_CELL) & 0xffff);
+    let b = propGrid.get(k); if (!b) { b = []; propGrid.set(k, b); }
+    b.push(c);
+  }
+}
+// Oyuncuyu nesnelerin dışına iter
+function resolveProps(px, pz, pr, out) {
+  const cx = Math.floor(px / PROP_CELL), cz = Math.floor(pz / PROP_CELL);
+  let x = px, z = pz;
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+    const bucket = propGrid.get((((cx + a) & 0xffff) << 16) | ((cz + b) & 0xffff));
+    if (!bucket) continue;
+    for (let i = 0; i < bucket.length; i++) {
+      const c = bucket[i];
+      const dx = x - c.x, dz = z - c.z;
+      const min = c.r + pr;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < min * min && d2 > 1e-6) {
+        const d = Math.sqrt(d2), push = (min - d) / d;
+        x += dx * push; z += dz * push;
+      }
+    }
+  }
+  out.x = x; out.z = z;
+}
+const _res = { x: 0, z: 0 };
+let CULL_R2 = 900;                 // ekran dışını çizim öncesi eleme yarıçapının karesi
 const qbuf = [];
 
 /* ============ 4) OYUN DURUMU ============ */
@@ -185,8 +226,25 @@ const G = {
   banner: '', bannerT: 0, dmgDealt: 0, win: false,
 };
 const WIN_TIME = 900, BOSS_EVERY = 180;
-const addShake = v => { G.shake = Math.min(1.4, G.shake + v); };
-const hitStop = v => { G.hitStop = Math.max(G.hitStop, v); };
+/* Yüksek seviyede saniyede binlerce isabet oluyor. Her isabet sallantı ve
+   hit-stop tetiklerse ikisi de hiç boşalmaz: kamera sürekli titrer ve oyun
+   karelerin yarısından fazlasında donar. Bu yüzden kare başına sallantı
+   bütçesi ve hit-stop bekleme süresi var. `force` (boss ölümü, oyuncunun
+   hasar alması gibi tekil olaylar) bunları atlar. */
+let shakeCd = 0, hitStopCd = 0;
+const SHAKE_CD = 0.14, SHAKE_MAX = 0.55, HITSTOP_CD = 0.32;
+function addShake(v, force) {
+  if (force) { G.shake = Math.min(1.4, G.shake + v); return; }
+  // Sıradan isabetler: en fazla ~0.14 sn'de bir, sönümlenmeye zaman kalsın
+  if (shakeCd > 0) return;
+  shakeCd = SHAKE_CD;
+  G.shake = Math.min(SHAKE_MAX, G.shake + v);
+}
+function hitStop(v, force) {
+  if (!force && hitStopCd > 0) return;
+  hitStopCd = HITSTOP_CD;
+  G.hitStop = Math.max(G.hitStop, Math.min(v, 0.05));
+}
 const banner = (t, s = 2.4) => { G.banner = t; G.bannerT = s; };
 
 /* ============ 5) OYUNCU ============ */
@@ -195,7 +253,7 @@ const P = {
   hp: 100, maxHp: 100, iframe: 0, yaw: 0, walk: 0, speed: 8.6,
   weapons: [], passives: {},
   base: { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 },
-  st: null, model: null, hitPop: 0,
+  st: null, model: null, hitPop: 0, inWater: false,
 };
 function recomputeStats() {
   const s = Object.assign({}, P.base);
@@ -213,8 +271,13 @@ function updatePlayer(dt) {
   const k = 1 - Math.pow(0.0005, dt);
   P.vx = lerp(P.vx, input.ax * sp, k);
   P.vz = lerp(P.vz, input.az * sp, k);
-  P.x = clamp(P.x + P.vx * dt, -ARENA.hx + 1.5, ARENA.hx - 1.5);
-  P.z = clamp(P.z + P.vz * dt, -ARENA.hz + 1.5, ARENA.hz - 1.5);
+  // Suda hareket biraz yavaşlar (ve iz bırakır)
+  P.inWater = isWater(P.x, P.z);
+  const wSlow = P.inWater ? 0.78 : 1;
+  P.x = clamp(P.x + P.vx * dt * wSlow, -ARENA.hx + 1.5, ARENA.hx - 1.5);
+  P.z = clamp(P.z + P.vz * dt * wSlow, -ARENA.hz + 1.5, ARENA.hz - 1.5);
+  resolveProps(P.x, P.z, P.r, _res);        // ağaç/kaya/fıçı içinden geçme
+  P.x = _res.x; P.z = _res.z;
   const mv = Math.hypot(P.vx, P.vz);
   if (mv > 0.5) {
     const want = Math.atan2(P.vx, P.vz);
@@ -225,6 +288,15 @@ function updatePlayer(dt) {
   if (P.iframe > 0) P.iframe -= dt;
   if (P.hitPop > 0) P.hitPop -= dt * 4;
   if (P.st.regen > 0 && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + P.st.regen * dt);
+  // Su üstünde yürürken halka + sıçrama
+  if (P.inWater) {
+    rippleT -= dt;
+    if (rippleT <= 0 && mv > 1.5) {
+      rippleT = 0.16;
+      spawnRipple(P.x, P.z);
+      for (let i = 0; i < 3; i++) particle(P.x, 0.25, P.z, '#cfeaff', 2.4, 3.5);
+    } else if (rippleT <= 0) { rippleT = 0.5; spawnRipple(P.x, P.z); }
+  }
   // Modeli yerleştir; bacakları iskelet animasyonu sürer
   if (P.model) {
     const idleBob = mv < 0.5 ? Math.sin(G.time * 2.2) * 0.03 : 0;   // dururken nefes alma
@@ -236,10 +308,50 @@ function updatePlayer(dt) {
     updateKnightAnim(dt, mv);
   }
 }
+/* Suda yürüme izi: genişleyip sönen halkalar + sıçrayan damlalar */
+const RIPPLE_N = 14;
+const ripples = [];
+let rippleMesh = null, rippleT = 0;
+function initRipples() {
+  const geo = new THREE.RingGeometry(0.55, 0.72, 16);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xdff2ff, transparent: true,
+    opacity: 0.55, depthWrite: false });
+  rippleMesh = new THREE.InstancedMesh(geo, mat, RIPPLE_N);
+  rippleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  rippleMesh.frustumCulled = false; rippleMesh.count = 0;
+  scene.add(rippleMesh);
+  for (let i = 0; i < RIPPLE_N; i++) ripples.push({ x: 0, z: 0, t: 1, life: 1 });
+}
+function spawnRipple(x, z) {
+  let best = null;
+  for (const r of ripples) if (r.t >= r.life && (!best || r.t > best.t)) best = r;
+  if (!best) return;
+  best.x = x + rnd(0.3, -0.3); best.z = z + rnd(0.3, -0.3);
+  best.t = 0; best.life = rnd(1.1, 0.75);
+}
+function updateRipples(dt) {
+  if (!rippleMesh) return;
+  let n = 0;
+  for (const r of ripples) {
+    if (r.t >= r.life) continue;
+    r.t += dt;
+    const k = r.t / r.life;
+    _v3.set(r.x, 0.09, r.z);
+    _q.setFromAxisAngle(_AXIS_Y, 0);
+    _s3.setScalar(0.35 + k * 1.5);
+    _m4.compose(_v3, _q, _s3);
+    rippleMesh.setMatrixAt(n++, _m4);
+  }
+  rippleMesh.count = n;
+  rippleMesh.instanceMatrix.needsUpdate = true;
+  rippleMesh.material.opacity = 0.5;
+}
+
 function hurtPlayer(dmg) {
   if (P.iframe > 0 || G.state !== 'PLAY') return;
   P.hp -= Math.max(1, dmg - P.st.armor);
-  P.iframe = 0.62; G.flashRed = 0.35; addShake(0.42); hitStop(0.04);
+  P.iframe = 0.62; G.flashRed = 0.35; addShake(0.42, true); hitStop(0.04, true);
   for (let i = 0; i < 10; i++) particle(P.x, 0.8, P.z, '#ff5566', 3, 6);
   if (P.hp <= 0) { P.hp = 0; gameOver(false); }
 }
@@ -269,19 +381,79 @@ const enemies = new Pool(() => ({
 }), MAX_ENEMIES);
 
 // --- Instanced mesh havuzları (tip başına bir çizim çağrısı) ---
+/* Düşman modelleri: her tip birkaç ilkel şeklin BİRLEŞTİRİLMİŞ tek
+   geometrisidir (tip başına tek çizim çağrısı korunur). Parçalara damar rengi
+   (vertex color) basılır; instanceColor ile çarpıldığı için gövde/uzuv ayrımı
+   görünür ama beyaz flash efekti hâlâ okunur. */
+/* Icosahedron/Octahedron indekssiz, Box/Cone indekslidir; mergeGeometries
+   karışık girdi kabul etmiyor. Hepsini indekssize çevirip birleştiriyoruz. */
+const ni = g => g.index ? g.toNonIndexed() : g;
+function tinted(geo, shade) {
+  geo = ni(geo);
+  const n = geo.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { c[i*3] = c[i*3+1] = c[i*3+2] = shade; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return geo;
+}
+const put = (g, x, y, z, rx, ry, rz) => {
+  if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz);
+  g.translate(x, y, z); return g;
+};
 function makeGeo(kind) {
+  const parts = [];
   switch (kind) {
-    case 'blob':  { const g = new THREE.IcosahedronGeometry(0.6, 0); g.scale(1, 0.95, 1); g.translate(0, 0.58, 0); return g; }
-    case 'spike': { const g = new THREE.ConeGeometry(0.42, 1.0, 5); g.translate(0, 0.5, 0); return g; }
-    case 'bone':  { const g = new THREE.CapsuleGeometry(0.32, 0.62, 3, 6); g.translate(0, 0.65, 0); return g; }
-    case 'block': { const g = new THREE.BoxGeometry(1.15, 1.35, 1.15); g.translate(0, 0.68, 0); return g; }
-    case 'ghost': { const g = new THREE.OctahedronGeometry(0.72, 0); g.scale(1, 1.35, 1); g.translate(0, 0.75, 0); return g; }
+    case 'blob': {   // Zombi: yayvan gövde, öne sarkan kollar, yamuk kafa
+      parts.push(tinted(put(new THREE.IcosahedronGeometry(0.46, 0), 0, 0.52, 0), 1.0));
+      parts.push(tinted(put(new THREE.SphereGeometry(0.27, 7, 5), 0, 1.02, 0.04), 0.92));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.16, 0.5, 0.16), -0.36, 0.62, 0.22, 0.5, 0, 0), 0.74));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.16, 0.5, 0.16), 0.36, 0.62, 0.22, 0.5, 0, 0), 0.74));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.17, 0.4, 0.17), -0.17, 0.2, 0), 0.7));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.17, 0.4, 0.17), 0.17, 0.2, 0), 0.7));
+      break;
+    }
+    case 'spike': {  // Hızlı: alçak gövde, dört bacak, sivri kafa
+      parts.push(tinted(put(new THREE.OctahedronGeometry(0.34, 0), 0, 0.42, 0), 1.0));
+      parts.push(tinted(put(new THREE.ConeGeometry(0.16, 0.42, 5), 0, 0.44, 0.36, Math.PI / 2, 0, 0), 0.9));
+      for (let i = 0; i < 4; i++) {
+        const sx = i < 2 ? -0.3 : 0.3, sz = (i % 2) ? -0.22 : 0.24;
+        parts.push(tinted(put(new THREE.BoxGeometry(0.08, 0.42, 0.08), sx, 0.2, sz, 0, 0, sx < 0 ? -0.5 : 0.5), 0.66));
+      }
+      break;
+    }
+    case 'bone': {   // İskelet: kaburga yığını + kafatası + kollar
+      parts.push(tinted(put(new THREE.BoxGeometry(0.42, 0.46, 0.26), 0, 0.72, 0), 1.0));
+      parts.push(tinted(put(new THREE.SphereGeometry(0.24, 7, 5), 0, 1.15, 0), 0.95));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.09, 0.44, 0.09), -0.29, 0.72, 0.1, 0.6, 0, 0), 0.78));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.09, 0.44, 0.09), 0.29, 0.72, 0.1, 0.6, 0, 0), 0.78));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.11, 0.5, 0.11), -0.12, 0.25, 0), 0.72));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.11, 0.5, 0.11), 0.12, 0.25, 0), 0.72));
+      break;
+    }
+    case 'block': {  // Tank: iri gövde, omuz blokları, küçük kafa
+      parts.push(tinted(put(new THREE.BoxGeometry(1.0, 1.0, 0.8), 0, 0.78, 0), 1.0));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.34, 0.34, 0.34), -0.62, 1.16, 0), 0.8));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.34, 0.34, 0.34), 0.62, 1.16, 0), 0.8));
+      parts.push(tinted(put(new THREE.SphereGeometry(0.26, 7, 5), 0, 1.44, 0.06), 0.9));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.34, 0.34, 0.34), -0.28, 0.16, 0), 0.66));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.34, 0.34, 0.34), 0.28, 0.16, 0), 0.66));
+      break;
+    }
+    case 'ghost': {  // Hayalet: koni pelerin + kukuleta
+      const cloak = new THREE.ConeGeometry(0.6, 1.3, 7);
+      parts.push(tinted(put(cloak, 0, 0.65, 0), 1.0));
+      parts.push(tinted(put(new THREE.SphereGeometry(0.3, 7, 5, 0, Math.PI * 2, 0, Math.PI * 0.62), 0, 1.28, 0), 0.85));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.12, 0.34, 0.12), -0.4, 0.95, 0.1, 0, 0, 0.5), 0.7));
+      parts.push(tinted(put(new THREE.BoxGeometry(0.12, 0.34, 0.12), 0.4, 0.95, 0.1, 0, 0, -0.5), 0.7));
+      break;
+    }
   }
+  return mergeGeometries(parts, false);
 }
 const eMeshes = {};
 for (const t in ETYPES) {
   const cfg = ETYPES[t];
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, vertexColors: true });
   const im = new THREE.InstancedMesh(makeGeo(cfg.geo), mat, MAX_ENEMIES);
   im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   im.frustumCulled = false; im.count = 0;
@@ -385,10 +557,10 @@ function spawnWave(dt) {
     if (G.time >= WIN_TIME && !G.finalSpawned) {
       G.finalSpawned = true; G.bossIdx = BOSSES.length - 1;
       const b = spawnEnemy(null, rnd(TAU), true, true);
-      if (b) { banner('FİNAL BOSS: ' + b.bossName, 3.2); addShake(0.9); } else G.finalSpawned = false;
+      if (b) { banner('FİNAL BOSS: ' + b.bossName, 3.2); addShake(0.9, true); } else G.finalSpawned = false;
     } else if (G.time >= G.nextBossAt && G.time < WIN_TIME) {
       const b = spawnEnemy(null, rnd(TAU), true);
-      if (b) { G.nextBossAt += BOSS_EVERY; banner('BOSS: ' + b.bossName, 3); addShake(0.7); }
+      if (b) { G.nextBossAt += BOSS_EVERY; banner('BOSS: ' + b.bossName, 3); addShake(0.7, true); }
     }
   }
 }
@@ -525,7 +697,7 @@ function updateTelegraphs(dt) {
     if (t.mesh) t.mesh.userData.fill.scale.setScalar(Math.max(0.001, k));
     if (t.t >= t.dur) {
       if (dist(P.x, P.z, t.x, t.z) < t.r) hurtPlayer(t.dmg);
-      addShake(0.5); hitStop(0.03);
+      addShake(0.5, true); hitStop(0.03, true);
       for (let n = 0; n < 20; n++) {
         const a = rnd(TAU);
         particle(t.x + Math.cos(a) * t.r * 0.6, 0.4, t.z + Math.sin(a) * t.r * 0.6, '#ff7a4d', 4, 9);
@@ -544,12 +716,46 @@ const bullets = new Pool(() => ({
   kind: 'bolt', color: 0x7ddcff, hits: [], homing: 0, target: null, spin: 0,
   tx: 0, tz: 0, boom: 0, zone: null, big: false, cluster: 0,
 }), MAX_BULLETS);
-const bulletMesh = new THREE.InstancedMesh(
-  (() => { const g = new THREE.BoxGeometry(1, 0.34, 0.34); return g; })(),
-  new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX_BULLETS);
-bulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-bulletMesh.frustumCulled = false; bulletMesh.count = 0;
-scene.add(bulletMesh);
+/* Mermi modelleri: her tip ayrı InstancedMesh (yine tip başına tek çizim).
+   Fiziksel silahlara katı model, enerji silahlarına parlak form. */
+function bulletGeo(kind) {
+  if (kind === 'kunai') {                    // düz bıçak + sap
+    const blade = new THREE.ConeGeometry(0.16, 0.62, 4); blade.rotateZ(-Math.PI / 2); blade.translate(0.16, 0, 0);
+    const grip = new THREE.BoxGeometry(0.22, 0.08, 0.08); grip.translate(-0.2, 0, 0);
+    const ring = new THREE.TorusGeometry(0.08, 0.03, 4, 8); ring.rotateY(Math.PI / 2); ring.translate(-0.32, 0, 0);
+    return mergeGeometries([blade, grip, ring].map(ni), false);
+  }
+  if (kind === 'rocket') {                   // gövde + burun + kanatçık
+    const body = new THREE.CylinderGeometry(0.14, 0.14, 0.5, 6); body.rotateZ(-Math.PI / 2);
+    const nose = new THREE.ConeGeometry(0.14, 0.24, 6); nose.rotateZ(-Math.PI / 2); nose.translate(0.37, 0, 0);
+    const fins = [];
+    for (let i = 0; i < 3; i++) {
+      const f = new THREE.BoxGeometry(0.16, 0.02, 0.16);
+      f.rotateX(i / 3 * Math.PI * 2); f.translate(-0.22, 0, 0);
+      fins.push(f);
+    }
+    return mergeGeometries([body, nose, ...fins].map(ni), false);
+  }
+  if (kind === 'molotov') {                  // şişe: gövde + boyun + fitil
+    const body = new THREE.CylinderGeometry(0.16, 0.13, 0.3, 6);
+    const neck = new THREE.CylinderGeometry(0.06, 0.06, 0.14, 5); neck.translate(0, 0.22, 0);
+    const wick = new THREE.SphereGeometry(0.07, 5, 4); wick.translate(0, 0.32, 0);
+    return mergeGeometries([body, neck, wick].map(ni), false);
+  }
+  // bolt: uzun enerji dartı
+  const g = new THREE.OctahedronGeometry(0.2, 0);
+  g.scale(2.4, 1, 1);
+  return g;
+}
+const bulletKinds = ['bolt', 'kunai', 'rocket', 'molotov'];
+const bMeshes = {};
+for (const k of bulletKinds) {
+  const im = new THREE.InstancedMesh(bulletGeo(k),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX_BULLETS);
+  im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  im.frustumCulled = false; im.count = 0;
+  scene.add(im); bMeshes[k] = im;
+}
 
 const zones = new Pool(() => ({ x: 0, z: 0, r: 1, dps: 10, life: 3, maxLife: 3, dead: false, tick: 0, mesh: null }), 34);
 const zoneMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -661,21 +867,31 @@ function updateBullets(dt) {
   }
   bullets.sweep();
   // instanced çizim
-  let n = 0;
+  const bc = { bolt: 0, kunai: 0, rocket: 0, molotov: 0 };
   for (let i = 0; i < A.length; i++) {
     const b = A[i];
+    const im = bMeshes[b.kind] || bMeshes.bolt;
+    const kind = bMeshes[b.kind] ? b.kind : 'bolt';
+    const n = bc[kind]++;
+    if (n >= MAX_BULLETS) continue;
     _v3.set(b.x, b.y, b.z);
-    _q.setFromAxisAngle(_AXIS_Y, Math.atan2(b.vx, b.vz) + Math.PI / 2);
-    const L = b.kind === 'kunai' ? 0.9 : b.kind === 'rocket' ? 0.8 : 1.0;
-    _s3.set(b.r * 4 * L, b.r * 2.4, b.r * 2.4);
+    if (b.kind === 'molotov') {
+      _q.setFromAxisAngle(_AXIS_Y, b.spin);           // şişe dönerek uçar
+      _s3.setScalar(b.r * 5);
+    } else {
+      _q.setFromAxisAngle(_AXIS_Y, Math.atan2(b.vx, b.vz) + Math.PI / 2);
+      _s3.setScalar(b.r * 5);
+    }
     _m4.compose(_v3, _q, _s3);
-    bulletMesh.setMatrixAt(n, _m4);
-    _col.setHex(b.color); bulletMesh.setColorAt(n, _col);
-    n++;
+    im.setMatrixAt(n, _m4);
+    _col.setHex(b.color); im.setColorAt(n, _col);
   }
-  bulletMesh.count = n;
-  bulletMesh.instanceMatrix.needsUpdate = true;
-  if (bulletMesh.instanceColor) bulletMesh.instanceColor.needsUpdate = true;
+  for (const k of bulletKinds) {
+    const im = bMeshes[k];
+    im.count = bc[k];
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+  }
 }
 function updateZones(dt) {
   let A = zones.active;
@@ -789,7 +1005,8 @@ const WEAPONS = {
       for (let i = 0; i < s.n; i++) {
         const a = w.ang + i / s.n * TAU;
         const bx = P.x + Math.cos(a) * rad, bz = P.z + Math.sin(a) * rad;
-        w.blades[i] = { x: bx, z: bz, a };
+        const bl = w.blades[i] || (w.blades[i] = { x: 0, z: 0, a: 0 });
+        bl.x = bx; bl.z = bz; bl.a = a;
         const list = hash.query(bx, bz, s.size + 1.5, qbuf);
         for (let j = 0; j < list.length; j++) {
           const e = list[j];
@@ -890,7 +1107,10 @@ const bladeEvoMat = new THREE.MeshBasicMaterial({ color: 0x7ecbff, transparent: 
 const bladeMeshes = [];
 function getBlade(i) {
   if (!bladeMeshes[i]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 1.1), bladeMat);
+    const blade = new THREE.ConeGeometry(0.22, 1.15, 4); blade.rotateX(Math.PI / 2); blade.translate(0, 0, 0.2);
+    const guard = new THREE.BoxGeometry(0.5, 0.09, 0.12); guard.translate(0, 0, -0.36);
+    const grip = new THREE.CylinderGeometry(0.07, 0.07, 0.34, 5); grip.rotateX(Math.PI / 2); grip.translate(0, 0, -0.56);
+    const m = new THREE.Mesh(mergeGeometries([blade, guard, grip].map(ni), false), bladeMat);
     m.visible = false; scene.add(m); bladeMeshes[i] = m;
   }
   return bladeMeshes[i];
@@ -902,7 +1122,9 @@ function updateWeapons(dt) {
   let bi = 0;
   for (let i = 0; i < P.weapons.length; i++) {
     const w = P.weapons[i], def = WEAPONS[w.id];
-    const s = def.stats(w.lv, w.evolved);
+    // stats() her karede yeni nesne üretiyordu; seviye/evrim değişmedikçe önbellekten
+    if (w._sk !== w.lv + ':' + w.evolved) { w._sk = w.lv + ':' + w.evolved; w._s = def.stats(w.lv, w.evolved); }
+    const s = w._s;
     if (def.orbit) {
       def.update(w, s, dt);
       for (const bl of w.blades) {
@@ -1082,7 +1304,7 @@ function applyCard(c) {
   else if (c.id === 'gold') G.gold += 50;
   else if (c.id === 'bomb') {
     for (const e of enemies.active.slice()) if (!e.dead) hitEnemy(e, 300 * P.st.dmg, P.x, P.z, 13, true);
-    addShake(1.0);
+    addShake(1.0, true);
     for (let i = 0; i < 50; i++) particle(P.x, 1, P.z, '#ffe08a', 5, 18);
   }
 }
@@ -1132,7 +1354,7 @@ function killEnemy(e) {
   const n = e.boss ? 60 : e.elite ? 20 : 8;
   for (let i = 0; i < n; i++) particle(e.x, 0.7, e.z, i % 3 ? col : '#ffffff', e.boss ? 6 : 3, e.boss ? 20 : 9);
   if (e.boss) {
-    G.boss = null; bossMesh.visible = false; addShake(1.2); hitStop(0.12);
+    G.boss = null; bossMesh.visible = false; addShake(1.2, true); hitStop(0.12, true);
     banner(e.bossName + ' YOK EDİLDİ!', 2.4);
     if (e.isFinal) gameOver(true);
   } else if (e.elite) addShake(0.28);
@@ -1146,7 +1368,8 @@ function drawOverlay() {
   let A = parts.active;
   for (let i = 0; i < A.length; i++) {
     const p = A[i];
-    const [sx, sy] = project(p.x, p.y, p.z);
+    project(p.x, p.y, p.z);
+    const sx = PX, sy = PY;
     if (sx < -20 || sx > VW + 20 || sy < -20 || sy > VH + 20) continue;
     const k = p.life / p.maxLife;
     ctx.globalAlpha = k; ctx.fillStyle = p.color;
@@ -1160,7 +1383,8 @@ function drawOverlay() {
   ctx.textAlign = 'center';
   for (let i = 0; i < A.length; i++) {
     const t = A[i];
-    const [sx, sy] = project(t.x, t.y, t.z);
+    project(t.x, t.y, t.z);
+    const sx = PX, sy = PY;
     if (sx < -40 || sx > VW + 40 || sy < -30 || sy > VH + 30) continue;
     const k = t.life / t.maxLife;
     ctx.globalAlpha = clamp(k * 1.6, 0, 1);
@@ -1174,7 +1398,8 @@ function drawOverlay() {
 
   // oyuncu can barı (başının üstünde)
   {
-    const [sx, sy] = project(P.x, 2.0, P.z);
+    project(P.x, 2.0, P.z);
+    const sx = PX, sy = PY;
     const w = 46, h = 5, hx = sx - w / 2, hy = sy;
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(hx - 1, hy - 1, w + 2, h + 2);
     const k = clamp(P.hp / P.maxHp, 0, 1);
@@ -1186,7 +1411,10 @@ function drawOverlay() {
   for (let i = 0; i < A.length; i++) {
     const e = A[i];
     if (e.dead || e.boss || e.hp >= e.maxHp) continue;
-    const [sx, sy] = project(e.x, (e.cfg.h * e.scale) + 0.35, e.z);
+    // Ekranda olamayacak kadar uzaktakileri izdüşüm almadan ele
+    if (dist2(e.x, e.z, P.x, P.z) > CULL_R2) continue;
+    project(e.x, (e.cfg.h * e.scale) + 0.35, e.z);
+    const sx = PX, sy = PY;
     if (sx < 0 || sx > VW || sy < 0 || sy > VH) continue;
     const w = 22 * e.scale, h = 3;
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(sx - w / 2, sy, w, h);
@@ -1264,10 +1492,11 @@ function drawHUD() {
     ctx.strokeText(G.boss.bossName, VW / 2, by + 7);
     ctx.fillStyle = '#fff0e0'; ctx.fillText(G.boss.bossName, VW / 2, by + 7);
     // ekran dışındaysa yön oku
-    const [bsx, bsy] = project(G.boss.x, 1, G.boss.z);
+    project(G.boss.x, 1, G.boss.z);
+    const bsx = PX, bsy = PY;
     if (bsx < 0 || bsx > VW || bsy < 0 || bsy > VH) {
-      const [psx, psy] = project(P.x, 1, P.z);
-      const a = Math.atan2(bsy - psy, bsx - psx);
+      project(P.x, 1, P.z);
+      const a = Math.atan2(bsy - PY, bsx - PX);
       ctx.save();
       ctx.translate(VW / 2 + Math.cos(a) * Math.min(VW, VH) * 0.36, VH / 2 + Math.sin(a) * Math.min(VW, VH) * 0.36);
       ctx.rotate(a); ctx.fillStyle = '#ff5a3d';
@@ -1495,6 +1724,8 @@ function frame(now) {
   let rdt = (now - last) / 1000; last = now;
   rdt = Math.min(rdt, 0.05);
   let dt = rdt;
+  if (shakeCd > 0) shakeCd -= rdt;               // sallantı ve hit-stop bekleme süreleri
+  if (hitStopCd > 0) hitStopCd -= rdt;
   if (G.hitStop > 0) { G.hitStop -= rdt; dt = 0; }
 
   if (G.state === 'PLAY') {
@@ -1509,6 +1740,7 @@ function frame(now) {
     updateTelegraphs(dt);
     updatePickups(dt);
     updateFx(dt);
+    updateRipples(dt);
     enemies.sweep();
     if (G.bannerT > 0) G.bannerT -= dt;
     if (G.flashRed > 0) G.flashRed -= dt;
@@ -1539,6 +1771,8 @@ function frame(now) {
 (async function boot() {
   resize();
   buildWorld(scene);
+  buildPropGrid();
+  initRipples();
   P.model = await loadKnight();
   resetAll();
   G.state = 'MENU';
@@ -1548,7 +1782,7 @@ function frame(now) {
 })();
 
 // Test/otomasyon için
-window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS, PASSIVES,
+window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS, PASSIVES, COLLIDERS, isWater,
                   addWeapon, getWeapon, recomputeStats, applyCard, spawnEnemy, gainXp, hitEnemy,
                   buildChoices, cardInfo, openLevelUp, startGame, input, joy, camera, scene,
                   hurtPlayer, THREE,

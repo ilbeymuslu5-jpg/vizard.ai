@@ -20,6 +20,20 @@ export function biomeAt(x, z) {
   return 'volcanic';
 }
 
+/* Su yüzeyi testi. buildWorld'deki şekil -90° X ekseninde döndürülüyor:
+   şekil (sx, sy) -> dünya (sx + px, 0, -sy + pz). */
+const WATER = { px: -64 * 0.48, pz: 36 * 0.46, rx: 64 * 0.46, rz: 36 * 0.52 };
+export function isWater(x, z) {
+  const sx = (x - WATER.px) / WATER.rx;
+  const sy = -(z - WATER.pz) / WATER.rz;
+  const a = Math.atan2(sy, sx);
+  const w = 1 + Math.sin(a * 3.1) * 0.10 + Math.sin(a * 5.7) * 0.07;
+  return sx * sx + sy * sy < w * w;
+}
+
+// Oyuncunun içinden geçemeyeceği nesneler (x, z, yarıçap)
+export const COLLIDERS = [];
+
 export const BIOME = {
   forest:   { ground: '#4a8b3a', accent: '#3b6f2c', fog: '#7fb069' },
   rocky:    { ground: '#d9c9a3', accent: '#c2ad80', fog: '#e6dcc0' },
@@ -186,6 +200,7 @@ function barrel(r, h) {
 
 /* -------- Dünyayı kur -------- */
 export function buildWorld(scene) {
+  COLLIDERS.length = 0;
   const group = new THREE.Group();
   scene.add(group);
 
@@ -228,11 +243,12 @@ export function buildWorld(scene) {
   }
 
   // Biyomlara göre nesne serpiştirme
-  const place = (obj, x, z, s) => {
+  const place = (obj, x, z, s, colR) => {
     obj.position.x = x; obj.position.z = z;
     obj.scale.multiplyScalar(s);
     obj.rotation.y = Math.random() * Math.PI * 2;
     group.add(obj);
+    if (colR > 0) COLLIDERS.push({ x, z, r: colR * s });
   };
   const inArena = (x, z) => Math.abs(x) < ARENA.hx - 3 && Math.abs(z) < ARENA.hz - 3;
   const spawnArea = (n, minX, maxX, minZ, maxZ, make) => {
@@ -246,19 +262,19 @@ export function buildWorld(scene) {
   // Orman (sol-üst)
   spawnArea(70, -ARENA.hx, -2, -ARENA.hz, -2, (x, z) =>
     place(Math.random() < 0.35 ? coneTree(3.7, 1.15, '#2f7d33', '#5a3b22')
-                               : blobTree(3.4, 1.3, '#3f9b3f', '#6b4526'), x, z, 0.75 + Math.random() * 0.45));
+                               : blobTree(3.4, 1.3, '#3f9b3f', '#6b4526'), x, z, 0.75 + Math.random() * 0.45, 0.42));
   // Kayalık plato (sağ-üst)
   spawnArea(55, 2, ARENA.hx, -ARENA.hz, -2, (x, z) =>
-    place(rock(0.65 + Math.random() * 1.1, Math.random() < .5 ? '#c9b98f' : '#b3a077'), x, z, 1));
+    place(rock(0.65 + Math.random() * 1.1, Math.random() < .5 ? '#c9b98f' : '#b3a077'), x, z, 1, 0.95));
   // Batık harabeler (sol-alt)
-  spawnArea(26, -ARENA.hx, -2, 2, ARENA.hz, (x, z) => place(column(2.2 + Math.random() * 2, 0.42), x, z, 1));
-  spawnArea(24, -ARENA.hx, -2, 2, ARENA.hz, (x, z) => place(rock(0.8 + Math.random() * 1.1, '#7f93a6'), x, z, 1));
+  spawnArea(26, -ARENA.hx, -2, 2, ARENA.hz, (x, z) => place(column(2.2 + Math.random() * 2, 0.42), x, z, 1, 0.55));
+  spawnArea(24, -ARENA.hx, -2, 2, ARENA.hz, (x, z) => place(rock(0.8 + Math.random() * 1.1, '#7f93a6'), x, z, 1, 0.9));
   // Volkanik çorak arazi (sağ-alt)
-  spawnArea(42, 2, ARENA.hx, 2, ARENA.hz, (x, z) => place(deadTree(2.8 + Math.random() * 1.7, 0.75), x, z, 1));
-  spawnArea(20, 2, ARENA.hx, 2, ARENA.hz, (x, z) => place(rock(0.6 + Math.random() * 0.85, '#2a2020'), x, z, 1));
+  spawnArea(42, 2, ARENA.hx, 2, ARENA.hz, (x, z) => place(deadTree(2.8 + Math.random() * 1.7, 0.75), x, z, 1, 0.3));
+  spawnArea(20, 2, ARENA.hx, 2, ARENA.hz, (x, z) => place(rock(0.6 + Math.random() * 0.85, '#2a2020'), x, z, 1, 0.75));
   // Fıçılar (haritadaki B) — patika boyunca
   spawnArea(18, -ARENA.hx * .8, ARENA.hx * .8, -ARENA.hz * .5, ARENA.hz * .5, (x, z) =>
-    place(barrel(0.42, 0.92), x, z, 1));
+    place(barrel(0.42, 0.92), x, z, 1, 0.45));
 
   // Arena duvarı — dört kenarda kaya sırası
   const wallMat = new THREE.MeshLambertMaterial({ color: '#4a4740', flatShading: true });

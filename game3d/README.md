@@ -65,3 +65,25 @@ uniform olarak verilip tarayıcıda ölçülerek `0.0005`'e ayarlandı.
 552k üçgendi ve **yan yana 4 kopya** içeriyordu; bağlı bileşen analiziyle tek
 şövalye ayıklanıp 269 KB'a indirilmişti. `prepare_animated.mjs`: animasyonlu
 modeli tek başına hazırlar (aynı 2048² dokunun iki kopyasını teke indirir).
+
+## Performans notu: "titriyor" ve düşen FPS
+
+Yüksek seviyede (30+) oyun titriyor ve donuk hissettiriyordu. Ölçüm, sebebin
+render yükü **olmadığını** gösterdi:
+
+| | Sv. 1 | Sv. 43 (tüm EVO) |
+|---|---|---|
+| ekran sallantısı aktif kare | %73 | %100 (ort. 1.05) |
+| hit-stop aktif kare | %5 | %54 |
+
+Altı EVO silahla saniyede binlerce isabet oluyor; her isabet `addShake` ve
+`hitStop` tetikliyordu. İkisi de hiç boşalamadığı için kamera sürekli titriyor
+ve oyun karelerin yarısından fazlasında donuyordu (`dt = 0`).
+
+Çözüm: sıradan isabetler için bekleme süresi (sallantı 0.14 sn, hit-stop
+0.32 sn) ve daha düşük tavan. Boss ölümü, oyuncunun hasar alması gibi tekil
+olaylar `force` ile bunu atlar. Ölçüm sonrası: sallantı 0.30, hit-stop %16.
+
+Ayrıca kare başına yapılan tahsisler kaldırıldı: `project()` dizi döndürmüyor,
+silah `stats()` nesnesi önbelleğe alınıyor, döner bıçak nesneleri yeniden
+kullanılıyor, ekran dışı düşmanlar izdüşüm alınmadan eleniyor.
