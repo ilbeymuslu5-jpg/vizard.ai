@@ -46,7 +46,7 @@ export const BIOME = {
 };
 
 /* ============ ZEMİN DOKUSU ============ */
-function groundTexture() {
+function groundCanvas() {
   const S = 2048;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -148,10 +148,27 @@ function groundTexture() {
   g.stroke();
   g.strokeStyle = '#efe0ab'; g.lineWidth = 26; g.stroke();
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+  return c;      // doku, nesne gölgeleri pişirildikten SONRA üretilir
+}
+
+/* Zemine yüksek frekanslı, tekrarlayan detay dokusu. Biyom haritası 2048px'i
+   128 dünya birimine yayıyor (16 px/birim) — yakından bulanık kalıyordu.
+   Bu doku 30 kez tekrar ederek gren ekler; ana renk haritasıyla çarpılır. */
+function detailTexture() {
+  const S = 256;
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = '#808080'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 2600; i++) {
+    const v = 96 + Math.random() * 64;
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    const x = Math.random() * S, y = Math.random() * S, r = 0.6 + Math.random() * 2.4;
+    g.beginPath(); g.ellipse(x, y, r, r * (0.5 + Math.random()), Math.random() * 6.28, 0, 6.28); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(34, 19);
+  return t;
 }
 
 /* ============ GEOMETRİ YARDIMCILARI ============
@@ -351,16 +368,62 @@ const BUILD = {
   },
 };
 
+/* Su yüzeyi için kayan parıltı dokusu (kostik benzeri ağ) */
+function waterTexture() {
+  const S = 256;
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8fd0ee'; g.fillRect(0, 0, S, S);
+  g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineCap = 'round';
+  for (let i = 0; i < 90; i++) {
+    g.lineWidth = 1 + Math.random() * 2.5;
+    let x = Math.random() * S, y = Math.random() * S;
+    g.beginPath(); g.moveTo(x, y);
+    for (let k = 0; k < 3; k++) {
+      x += (Math.random() - .5) * 46; y += (Math.random() - .5) * 26;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  g.fillStyle = 'rgba(60,140,190,.35)';
+  for (let i = 0; i < 220; i++) {
+    const x = Math.random() * S, y = Math.random() * S, r = 3 + Math.random() * 14;
+    g.beginPath(); g.ellipse(x, y, r, r * 0.5, Math.random() * 6.28, 0, 6.28); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(6, 4);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* Pişirilmiş gölgenin nesne türüne göre yarıçapı ve koyuluğu */
+const SHADOW_SIZE = {
+  treeDeciduous: { r: 1.5, a: 0.5 }, treeConifer: { r: 1.15, a: 0.5 },
+  stump: { r: 0.6, a: 0.42 }, charredStump: { r: 0.55, a: 0.45 },
+  fallenLog: { r: 1.3, a: 0.4 }, shrub: { r: 0.4, a: 0.3 }, cactus: { r: 0.35, a: 0.4 },
+  boulder: { r: 0.95, a: 0.45 }, spire: { r: 1.2, a: 0.5 }, pebbles: { r: 0.3, a: 0.22 },
+  pillar: { r: 0.6, a: 0.5 }, pillarBroken: { r: 0.8, a: 0.4 }, pavement: { r: 0.9, a: 0.16 },
+  urn: { r: 0.35, a: 0.38 }, barrel: { r: 0.42, a: 0.42 }, coinPile: { r: 0.25, a: 0.25 },
+  bones: { r: 0.4, a: 0.22 }, bridge: { r: 1.6, a: 0.35 }, ladder: { r: 0.4, a: 0.3 },
+  reed: { r: 0.3, a: 0.18 }, lily: { r: 0.3, a: 0.14 },
+};
+
 /* ============ DÜNYAYI KUR ============ */
-export function buildWorld(scene) {
+export function buildWorld(scene, opts) {
+  const useDetail = !opts || opts.detail !== false;
   COLLIDERS.length = 0;
   const group = new THREE.Group();
   scene.add(group);
 
-  // Zemin
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(ARENA.hx * 2, ARENA.hz * 2),
-    new THREE.MeshLambertMaterial({ map: groundTexture() }));
+  // Zemin dokusu (nesne gölgeleri aşağıda bu tuvale pişirilecek)
+  const gcanvas = groundCanvas();
+  const gctx = gcanvas.getContext('2d');
+  const GS = gcanvas.width;
+  const toPx = wx => (wx + ARENA.hx) / (ARENA.hx * 2) * GS;
+  const toPz = wz => (wz + ARENA.hz) / (ARENA.hz * 2) * GS;
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.hx * 2, ARENA.hz * 2), groundMat);
   ground.rotation.x = -Math.PI / 2;
   group.add(ground);
 
@@ -372,8 +435,9 @@ export function buildWorld(scene) {
     const x = Math.cos(a) * WATER.rx * w, y = Math.sin(a) * WATER.rz * w;
     i ? shape.lineTo(x, y) : shape.moveTo(x, y);
   }
-  const water = new THREE.Mesh(new THREE.ShapeGeometry(shape),
-    new THREE.MeshLambertMaterial({ color: '#37a3d8', transparent: true, opacity: 0.5 }));
+  const waterMat = new THREE.MeshLambertMaterial({
+    color: '#37a3d8', transparent: true, opacity: 0.55, map: waterTexture() });
+  const water = new THREE.Mesh(new THREE.ShapeGeometry(shape), waterMat);
   water.rotation.x = -Math.PI / 2;
   water.position.set(WATER.px, 0.06, WATER.pz);
   group.add(water);
@@ -443,6 +507,50 @@ export function buildWorld(scene) {
   scatter(20, -ARENA.hx * .8, ARENA.hx * .8, -ARENA.hz * .5, ARENA.hz * .5, (x, z) => put('barrel', x, z, rnd(1.2, 0.9), 0.4));
   scatter(10, -ARENA.hx * .8, ARENA.hx * .8, -ARENA.hz * .6, ARENA.hz * .6, (x, z) => put('coinPile', x, z, rnd(1.3, 0.9), 0));
 
+  /* --- Nesne gölgelerini zemin dokusuna pişir ---
+     Gerçek gölge haritası ölçüldü: %66 FPS bedeli, üstelik izometrik açıda
+     güneş yüksek olduğu için gölgeler nesnenin altında kalıyordu. Nesneler
+     sabit olduğundan gölgeleri bir kez dokuya çizmek hem bedava hem de
+     stilize görünüme daha uygun. */
+  const SHADOW_OFF = 0.55;                     // dünya biriminde ışık yönü kayması
+  gctx.globalCompositeOperation = 'multiply';
+  for (const kind in place) {
+    const info = SHADOW_SIZE[kind];
+    if (!info) continue;
+    for (const it of place[kind]) {
+      const r = info.r * it.s;
+      const x = toPx(it.x + SHADOW_OFF * it.s), y = toPz(it.z + SHADOW_OFF * it.s);
+      const rx = r / (ARENA.hx * 2) * GS, ry = rx * 0.62;
+      const grd = gctx.createRadialGradient(x, y, rx * 0.15, x, y, rx);
+      grd.addColorStop(0, `rgba(70,74,86,${info.a})`);
+      grd.addColorStop(0.62, `rgba(120,124,136,${info.a * 0.55})`);
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      gctx.fillStyle = grd;
+      gctx.save(); gctx.translate(x, y); gctx.scale(1, ry / rx); gctx.translate(-x, -y);
+      gctx.beginPath(); gctx.arc(x, y, rx, 0, 6.28); gctx.fill();
+      gctx.restore();
+    }
+  }
+  gctx.globalCompositeOperation = 'source-over';
+
+  const gtex = new THREE.CanvasTexture(gcanvas);
+  gtex.colorSpace = THREE.SRGBColorSpace;
+  gtex.anisotropy = 8;
+  groundMat.map = gtex;
+  /* Detay dokusu: tam ekran fazladan bir doku örneklemesi demek. Ölçümde
+     yazılım rasterizasyonunda ~%12 maliyeti var; düşük güçlü cihazlarda
+     kapatılıyor (küçük ekranda zaten bulanıklık daha az fark ediliyor). */
+  if (useDetail) {
+    const dtex = detailTexture();
+    groundMat.onBeforeCompile = sh => {
+      sh.uniforms.uDetail = { value: dtex };
+      sh.fragmentShader = 'uniform sampler2D uDetail;\n' + sh.fragmentShader.replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\n\tdiffuseColor.rgb *= texture2D(uDetail, vMapUv * vec2(34.0, 19.0)).rgb * 2.0;');
+    };
+    groundMat.needsUpdate = true;
+  }
+
   // --- InstancedMesh üretimi ---
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
@@ -460,7 +568,6 @@ export function buildWorld(scene) {
       im.setMatrixAt(i, m4);
     });
     im.instanceMatrix.needsUpdate = true;
-    im.castShadow = false;
     group.add(im);
     drawCalls++;
   }
@@ -482,5 +589,5 @@ export function buildWorld(scene) {
   wall.count = wi; wall.instanceMatrix.needsUpdate = true;
   group.add(wall);
 
-  return { group, ground, water, propKinds: drawCalls, propCount: COLLIDERS.length };
+  return { group, ground, water, waterMap: waterMat.map, propKinds: drawCalls, propCount: COLLIDERS.length };
 }

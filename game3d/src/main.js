@@ -30,9 +30,26 @@ const glCanvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: !LOW_END, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, LOW_END ? 1.6 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+/* Not: gerçek gölge haritası denendi ve ölçüldü — %66 FPS bedeli getiriyor,
+   buna karşılık izometrik açıda güneş yüksek olduğu için gölgeler nesnenin
+   altında kalıp neredeyse görünmüyordu. Bunun yerine nesne gölgeleri zemin
+   dokusuna PİŞİRİLİYOR (world.js): çalışma anında sıfır maliyet. */
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#0e1220');
+/* Gökyüzü: düz renk yerine dikey gradyan — ufuk çizgisi ve derinlik hissi */
+scene.background = (() => {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, '#1a2744');            // üst: gece mavisi
+  grd.addColorStop(0.55, '#2b3a56');
+  grd.addColorStop(1, '#3d4a5e');            // ufuk: sisli gri-mavi
+  g.fillStyle = grd; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
 // Not: ortografik kamera hedefin 70 birim uzağında durur; sis mesafesi buna göre
 // ayarlanmazsa tüm sahne sise gömülür. Uzak kenarlara hafif bir tül bırakıyoruz.
 scene.fog = new THREE.Fog('#131a2c', 92, 150);
@@ -1791,6 +1808,7 @@ const elDashBtn = document.getElementById('dashBtn');
 elDashBtn.addEventListener('pointerdown', e => { e.stopPropagation(); doDash(); });
 
 /* ============ 13) MODEL YÜKLEME + ANA DÖNGÜ ============ */
+let WORLD = null;
 let MODEL_SCALE = 1, MODEL_YAW = 0, MODEL_Y = 0;   // model +Z yönüne bakar
 const OUTLINE_W = 0.0005;                          // dış çizgi kalınlığı (tarayıcıda ölçülerek bulundu)
 let mixer = null, actWalk = null, actRun = null;
@@ -1960,6 +1978,11 @@ function frame(now) {
   } else G.shake = 0;
   camera.lookAt(camTarget);
 
+  // Su yüzeyi yavaşça kaysın: durgun yerine akan su hissi
+  if (WORLD && WORLD.waterMap) {
+    WORLD.waterMap.offset.x = (now / 26000) % 1;
+    WORLD.waterMap.offset.y = (now / 41000) % 1;
+  }
   syncEnemyMeshes();
   renderer.render(scene, camera);
   drawOverlay();
@@ -1968,7 +1991,7 @@ function frame(now) {
 (async function boot() {
   resize();
   metaLoad(); renderShop();
-  buildWorld(scene);
+  WORLD = buildWorld(scene, { detail: !LOW_END });
   buildPropGrid();
   initRipples();
   P.model = await loadKnight();

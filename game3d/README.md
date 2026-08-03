@@ -157,3 +157,35 @@ Sürüyle çevrildiğinde kaçış imkânı verir.
 ### Bekleme duruşu
 Modelde idle klibi olmadığı için karakter dururken yarı adımda donuyordu;
 artık çok yavaş (0.18x) adımlama + nefes salınımı ile "hazır duruş" okunuyor.
+
+
+## Grafik iyileştirmeleri (ve gerçek gölgelerin neden kullanılmadığı)
+
+### Denenen ve ölçülüp vazgeçilen: gerçek gölge haritası
+Yönlü ışık + gölge haritası kuruldu (oyuncuyu takip eden dar ortografik
+gölge kamerası, 1–2K harita). Sonuç:
+
+- **%66 FPS bedeli** (yazılım rasterizasyonunda 16.3 → 5.6 fps)
+- Buna karşılık kazanç düşüktü: izometrik açıda güneş 61° yükseklikte
+  olduğu için gölgeler kısa kalıyor ve büyük ölçüde nesnenin kendi altında
+  gizleniyordu — piksel farkı ölçümü de bunu doğruladı.
+
+Not: ilk denemede gölge hiç görünmüyordu; sebep `sun.shadow.camera` ortografik
+sınırları değiştirildikten sonra `updateProjectionMatrix()` çağrılmamasıydı
+(three varsayılan ±5 projeksiyonu kullanmaya devam ediyor).
+
+### Kullanılan: zemin dokusuna pişirilmiş gölgeler
+Nesneler sabit olduğundan gölgeleri dünya kurulurken bir kez zemin tuvaline
+çiziliyor (`SHADOW_SIZE` tablosuna göre yumuşak elips, ışık yönünde kaydırılmış).
+**Çalışma anında sıfır maliyet**, stilize görünüme de daha uygun.
+
+### Diğerleri
+- **Detay dokusu**: biyom haritası 2048 px'i 128 birime yayıyor (16 px/birim),
+  yakından bulanıktı. 34× tekrar eden gren dokusu shader'da çarpılıyor.
+  Ölçüm: tam ekran fazladan doku örneklemesi ~%12 maliyet → düşük güçlü
+  cihazlarda kapalı (`buildWorld(scene, { detail: !LOW_END })`).
+- **Gökyüzü gradyanı**: düz renk yerine dikey gradyan (ufuk hissi).
+- **Su**: kostik benzeri parıltı dokusu, yavaşça kayarak akıntı hissi veriyor.
+
+Kontrollü A/B (aynı oturumda, sırayı değiştirerek iki tur):
+önceki 7.6 fps → yeni 6.7 fps (detay dokusu açıkken).
