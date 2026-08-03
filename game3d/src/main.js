@@ -42,8 +42,8 @@ const CAM_DIR = new THREE.Vector3(1, Math.SQRT2 * 0.82, 1).normalize();
 const camTarget = new THREE.Vector3();
 let VIEW_H = 34;                                   // dikeyde kaç dünya birimi görünsün
 
-scene.add(new THREE.HemisphereLight(0xdcecff, 0x6b5a48, 2.0));
-const sun = new THREE.DirectionalLight(0xfff4e2, 2.4);
+scene.add(new THREE.HemisphereLight(0xdcecff, 0x6b5a48, 1.05));
+const sun = new THREE.DirectionalLight(0xfff4e2, 1.55);
 sun.position.set(30, 60, 20);
 scene.add(sun);
 
@@ -1368,6 +1368,7 @@ elPauseBtn.onclick = togglePause;
 
 /* ============ 13) MODEL YÜKLEME + ANA DÖNGÜ ============ */
 let MODEL_SCALE = 1, MODEL_YAW = 0, MODEL_Y = 0;   // model +Z yönüne bakar
+const OUTLINE_W = 0.0005;                          // dış çizgi kalınlığı (tarayıcıda ölçülerek bulundu)
 let mixer = null, actWalk = null, actRun = null;
 
 /* Yürüme/koşma harmanı. Modelde bekleme (idle) klibi yok; oyuncu dururken
@@ -1404,17 +1405,50 @@ function loadKnight() {
       const holder = new THREE.Group();
       holder.add(m);
       holder.scale.setScalar(MODEL_SCALE);
+      /* Oyun mesafesinde karakter ~60 piksel; gümüş zırh siluetin çoğunu
+         kaplayıp soluk bir lekeye dönüşüyordu. Stilize oyunların standart
+         çözümü: hafif çelik tonu + ters-kabuk (inverted hull) koyu dış çizgi. */
+      /* Dış çizgi (ters kabuk): geometri meshopt ile kuantalandığı için offset'in
+         birimi model birimi DEĞİL; kalınlık uniform olarak verilip ölçülerek
+         ayarlandı. <begin_vertex> iskelet dönüşümünden önce geldiğinden offset
+         animasyonla birlikte hareket eder. */
+      const outlineU = { value: OUTLINE_W };
+      const makeOutlineMat = () => {
+        const mat = new THREE.MeshBasicMaterial({ color: 0x241c2e, side: THREE.BackSide });
+        mat.onBeforeCompile = sh => {
+          sh.uniforms.uOutline = outlineU;
+          sh.vertexShader = 'uniform float uOutline;\n' + sh.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\n\ttransformed += objectNormal * uOutline;');
+        };
+        return mat;
+      };
+      window.__outlineU = outlineU;                 // ölçüm/ayar için (test)
+      const outlines = [];
       m.traverse(o => {
         if (o.isMesh || o.isSkinnedMesh) {
           o.frustumCulled = false;
           const map = o.material.map;
-          // Rengi koru: dokunun kendi rengi gölgede de sönmesin diye ölçülü
-          // bir emissive katkısı veriliyor (kaynak model fullbright emissive idi).
           o.material = new THREE.MeshLambertMaterial({
-            map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.34,
+            map,
+            color: 0xd7dde8,                 // hafif çelik tonu: beyaza doymayı önler
+            emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.16,
           });
+          // Dış çizgi: aynı geometri + iskelet, ters yüzeyle çizilir
+          const om = makeOutlineMat();
+          let ol;
+          if (o.isSkinnedMesh) {
+            ol = new THREE.SkinnedMesh(o.geometry, om);
+            ol.bind(o.skeleton, o.bindMatrix);
+          } else {
+            ol = new THREE.Mesh(o.geometry, om);
+          }
+          ol.frustumCulled = false;
+          ol.renderOrder = -1;
+          outlines.push([o, ol]);
         }
       });
+      for (const [src, ol] of outlines) src.parent.add(ol);
       // Animasyonlar: "Walking" / "Running"
       if (gltf.animations && gltf.animations.length) {
         mixer = new THREE.AnimationMixer(m);
