@@ -84,16 +84,18 @@
     align-items:center; justify-content:center; cursor:pointer;
   }
   #pauseBtn.show{ display:flex; }
+  /* Atılma butonu ALTTA ORTADA: sağ alt köşe artık nişan çubuğunun bölgesi,
+     buton oraya konsaydı nişan almak isteyen parmak yanlışlıkla atılırdı. */
   #dashBtn{
-    position:fixed; z-index:6; right:calc(env(safe-area-inset-right,0px) + 18px);
-    bottom:calc(env(safe-area-inset-bottom,0px) + 26px);
-    width:74px; height:74px; border-radius:50%; border:2px solid rgba(140,205,255,.5);
+    position:fixed; z-index:6; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
+    width:66px; height:66px; border-radius:50%; border:2px solid rgba(140,205,255,.5);
     background:rgba(16,18,30,.7); color:#cfe8ff; font-size:30px; display:none;
     align-items:center; justify-content:center; cursor:pointer; touch-action:none;
     transition:opacity .12s ease;
   }
   #dashBtn.show{ display:flex; }
-  #dashBtn:active{ transform:scale(.93); }
+  #dashBtn:active{ transform:translateX(-50%) scale(.93); }
   .spinner{ width:44px; height:44px; border:4px solid rgba(255,255,255,.15);
     border-top-color:#ffb347; border-radius:50%; animation:spin .9s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
@@ -121,6 +123,32 @@
     min-width:62px; font-variant-numeric:tabular-nums; }
   .buy:disabled{ background:rgba(255,255,255,.09); color:#6f7896; cursor:default; }
   .buy.max{ background:rgba(93,255,160,.18); color:#5dffa0; }
+
+  .tabs{ display:flex; gap:4px; }
+  .tab{ font-family:inherit; font-size:11px; font-weight:800; letter-spacing:1.5px;
+    padding:5px 10px; border-radius:7px; border:none; cursor:pointer;
+    background:rgba(255,255,255,.06); color:#8f99b4; }
+  .tab.on{ background:rgba(255,212,121,.16); color:#ffd479; }
+
+  /* ========== TEÇHİZAT (GİYİLEBİLİRLER) ========== */
+  #gear{ display:flex; flex-direction:column; gap:8px; }
+  .gslot{ background:rgba(0,0,0,.28); border-radius:9px; padding:7px 8px 8px; }
+  .ghead{ display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:12px; font-weight:800; margin-bottom:6px; }
+  .ghead small{ font-weight:600; color:#7fe6bd; font-size:10.5px; text-align:right; }
+  .gitems{ display:flex; gap:6px; }
+  .gitem{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:6px 4px; border-radius:8px; cursor:pointer; font-family:inherit;
+    background:rgba(255,255,255,.05); border:2px solid transparent; color:#dbe2f0; }
+  .gitem .gi{ font-size:19px; line-height:1.1; }
+  /* Dar telefonda 4 parçalı satırda isim sığmıyordu: kesmek yerine sarsın */
+  .gitem .gn{ font-size:9.5px; font-weight:700; line-height:1.2; text-align:center;
+    overflow-wrap:anywhere; max-width:100%; }
+  .gitem .gc{ font-size:10px; font-weight:800; color:#ffd479; font-variant-numeric:tabular-nums; }
+  .gitem.on{ border-color:#5dffa0; background:rgba(93,255,160,.14); }
+  .gitem.locked{ opacity:.78; }
+  .gitem:disabled{ opacity:.4; cursor:default; }
+  .gitem:active{ transform:scale(.96); }
 </style>
 
 <canvas id="gl"></canvas>
@@ -147,12 +175,27 @@
     <span class="biome" style="border-color:#ff5a1f">🌋 Volkanik Çorak Arazi</span>
   </div>
   <button class="btn" id="startBtn">OYUNA BAŞLA</button>
+  <!-- İki panel SEKMELİ: alt alta konsaydı menü uzayıp BAŞLA düğmesini
+       küçük ekranlarda görüş alanının dışına itiyordu. -->
   <div class="shopWrap">
-    <div class="shopHead"><span>KALICI YÜKSELTMELER</span><span id="bank">💰 0</span></div>
-    <div id="shop"></div>
-    <div class="hint" style="margin-top:6px">Koşularda topladığın altın kalıcıdır — her koşuya daha güçlü başlarsın.</div>
+    <div class="shopHead">
+      <div class="tabs">
+        <button class="tab on" data-pane="gearPane">TEÇHİZAT</button>
+        <button class="tab" data-pane="shopPane">YÜKSELTMELER</button>
+      </div>
+      <span id="bank">💰 0</span>
+    </div>
+    <div id="gearPane">
+      <div id="gear"></div>
+      <div class="hint" style="margin-top:6px">Kuşandığın parça karakterin üstünde görünür ve gerçek bonus verir.</div>
+    </div>
+    <div id="shopPane" hidden>
+      <div id="shop"></div>
+      <div class="hint" style="margin-top:6px">Koşularda topladığın altın kalıcıdır — her koşuya daha güçlü başlarsın.</div>
+    </div>
   </div>
-  <div class="hint">MOBİL: dokun ve sürükle, ⚡ ile atıl &nbsp;•&nbsp; PC: WASD &nbsp;•&nbsp; Boşluk/Shift: atılma &nbsp;•&nbsp; P: duraklat</div>
+  <div class="hint">MOBİL: SOL yarı = yürüme, SAĞ yarı = nişan &nbsp;•&nbsp; ⚡ ile atıl<br>
+    PC: WASD ile yürü, FARE ile nişan al &nbsp;•&nbsp; Boşluk/Shift: atılma &nbsp;•&nbsp; P: duraklat</div>
 </div>
 
 <div id="levelup" class="overlay">

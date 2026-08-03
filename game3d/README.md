@@ -189,3 +189,83 @@ Nesneler sabit olduğundan gölgeleri dünya kurulurken bir kez zemin tuvaline
 
 Kontrollü A/B (aynı oturumda, sırayı değiştirerek iki tur):
 önceki 7.6 fps → yeni 6.7 fps (detay dokusu açıkken).
+
+## Çift joystick (twin-stick) kontrol
+
+Ekranın **sol yarısı** hareket, **sağ yarısı** nişan çubuğu. İkisi de dinamik:
+parmağın değdiği yerde beliriyor, sabit bir konumları yok. İki parmak da aynı
+yarıya düşerse ikincisi diğer çubuğa yönlendiriliyor (`pointerdown` içinde),
+yoksa oyuncunun ikinci parmağı hiç çalışmıyordu.
+
+PC karşılığı: WASD ile yürü, **fare imleciyle** nişan al. İmleç ile oyuncunun
+ekrandaki izdüşümü arasındaki vektör dünya yönüne çevriliyor.
+
+- Nişan çubuğu **boştayken** silahlar eskisi gibi en yakın düşmanı otomatik
+  hedefliyor — yani tek parmakla da oynanabiliyor. Tüm nişanlı/otomatik ayrımı
+  tek bir yerde: `aimAngle(range)`.
+- Nişan alınırken karakter **namlunun yönüne** bakıyor (yan yürürken bile);
+  alınmıyorsa yürüdüğü yöne bakmaya devam ediyor.
+- Atılma düğmesi sağ alttan **alta ortaya** taşındı: sağ alt köşe artık nişan
+  çubuğunun bölgesi, düğme orada kalsaydı nişan almak isteyen parmak
+  yanlışlıkla atılıyordu.
+
+### Ölçülen hata: çift sayıda atış hedefin ortasını boşa harcıyordu
+Nişanlı yelpaze ilk başta ortalanmıştı (`(i - (count-1)/2) * spread`). Çift
+sayıda atışta hedefin tam ortası boş kalıyor: ölçüm, 2 ışınlı lazerin 14 birim
+mesafedeki hedefi ıskaladığını gösterdi (yanal sapma 1.19 > ışın yarı genişliği
+1.10). `fanAngle()` ile düzeltildi — **ilk atış tam nişan yönüne** gider,
+fazlalıklar sırayla iki yana açılır (0, +s, −s, +2s…).
+
+Doğrulama: nişan yönündeki düşman 48 hasar alıyor, nişanın tersindeki yakın
+düşman 0; çubuk bırakılınca otomatik hedeflemede ikisi de vuruluyor.
+
+## Giyilebilirler (teçhizat)
+
+Dört yuva — **kask, pelerin, kalkan, aura** — menüdeki kalıcı altınla alınır.
+Kuşanılan parça hem karakterin üstünde görünür hem gerçek istatistik verir
+(zırh, maks. can, hız, mıknatıs, hasar, kritik…). Kuşanma yalnızca menüde
+değiştiği için bonuslar koşu başında bir kez `P.base`'e işleniyor —
+kare başına maliyet yok (`applyGear()`).
+
+### Parçalar kemiğe bağlanıyor
+Parçalar iskeletin ilgili kemiğine (`Head`, `Spine02`, `LeftHand`) çocuk olarak
+ekleniyor, böylece yürüme animasyonuyla birlikte hareket ediyorlar.
+
+Tablodaki `pos`/`rot` **karakter uzayında** (dünya birimi, +Z ileri, +Y yukarı)
+yazılıyor; kod bunları kemiğin karakter uzayındaki dönüşünü tersleyerek kemiğe
+taşıyor. Elle çevirmek hataya çok açıktı: örneğin `LeftHand` kemiğinin +Y'si
+dünyada **aşağıyı** gösteriyor, ilk denemede kalkan yan yatmıştı.
+
+Ölçek de ölçülerek çözüldü: kemik uzayı model birimi (bu modelde ~santimetre),
+`U = 1 / (MODEL_SCALE · kemikÖlçeği)` ile geometri dünya biriminde yazılabiliyor.
+
+### Kask neden büyüdü: modelin zaten miğferi var
+İlk kasklar (yarıçap 0.2) görünmüyordu. Kemik konumları ve iskeletli köşe
+konumları ölçüldü (`getVertexPosition` + baskın kemik):
+
+| Bölge | Dünya kutusu |
+|---|---|
+| `Head` kemiği | y = 1.19 (yani **ense**, kafanın tepesi değil) |
+| Kafayı süren köşeler | y 1.01 → 2.20, yarı genişlik 0.37 |
+| `LeftHand` köşeleri | merkez (0.50, 0.54, 0.15), ~0.19 küp |
+
+Yani `Head` kemiği boynun dibinde; kask oraya konunca omuzların içinde
+kalıyordu. Kasklar kafanın ortasına (y≈1.52) taşındı ve mevcut miğferi
+**saracak** kadar büyütüldü (yarıçap 0.40–0.44).
+
+### Aura
+Zeminde yatan iki halka + yükselen kıvılcımlar (mevcut parçacık havuzunu
+kullanıyor, yeni çizim nesnesi yok). Halkalar sahne düzeyinde duruyor, karaktere
+bağlı değil — hasar alırken karakter yanıp sönerken auranın kaybolmaması için.
+İlk sürümde halkalar **Z ekseninde** döndürülüyordu: geometri zaten yatırılmış
+olduğu için halkalar yere dik kalkıyordu; dönüş ekseni Y olmalı.
+
+### Maliyet
+Kontrollü A/B (260 düşman, aynı oturumda sıra değiştirilerek 3+3 tur):
+teçhizatsız 10.49 fps · tam teçhizat 10.99 fps → **ölçüm gürültüsünün içinde**,
+kayda değer maliyet yok (en fazla 10 çizim çağrısı ekliyor).
+
+### Menü
+Teçhizat ve kalıcı yükseltmeler **sekmeli** tek panelde: alt alta konduğunda
+menü uzayıp "OYUNA BAŞLA" düğmesini telefon ekranında görüş alanının dışına
+itiyordu (390×780 ve 360×640'ta doğrulandı).

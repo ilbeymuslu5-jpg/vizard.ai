@@ -112,25 +112,54 @@ function spawnDist(a) {
   return Math.min(u > 1e-4 ? halfW / u : 1e9, v > 1e-4 ? halfH / v : 1e9) + 4;
 }
 
-/* ============ 2) GİRDİ: SANAL JOYSTİCK + KLAVYE ============ */
+/* ============ 2) GİRDİ: ÇİFT JOYSTİCK + KLAVYE ============
+   SOL yarı  -> hareket çubuğu (karakter nereye yürüyecek)
+   SAĞ yarı  -> nişan çubuğu   (silahlar hangi yöne ateş edecek)
+   İkisi de "dinamik": parmağın değdiği yerde belirir, sabit bir yerleri yok.
+   Nişan çubuğu boştayken silahlar eskisi gibi en yakın düşmanı otomatik
+   hedefler; yani tek parmakla da oynanabilir. */
 const keys = {};
-const joy = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, r: 70 };
-const input = { ax: 0, az: 0 };
+const mkJoy = side => ({ side, active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, r: 70, mag: 0 });
+const joyL = mkJoy('L');                       // hareket
+const joyR = mkJoy('R');                       // nişan
+const joy = joyL;                              // eski ad (test/otomasyon uyumu)
+const input = { ax: 0, az: 0, aimX: 0, aimZ: 1, aimA: 0, aiming: false };
+/* Fare: sağ çubuğun PC karşılığı. İmleç nereyi gösteriyorsa silahlar oraya
+   ateş eder; hareket WASD ile. Böylece masaüstünde de çift kontrol olur. */
+const mouseAim = { on: false, x: 0, y: 0 };
 
+function startJoy(j, e) {
+  j.active = true; j.id = e.pointerId;
+  j.ox = j.x = e.clientX; j.oy = j.y = e.clientY;
+  j.r = Math.min(70, Math.min(VW, VH) * 0.17);
+  try { fx2d.setPointerCapture(e.pointerId); } catch (err) { /* yakalanamadıysa sorun değil */ }
+}
 fx2d.addEventListener('pointerdown', e => {
-  if (G.state !== 'PLAY' || joy.active) return;
-  joy.active = true; joy.id = e.pointerId;
-  joy.ox = joy.x = e.clientX; joy.oy = joy.y = e.clientY;
-  joy.r = Math.min(70, Math.min(VW, VH) * 0.17);
-  fx2d.setPointerCapture(e.pointerId);
+  if (G.state !== 'PLAY') return;
+  if (e.pointerType === 'mouse') { mouseAim.on = true; mouseAim.x = e.clientX; mouseAim.y = e.clientY; }
+  const wantRight = e.clientX > VW * 0.5;
+  let j = wantRight ? joyR : joyL;
+  if (j.active) j = wantRight ? joyL : joyR;   // iki parmak aynı yarıya düşerse diğerine ver
+  if (j.active) return;
+  startJoy(j, e);
 }, { passive: true });
 fx2d.addEventListener('pointermove', e => {
-  if (joy.active && e.pointerId === joy.id) { joy.x = e.clientX; joy.y = e.clientY; }
+  if (e.pointerType === 'mouse') { mouseAim.x = e.clientX; mouseAim.y = e.clientY; mouseAim.on = true; }
+  if (joyL.active && e.pointerId === joyL.id) { joyL.x = e.clientX; joyL.y = e.clientY; }
+  else if (joyR.active && e.pointerId === joyR.id) { joyR.x = e.clientX; joyR.y = e.clientY; }
 }, { passive: true });
-const endPtr = e => { if (joy.active && e.pointerId === joy.id) { joy.active = false; joy.id = null; } };
+const endPtr = e => {
+  if (joyL.active && e.pointerId === joyL.id) { joyL.active = false; joyL.id = null; }
+  if (joyR.active && e.pointerId === joyR.id) { joyR.active = false; joyR.id = null; }
+};
 fx2d.addEventListener('pointerup', endPtr, { passive: true });
 fx2d.addEventListener('pointercancel', endPtr, { passive: true });
+fx2d.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') mouseAim.on = false; }, { passive: true });
 fx2d.addEventListener('contextmenu', e => e.preventDefault());
+const releaseSticks = () => {
+  joyL.active = joyR.active = false; joyL.id = joyR.id = null;
+  mouseAim.on = false; input.aiming = false;
+};
 
 addEventListener('keydown', e => {
   keys[e.code] = true;
@@ -140,28 +169,69 @@ addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; joy.active = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; releaseSticks(); });
 
 /* Ekran yönü ≠ dünya yönü: izometride "yukarı" dünyada -X-Z yönüdür.
    Joystick/klavye vektörünü kamera eksenlerine göre döndürüyoruz. */
 const ISO_COS = Math.cos(-Math.PI / 4), ISO_SIN = Math.sin(-Math.PI / 4);
+// ekran vektörü (sağ, aşağı) → dünya vektörü (x, z)
+const _w2 = { x: 0, z: 0 };
+function screenToWorld(sx, sy) {
+  _w2.x = sx * ISO_COS - sy * ISO_SIN;
+  _w2.z = sx * ISO_SIN + sy * ISO_COS;
+  return _w2;
+}
+// Çubuğun ekran üzerindeki sapması; ölü bölgeyi geçtiyse büyüklüğü döner
+function stickVec(j, dead) {
+  const dx = j.x - j.ox, dy = j.y - j.oy, d = Math.hypot(dx, dy);
+  if (d <= dead) { j.mag = 0; return null; }
+  j.mag = Math.min(d, j.r) / j.r;
+  return { x: dx / d, y: dy / d, m: j.mag };
+}
 function readInput() {
+  // --- hareket (sol çubuk / WASD) ---
   let sx = 0, sy = 0;
-  if (joy.active) {
-    const dx = joy.x - joy.ox, dy = joy.y - joy.oy, d = Math.hypot(dx, dy);
-    if (d > 6) { const m = Math.min(d, joy.r) / joy.r; sx = dx / d * m; sy = dy / d * m; }
-  } else {
+  const L = joyL.active ? stickVec(joyL, 6) : null;
+  if (L) { sx = L.x * L.m; sy = L.y * L.m; }
+  else {
     if (keys.KeyA || keys.ArrowLeft) sx -= 1;
     if (keys.KeyD || keys.ArrowRight) sx += 1;
     if (keys.KeyW || keys.ArrowUp) sy -= 1;
     if (keys.KeyS || keys.ArrowDown) sy += 1;
     const d = Math.hypot(sx, sy); if (d > 1) { sx /= d; sy /= d; }
   }
-  // ekran (sx, sy) → dünya (x, z), 45° döndürülmüş
-  input.ax = sx * ISO_COS - sy * ISO_SIN;
-  input.az = sx * ISO_SIN + sy * ISO_COS;
+  let w = screenToWorld(sx, sy);
+  input.ax = w.x; input.az = w.z;
   const m = Math.hypot(input.ax, input.az);
   if (m > 1) { input.ax /= m; input.az /= m; }
+
+  /* --- nişan (sağ çubuk / fare) ---
+     Sağ çubukta ölü bölge daha geniş: yanlışlıkla değen parmak silahın
+     yönünü kaçırmasın. Çubuk boştaysa aiming=false ve otomatik hedefleme
+     devreye girer. */
+  let axs = 0, ays = 0, aiming = false;
+  const R = joyR.active ? stickVec(joyR, 12) : null;
+  if (R) { axs = R.x; ays = R.y; aiming = true; }
+  else if (mouseAim.on && !joyR.active) {
+    // İmleç ile oyuncunun ekrandaki yeri arasındaki vektör
+    project(P.x, 1, P.z);
+    const dx = mouseAim.x - PX, dy = mouseAim.y - PY;
+    const d = Math.hypot(dx, dy);
+    if (d > 24) { axs = dx / d; ays = dy / d; aiming = true; }
+  }
+  input.aiming = aiming;
+  if (aiming) {
+    w = screenToWorld(axs, ays);
+    input.aimX = w.x; input.aimZ = w.z;
+    input.aimA = Math.atan2(w.x, w.z);
+  }
+}
+/* Silahların ateş yönü: nişan çubuğu varsa oyuncunun dediği yön, yoksa
+   menzildeki en yakın düşman (tek parmakla oynanabilsin diye). */
+function aimAngle(range) {
+  if (input.aiming) return input.aimA;
+  const t = findNearest(P.x, P.z, range);
+  return t ? Math.atan2(t.x - P.x, t.z - P.z) : P.yaw;
 }
 
 /* ============ 3) NESNE HAVUZU & SPATIAL HASH ============ */
@@ -356,11 +426,13 @@ function recomputeStats() {
   for (const id in P.passives) { const lv = P.passives[id]; if (lv) PASSIVES[id].apply(s, lv); }
   P.st = s;
 }
+const BASE0 = { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 };
 function resetPlayer() {
   P.x = P.z = 0; P.vx = P.vz = 0; P.maxHp = 100; P.hp = 100;
-  // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri uygula
-  P.base.dmg = 1; P.base.speedMul = 1; P.base.magnet = 1; P.base.armor = 0;
+  // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri + teçhizatı uygula
+  Object.assign(P.base, BASE0);
   applyMeta();
+  applyGear();
   P.hp = P.maxHp;
   P.iframe = 0; P.yaw = 0; P.walk = 0; P.hitPop = 0; P.dashCd = 0; P.dashT = 0;
   P.weapons = []; P.passives = {};
@@ -385,13 +457,15 @@ function updatePlayer(dt) {
   P.z = clamp(P.z + P.vz * dt * wSlow, -ARENA.hz + 1.5, ARENA.hz - 1.5);
   resolveProps(P.x, P.z, P.r, _res);        // ağaç/kaya/fıçı içinden geçme
   P.x = _res.x; P.z = _res.z;
+  /* Bakış yönü: nişan alınıyorsa namlunun yönü, alınmıyorsa yürüdüğü yön.
+     (Çift çubuklu oyunların standardı; yan yürürken bile hedefe bakılır.) */
   const mv = Math.hypot(P.vx, P.vz);
-  if (mv > 0.5) {
-    const want = Math.atan2(P.vx, P.vz);
+  if (input.aiming || mv > 0.5) {
+    const want = input.aiming ? input.aimA : Math.atan2(P.vx, P.vz);
     let d = ((want - P.yaw + Math.PI * 3) % TAU) - Math.PI;
-    P.yaw += d * Math.min(1, dt * 12);
-    P.walk += dt * mv * 1.1;
+    P.yaw += d * Math.min(1, dt * (input.aiming ? 18 : 12));
   }
+  if (mv > 0.5) P.walk += dt * mv * 1.1;
   if (P.iframe > 0) P.iframe -= dt;
   if (P.hitPop > 0) P.hitPop -= dt * 4;
   if (P.st.regen > 0 && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + P.st.regen * dt);
@@ -1096,6 +1170,15 @@ function findNearestN(x, z, maxD, n, out) {
   return out;
 }
 const dmgOf = base => base * P.st.dmg;
+/* Nişan alırken yelpaze açısı: İLK atış tam nişan yönüne gider, fazlalıklar
+   sırayla iki yana açılır (0, +s, -s, +2s, ...).
+   Ortalanmış yelpaze kullanılsaydı ÇİFT sayıda atışta hedefin tam ortası boş
+   kalırdı — ölçüldü: 2 ışınlı lazer 14 birim mesafedeki hedefi ıskalıyordu. */
+function fanAngle(i, count, step) {
+  if (count <= 1) return 0;
+  const k = ((i + 1) / 2) | 0;
+  return (i % 2 ? 1 : -1) * k * step;
+}
 
 const WEAPONS = {
   bolt: {
@@ -1107,10 +1190,10 @@ const WEAPONS = {
                  : { cd: 0.70 - 0.06 * (lv - 1), dmg: 12 + 5 * (lv - 1), count: lv >= 3 ? 2 : 1, spread: 0.14, speed: 26, pierce: lv >= 5 ? 2 : 1, r: 0.2, color: 0x7ddcff };
     },
     fire(w, s) {
-      const t = findNearest(P.x, P.z, 30);
-      const base = t ? Math.atan2(t.x - P.x, t.z - P.z) : P.yaw;
+      const base = aimAngle(30);
       for (let i = 0; i < s.count; i++)
-        shoot(P.x, P.z, base + (i - (s.count - 1) / 2) * s.spread, s.speed, dmgOf(s.dmg), s.pierce, s.r, 'bolt', s.color, { big: !!w.evolved });
+        shoot(P.x, P.z, base + (input.aiming ? fanAngle(i, s.count, s.spread)
+                                             : (i - (s.count - 1) / 2) * s.spread), s.speed, dmgOf(s.dmg), s.pierce, s.r, 'bolt', s.color, { big: !!w.evolved });
     },
   },
   guardian: {
@@ -1151,10 +1234,16 @@ const WEAPONS = {
                  : { cd: 2.2 - 0.18 * (lv - 1), dmg: 20 + 9 * (lv - 1), count: lv >= 4 ? 2 : 1, boom: 3.1 + lv * 0.3, speed: 14, homing: 3.4, cluster: 0 };
     },
     fire(w, s) {
-      const ts = findNearestN(P.x, P.z, 40, s.count, _tbuf);
+      // Nişan alınıyorsa roketler o yöne yelpaze hâlinde çıkar (güdüm devrede
+      // kalır, ama artık oyuncunun gösterdiği taraftaki hedefleri bulur).
+      const ts = input.aiming ? null : findNearestN(P.x, P.z, 40, s.count, _tbuf);
       for (let i = 0; i < s.count; i++) {
-        const t = ts[i] || ts[0];
-        const a = t ? Math.atan2(t.x - P.x, t.z - P.z) : P.yaw + rnd(1, -1);
+        let a;
+        if (input.aiming) a = input.aimA + fanAngle(i, s.count, 0.22);
+        else {
+          const t = ts[i] || ts[0];
+          a = t ? Math.atan2(t.x - P.x, t.z - P.z) : P.yaw + rnd(1, -1);
+        }
         const b = shoot(P.x, P.z, a, s.speed, dmgOf(s.dmg), 1, 0.3, 'rocket', 0xffb03a, { homing: s.homing, boom: s.boom * P.st.area, life: 3.2 });
         if (b && s.cluster) b.cluster = s.cluster;
       }
@@ -1169,6 +1258,11 @@ const WEAPONS = {
                  : { cd: 1.9 - 0.16 * (lv - 1), dmg: 16 + 8 * (lv - 1), count: lv >= 4 ? 2 : 1, w: 0.5 + lv * 0.1, len: 31 + lv * 2, color: 0x9ef1ff };
     },
     fire(w, s) {
+      if (input.aiming) {                          // nişan yönüne yelpaze ışın
+        for (let i = 0; i < s.count; i++)
+          beamHit(P.x, P.z, input.aimA + fanAngle(i, s.count, 0.17), s.len, s.w * P.st.area, dmgOf(s.dmg), s.color, !!w.evolved);
+        return;
+      }
       const ts = findNearestN(P.x, P.z, s.len, s.count, _tbuf);
       for (let i = 0; i < s.count; i++) {
         const t = ts[i]; if (!t) break;
@@ -1186,9 +1280,12 @@ const WEAPONS = {
     },
     fire(w, s) {
       for (let i = 0; i < s.count; i++) {
-        const t = findNearest(P.x, P.z, 26);
-        const a = t ? Math.atan2(t.x - P.x, t.z - P.z) + rnd(0.6, -0.6) : rnd(TAU);
-        const d = t ? Math.min(21, dist(P.x, P.z, t.x, t.z)) : rnd(15, 6);
+        // Nişan varsa şişe o yöne, sabit bir menzile atılır
+        const t = input.aiming ? null : findNearest(P.x, P.z, 26);
+        const a = input.aiming ? input.aimA + rnd(0.35, -0.35)
+                : t ? Math.atan2(t.x - P.x, t.z - P.z) + rnd(0.6, -0.6) : rnd(TAU);
+        const d = input.aiming ? rnd(15, 9)
+                : t ? Math.min(21, dist(P.x, P.z, t.x, t.z)) : rnd(15, 6);
         const tx = P.x + Math.sin(a) * d, tz = P.z + Math.cos(a) * d;
         const b = shoot(P.x, P.z, a, d / 0.55, 0, 999, 0.24, 'molotov', 0xff8a3d, { life: 0.6, tx, tz });
         if (b) b.zone = { r: s.r * P.st.area, dps: dmgOf(s.dps), life: s.life };
@@ -1204,10 +1301,11 @@ const WEAPONS = {
                  : { cd: 1.5 - 0.13 * (lv - 1), dmg: 11 + 5 * (lv - 1), count: 2 + Math.floor(lv / 2), speed: 39, pierce: 1 + Math.floor(lv / 2), spread: 0.34 };
     },
     fire(w, s) {
-      const t = findNearest(P.x, P.z, 40);
-      const base = t ? Math.atan2(t.x - P.x, t.z - P.z) : P.yaw;
+      const base = aimAngle(40);
       for (let i = 0; i < s.count; i++) {
-        const a = s.spread >= TAU ? base + i / s.count * TAU : base + (i - (s.count - 1) / 2) * s.spread;
+        const a = s.spread >= TAU ? base + i / s.count * TAU
+                : base + (input.aiming ? fanAngle(i, s.count, s.spread)
+                                       : (i - (s.count - 1) / 2) * s.spread);
         shoot(P.x, P.z, a, s.speed, dmgOf(s.dmg), s.pierce, 0.2, 'kunai', 0xdfe8ff, { life: 1.4 });
       }
       if (w.evolved) for (const p of pickups.active) p.pulled = true;
@@ -1224,6 +1322,253 @@ const PASSIVES = {
   armor: { name: 'Zırh', icon: '🛡️', max: 5, txt: l => `Gelen hasar -${l * 3}`, apply: (s, l) => s.armor += 3 * l },
   regen: { name: 'Rejenerasyon', icon: '✚', max: 5, txt: l => `Saniyede ${(l * 0.7).toFixed(1)} HP`, apply: (s, l) => s.regen += 0.7 * l },
 };
+
+/* ============ 8.5) GİYİLEBİLİRLER (TEÇHİZAT) ============
+   Dört yuva: kask, pelerin, kalkan, aura. Parçalar menüden kalıcı altınla
+   satın alınır, kuşanılınca hem KARAKTERİN ÜSTÜNDE GÖRÜNÜR hem de gerçek
+   istatistik verir. Kuşanma yalnızca menüde değişir, bu yüzden bonuslar koşu
+   başında bir kez P.base'e işlenir (kare başına maliyet yok).
+
+   Görsel taraf: parçalar iskeletin ilgili KEMİĞİNE bağlanır (Head, Spine02,
+   LeftHand), böylece yürüme animasyonuyla birlikte hareket ederler. Geometri
+   dünya biriminde yazılır, kemiğin dünya ölçeğine bölünerek yerleştirilir. */
+const painted = (geo, hex) => {
+  geo = ni(geo);
+  const n = geo.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  const col = new THREE.Color(hex);           // sRGB -> çalışma uzayına çevrilir
+  for (let i = 0; i < n; i++) { c[i*3] = col.r; c[i*3+1] = col.g; c[i*3+2] = col.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return geo;
+};
+/* Ölçüler DÜNYA biriminde yazılır (karakter 2.2 birim boyunda). Modelin
+   kafa bölgesi ölçüldü: y 1.01–2.20, yarı genişlik 0.37 — yani kasklar zaten
+   var olan miğferi SARMALI, yoksa içinde kaybolurlar. */
+const GEAR_MESH = {
+  // --- KASKLAR (Head kemiği) ---
+  /* Kask parçalarının merkezi y=0'dadır; yuvanın pos'u bu merkezi kafanın
+     ortasına (dünyada y≈1.52) taşır. */
+  hood() {                                    // deri kukuleta + ense koruması
+    return [
+      painted(put(new THREE.SphereGeometry(0.42, 10, 7, 0, TAU, 0, Math.PI * 0.68), 0, 0, -0.02), 0x6d4c33),
+      painted(put(new THREE.ConeGeometry(0.17, 0.44, 6), 0, 0.1, -0.32, 0.9, 0, 0), 0x5a3d28),
+      painted(put(new THREE.CylinderGeometry(0.42, 0.36, 0.18, 10), 0, -0.22, -0.02), 0x4a3222),
+    ];
+  },
+  ironHelm() {                                // kubbe + siperlik + burunluk + tepelik
+    return [
+      painted(put(new THREE.SphereGeometry(0.4, 10, 7, 0, TAU, 0, Math.PI * 0.58), 0, 0, -0.03), 0xa4b5cb),
+      painted(put(new THREE.CylinderGeometry(0.44, 0.47, 0.11, 12), 0, -0.1, -0.03), 0x76839a),
+      painted(put(new THREE.BoxGeometry(0.1, 0.32, 0.1), 0, -0.22, 0.34), 0x76839a),
+      painted(put(new THREE.BoxGeometry(0.07, 0.1, 0.8), 0, 0.34, -0.03), 0xc9d6e8),
+    ];
+  },
+  hornedHelm() {                              // miğfer + iki boynuz
+    const g = GEAR_MESH.ironHelm();
+    for (const s of [-1, 1]) {
+      const h = new THREE.ConeGeometry(0.135, 0.56, 6);
+      h.rotateZ(s * 0.78); h.rotateX(-0.18);
+      h.translate(s * 0.42, 0.3, -0.06);
+      g.push(painted(h, 0xe4d9bb));
+    }
+    return g;
+  },
+  // --- PELERİNLER (Spine02 kemiği; açık yarısı öne bakar) ---
+  cloak(colBody, colTrim, len) {
+    const shell = new THREE.CylinderGeometry(0.3, 0.46, len, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
+    shell.translate(0, -len / 2 + 0.16, 0);
+    const out = [painted(shell, colBody)];
+    const collar = new THREE.TorusGeometry(0.29, 0.06, 5, 12, Math.PI * 1.2);
+    collar.rotateX(Math.PI / 2); collar.rotateZ(Math.PI * 0.42);
+    collar.translate(0, 0.17, 0);
+    out.push(painted(collar, colTrim));
+    if (colTrim !== colBody) {                // etek kenarı şeridi
+      const hem = new THREE.CylinderGeometry(0.465, 0.465, 0.09, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
+      hem.translate(0, -len + 0.20, 0);
+      out.push(painted(hem, colTrim));
+    }
+    return out;
+  },
+  woolCloak() { return GEAR_MESH.cloak(0x6f5f47, 0x8b7a5c, 0.95); },
+  royalCloak() { return GEAR_MESH.cloak(0xa32340, 0xffc94d, 1.2); },
+  // --- KALKANLAR (LeftHand kemiği; el ~0.19 birim) ---
+  buckler() {
+    return [
+      painted(put(new THREE.CylinderGeometry(0.21, 0.21, 0.06, 12), 0, 0, 0, Math.PI / 2, 0, 0), 0xa9b6c8),
+      painted(put(new THREE.SphereGeometry(0.085, 7, 5), 0, 0, 0.05), 0xffd479),
+      painted(put(new THREE.TorusGeometry(0.205, 0.035, 4, 14), 0, 0, 0), 0x76839a),
+    ];
+  },
+  towerShield() {
+    const body = new THREE.BoxGeometry(0.38, 0.5, 0.08);
+    const tip = new THREE.ConeGeometry(0.19, 0.2, 4); tip.rotateY(Math.PI / 4); tip.rotateX(Math.PI); tip.translate(0, -0.34, 0);
+    return [
+      painted(body, 0x8fa0bb), painted(tip, 0x8fa0bb),
+      painted(put(new THREE.BoxGeometry(0.09, 0.6, 0.025), 0, -0.03, 0.05), 0xffd479),
+      painted(put(new THREE.BoxGeometry(0.4, 0.09, 0.025), 0, 0.1, 0.05), 0xffd479),
+      painted(put(new THREE.SphereGeometry(0.07, 7, 5), 0, 0.1, 0.07), 0xf0f4fb),
+    ];
+  },
+};
+/* pos/rot KARAKTER uzayında (dünya birimi, +Z ileri, +Y yukarı) yazılır;
+   kod bunları kemiğin kendi eksenlerine çevirir. Kemik yönleri modele göre
+   değiştiği için elle çevirmek hataya çok açıktı. */
+const GEAR = {
+  helm: { name: 'Kask', icon: '⛑️', bone: 'Head',
+    pos: [0, 0.33, -0.08], rot: [0, 0, 0],
+    items: [
+      { id: 'none', name: 'Açık Baş', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
+      { id: 'hood', name: 'Deri Başlık', icon: '🪖', cost: 120, mesh: 'hood',
+        st: { armor: 1, maxHp: 10 }, txt: 'Zırh +1 · Maks. can +10' },
+      { id: 'iron', name: 'Demir Miğfer', icon: '⛑️', cost: 300, mesh: 'ironHelm',
+        st: { armor: 3, maxHp: 20 }, txt: 'Zırh +3 · Maks. can +20' },
+      { id: 'horned', name: 'Boynuzlu Tolga', icon: '🐃', cost: 760, mesh: 'hornedHelm',
+        st: { armor: 5, maxHp: 45, dmg: 0.08 }, txt: 'Zırh +5 · Can +45 · Hasar +%8' },
+    ] },
+  cloak: { name: 'Pelerin', icon: '🧥', bone: 'Spine02',
+    pos: [0, 0.16, -0.2], rot: [0.1, 0, 0],
+    items: [
+      { id: 'none', name: 'Yok', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
+      { id: 'wool', name: 'Yün Pelerin', icon: '🧣', cost: 220, mesh: 'woolCloak',
+        st: { speedMul: 0.06, magnet: 0.2 }, txt: 'Hız +%6 · Mıknatıs +%20' },
+      { id: 'royal', name: 'Kraliyet Pelerini', icon: '👑', cost: 680, mesh: 'royalCloak',
+        st: { speedMul: 0.12, magnet: 0.45, regen: 0.4 }, txt: 'Hız +%12 · Mıknatıs +%45 · 0.4 HP/sn' },
+    ] },
+  shield: { name: 'Kalkan', icon: '🛡️', bone: 'LeftHand',
+    pos: [0.14, 0.02, 0.04], rot: [0, 0.5, 0],
+    items: [
+      { id: 'none', name: 'Yok', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
+      { id: 'buckler', name: 'Siperlik', icon: '🔘', cost: 300, mesh: 'buckler',
+        st: { armor: 2, maxHp: 15 }, txt: 'Zırh +2 · Maks. can +15' },
+      { id: 'tower', name: 'Kule Kalkanı', icon: '🛡️', cost: 860, mesh: 'towerShield',
+        st: { armor: 6, maxHp: 50, speedMul: -0.05 }, txt: 'Zırh +6 · Can +50 · Hız −%5' },
+    ] },
+  aura: { name: 'Aura', icon: '✨', bone: null,     // zemine oturur, kemiğe bağlı değil
+    items: [
+      { id: 'none', name: 'Yok', icon: '·', cost: 0, aura: null, st: null, txt: 'Boş yuva' },
+      { id: 'ember', name: 'Kor Aurası', icon: '🔥', cost: 380, aura: { color: 0xff8a3d, r: 1.15, spin: 1.2 },
+        st: { crit: 0.06, area: 0.08 }, txt: 'Kritik +%6 · Etki alanı +%8' },
+      { id: 'void', name: 'Boşluk Aurası', icon: '🌀', cost: 980, aura: { color: 0xb07bff, r: 1.35, spin: -1.8 },
+        st: { dmg: 0.12, atkSpeed: 0.1, crit: 0.05 }, txt: 'Hasar +%12 · Saldırı hızı +%10 · Kritik +%5' },
+    ] },
+};
+const gearItem = (slot, id) => GEAR[slot].items.find(i => i.id === id) || GEAR[slot].items[0];
+const equippedItem = slot => gearItem(slot, META.eq[slot]);
+/* Kuşanılan parçaların bonusları koşu başında temel değerlere işlenir */
+function applyGear() {
+  for (const slot in GEAR) {
+    const st = equippedItem(slot).st;
+    if (!st) continue;
+    if (st.maxHp) P.maxHp += st.maxHp;
+    for (const k in st) if (k !== 'maxHp' && P.base[k] !== undefined) P.base[k] += st[k];
+  }
+}
+
+/* --- Teçhizatın 3B tarafı --- */
+const gearMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const gearOutlineMat = new THREE.MeshBasicMaterial({ color: 0x241c2e, side: THREE.BackSide });
+const gearNodes = {};                 // slot -> kemiğe bağlı kapsayıcı
+const gearBones = {};
+let auraGroup = null;
+function findBone(root, name) {
+  let hit = null;
+  root.traverse(o => { if (!hit && o.isBone && o.name === name) hit = o; });
+  return hit;
+}
+/* Kemik uzayı model birimindedir (bu modelde ~santimetre) ve her kemiğin
+   ekseni farklı yöne bakar — mesela LeftHand'in +Y'si dünyada AŞAĞIYI
+   gösteriyor. Bu yüzden parçalar karakter uzayında tanımlanır, burada
+   kemiğin karakter uzayındaki dönüşü TERSLENEREK kemiğe taşınır.
+   Böylece tablodaki sayılar "ileri/yukarı/sağa" olarak okunabilir kalıyor. */
+const _relM = new THREE.Matrix4(), _rootInv = new THREE.Matrix4();
+const _bp = new THREE.Vector3(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3();
+const _inv = new THREE.Quaternion(), _eul = new THREE.Euler(), _off = new THREE.Vector3();
+function initGearNodes(root) {
+  root.updateMatrixWorld(true);
+  _rootInv.copy(root.matrixWorld).invert();
+  for (const slot in GEAR) {
+    const def = GEAR[slot];
+    if (!def.bone) continue;
+    const bone = findBone(root, def.bone);
+    if (!bone) { console.warn('kemik yok:', def.bone); continue; }
+    bone.updateWorldMatrix(true, false);
+    _relM.multiplyMatrices(_rootInv, bone.matrixWorld);   // kemik -> karakter uzayı
+    _relM.decompose(_bp, _bq, _bs);
+    _inv.copy(_bq).invert();
+    // 1 dünya birimi kaç kemik birimi eder
+    const U = 1 / (MODEL_SCALE * (_bs.x || 1));
+    const holder = new THREE.Group();
+    holder.scale.setScalar(U);
+    _off.fromArray(def.pos).multiplyScalar(U).applyQuaternion(_inv);
+    holder.position.copy(_off);
+    _eul.set(def.rot[0], def.rot[1], def.rot[2]);
+    holder.quaternion.copy(_inv).multiply(new THREE.Quaternion().setFromEuler(_eul));
+    bone.add(holder);
+    gearNodes[slot] = holder; gearBones[slot] = bone;
+  }
+  auraGroup = new THREE.Group();
+  auraGroup.visible = false;
+  scene.add(auraGroup);
+}
+// Kuşanılanları sahneye yansıt (menüde değiştikçe anında görünür)
+function refreshGearVisuals() {
+  for (const slot in gearNodes) {
+    const holder = gearNodes[slot];
+    while (holder.children.length) {
+      const c = holder.children.pop();
+      if (c.geometry) c.geometry.dispose();
+    }
+    const it = equippedItem(slot);
+    if (!it.mesh || !GEAR_MESH[it.mesh]) continue;
+    const geo = mergeGeometries(GEAR_MESH[it.mesh](), false);
+    if (!geo) continue;
+    const m = new THREE.Mesh(geo, gearMat);
+    m.frustumCulled = false;
+    const ol = new THREE.Mesh(geo, gearOutlineMat);   // ters kabuk dış çizgi
+    ol.scale.setScalar(1.07); ol.renderOrder = -1; ol.frustumCulled = false;
+    holder.add(m); holder.add(ol);
+  }
+  // Aura: ayakların dibinde dönen halka(lar), sahne düzeyinde
+  if (auraGroup) {
+    while (auraGroup.children.length) {
+      const c = auraGroup.children.pop();
+      c.geometry.dispose(); c.material.dispose();
+    }
+    const a = equippedItem('aura').aura;
+    auraGroup.visible = !!a;
+    if (a) {
+      for (let i = 0; i < 2; i++) {
+        const g = new THREE.RingGeometry(a.r * (i ? 0.62 : 0.86), a.r * (i ? 0.72 : 1), i ? 12 : 28);
+        g.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+          color: a.color, transparent: true, opacity: i ? 0.38 : 0.6,
+          depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+        mesh.userData.spin = a.spin * (i ? -0.7 : 1);
+        auraGroup.add(mesh);
+      }
+    }
+  }
+}
+let auraEmit = 0;
+function updateAura(dt) {
+  if (!auraGroup || !auraGroup.visible) return;
+  auraGroup.position.set(P.x, 0.12, P.z);
+  // Halkalar zeminde yatıyor; dönüş ekseni Y olmalı (Z olsaydı yere dik dururlardı)
+  for (const m of auraGroup.children) m.rotation.y += m.userData.spin * dt;
+  const a = equippedItem('aura').aura;
+  auraEmit -= dt;
+  if (a && auraEmit <= 0) {                   // yükselen kıvılcımlar
+    auraEmit = 0.09;
+    const ang = rnd(TAU);
+    const p = parts.get();
+    if (p) {
+      p.x = P.x + Math.cos(ang) * a.r * 0.85; p.z = P.z + Math.sin(ang) * a.r * 0.85; p.y = 0.15;
+      p.vx = p.vz = 0; p.vy = rnd(3.4, 1.8);
+      p.r = 2.6; p.color = '#' + a.color.toString(16).padStart(6, '0');
+      p.life = p.maxLife = rnd(0.7, 0.4);
+    }
+  }
+}
 
 // Döner bıçak mesh havuzu
 const bladeMat = new THREE.MeshLambertMaterial({ color: 0xdfe9ff });
@@ -1458,7 +1803,7 @@ function chooseCard(c) {
   applyCard(c); G.pendingLevels--;
   elLevelup.classList.remove('show');
   if (G.pendingLevels > 0) setTimeout(openLevelUp, 60);
-  else { G.state = 'PLAY'; joy.active = false; }
+  else { G.state = 'PLAY'; releaseSticks(); }
 }
 
 /* ============ 10) HASAR & ÖLÜM ============ */
@@ -1657,18 +2002,40 @@ function updateDashBtn() {
   elDashBtn.style.opacity = k >= 1 ? '1' : '0.55';
 }
 
-function drawJoystick() {
-  if (!joy.active) return;
-  const dx = joy.x - joy.ox, dy = joy.y - joy.oy, d = Math.hypot(dx, dy) || 1;
-  const m = Math.min(d, joy.r);
+/* İki çubuk aynı anda çizilir; renk hangisinin ne yaptığını anlatır:
+   mavi = hareket, turuncu = nişan (nişan çubuğunda ayrıca yön oku var). */
+function drawStick(j, tint, arrow) {
+  if (!j.active) return;
+  const dx = j.x - j.ox, dy = j.y - j.oy, d = Math.hypot(dx, dy) || 1;
+  const m = Math.min(d, j.r);
   ctx.save();
-  ctx.globalAlpha = .28; ctx.strokeStyle = '#cfe3ff'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(joy.ox, joy.oy, joy.r, 0, TAU); ctx.stroke();
-  ctx.globalAlpha = .14; ctx.fillStyle = '#cfe3ff';
-  ctx.beginPath(); ctx.arc(joy.ox, joy.oy, joy.r, 0, TAU); ctx.fill();
-  ctx.globalAlpha = .65; ctx.fillStyle = '#eaf3ff';
-  ctx.beginPath(); ctx.arc(joy.ox + dx / d * m, joy.oy + dy / d * m, joy.r * .42, 0, TAU); ctx.fill();
+  ctx.globalAlpha = .28; ctx.strokeStyle = tint; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(j.ox, j.oy, j.r, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = .13; ctx.fillStyle = tint;
+  ctx.beginPath(); ctx.arc(j.ox, j.oy, j.r, 0, TAU); ctx.fill();
+  ctx.globalAlpha = .68; ctx.fillStyle = tint;
+  ctx.beginPath(); ctx.arc(j.ox + dx / d * m, j.oy + dy / d * m, j.r * .42, 0, TAU); ctx.fill();
+  if (arrow && m > 8) {                       // nişan yönü oku
+    ctx.globalAlpha = .85; ctx.translate(j.ox, j.oy); ctx.rotate(Math.atan2(dy, dx));
+    ctx.beginPath();
+    ctx.moveTo(j.r + 16, 0); ctx.lineTo(j.r + 2, 9); ctx.lineTo(j.r + 2, -9);
+    ctx.closePath(); ctx.fill();
+  }
   ctx.restore();
+}
+function drawJoystick() {
+  drawStick(joyL, '#cfe3ff', false);
+  drawStick(joyR, '#ffb469', true);
+  // Fareyle nişan alınırken oyuncunun etrafında yön göstergesi
+  if (!joyR.active && mouseAim.on && input.aiming && G.state === 'PLAY') {
+    project(P.x, 1, P.z);
+    ctx.save();
+    ctx.globalAlpha = .55; ctx.fillStyle = '#ffb469';
+    ctx.translate(PX, PY); ctx.rotate(Math.atan2(mouseAim.y - PY, mouseAim.x - PX));
+    ctx.beginPath(); ctx.moveTo(58, 0); ctx.lineTo(42, 8); ctx.lineTo(42, -8);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
 }
 
 
@@ -1684,7 +2051,15 @@ const UPGRADES = {
   armor:  { icon: '🛡️', name: 'Zırh',         desc: 'Gelen hasar -1',    max: 5, cost: l => 90 + l * 140 },
 };
 const META_KEY = 'hordeSurvivor3D.meta';
-const META = { bank: 0, up: { hp: 0, dmg: 0, spd: 0, magnet: 0, armor: 0 } };
+/* eq: kuşanılan parçalar · own: satın alınmış "yuva.parça" anahtarları
+   (bedava parçalar zaten sahip sayılır, listede tutulmaz) */
+const META = {
+  bank: 0,
+  up: { hp: 0, dmg: 0, spd: 0, magnet: 0, armor: 0 },
+  eq: { helm: 'none', cloak: 'none', shield: 'none', aura: 'none' },
+  own: [],
+};
+const ownsGear = (slot, it) => it.cost === 0 || META.own.indexOf(slot + '.' + it.id) >= 0;
 function metaLoad() {
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -1693,6 +2068,15 @@ function metaLoad() {
     if (typeof d.bank === 'number') META.bank = Math.max(0, d.bank | 0);
     if (d.up) for (const k in META.up)
       if (typeof d.up[k] === 'number') META.up[k] = clamp(d.up[k] | 0, 0, UPGRADES[k].max);
+    // Teçhizat: kaydedilmiş ama artık var olmayan parçalar sessizce elenir
+    if (Array.isArray(d.own)) META.own = d.own.filter(k => {
+      const [s, i] = String(k).split('.');
+      return GEAR[s] && GEAR[s].items.some(it => it.id === i);
+    });
+    if (d.eq) for (const slot in META.eq) {
+      const it = GEAR[slot].items.find(i => i.id === d.eq[slot]);
+      if (it && ownsGear(slot, it)) META.eq[slot] = it.id;
+    }
   } catch (e) { /* erişilemiyor: bellekte devam */ }
 }
 function metaSave() {
@@ -1708,6 +2092,13 @@ function applyMeta() {
 }
 const elShop = document.getElementById('shop');
 const elBank = document.getElementById('bank');
+// Sekmeler: teçhizat / kalıcı yükseltmeler
+for (const t of document.querySelectorAll('.tab')) t.onclick = () => {
+  for (const o of document.querySelectorAll('.tab')) {
+    o.classList.toggle('on', o === t);
+    document.getElementById(o.dataset.pane).hidden = o !== t;
+  }
+};
 function renderShop() {
   elBank.textContent = '💰 ' + META.bank;
   elShop.innerHTML = '';
@@ -1733,6 +2124,45 @@ function renderShop() {
     row.appendChild(btn);
     elShop.appendChild(row);
   }
+  renderGear();
+}
+/* Teçhizat paneli: her yuva bir satır, parçalar yan yana rozetler.
+   Sahip olunan parçaya dokunmak kuşanır, olunmayana dokunmak satın alır. */
+const elGear = document.getElementById('gear');
+function renderGear() {
+  if (!elGear) return;
+  elGear.innerHTML = '';
+  for (const slot in GEAR) {
+    const def = GEAR[slot];
+    const row = document.createElement('div');
+    row.className = 'gslot';
+    const head = document.createElement('div');
+    head.className = 'ghead';
+    head.innerHTML = `<span>${def.icon} ${def.name}</span><small>${equippedItem(slot).txt}</small>`;
+    row.appendChild(head);
+    const list = document.createElement('div');
+    list.className = 'gitems';
+    for (const it of def.items) {
+      const owned = ownsGear(slot, it), on = META.eq[slot] === it.id;
+      const b = document.createElement('button');
+      b.className = 'gitem' + (on ? ' on' : '') + (owned ? '' : ' locked');
+      b.title = it.name + (it.txt ? ' — ' + it.txt : '');
+      b.innerHTML = `<span class="gi">${it.icon}</span><span class="gn">${it.name}</span>` +
+        (owned ? '' : `<span class="gc">💰 ${it.cost}</span>`);
+      if (!owned && META.bank < it.cost) b.disabled = true;
+      b.onclick = () => {
+        if (!ownsGear(slot, it)) {
+          if (META.bank < it.cost) return;
+          META.bank -= it.cost; META.own.push(slot + '.' + it.id);
+        }
+        META.eq[slot] = it.id;
+        metaSave(); refreshGearVisuals(); renderShop(); SFX.levelup();
+      };
+      list.appendChild(b);
+    }
+    row.appendChild(list);
+    elGear.appendChild(row);
+  }
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -1756,7 +2186,7 @@ function resetAll() {
   G.finalSpawned = false; G.banner = ''; G.bannerT = 0; G.win = false;
   resetPlayer();
   camTarget.set(0, 0, 0);
-  joy.active = false;
+  releaseSticks();
 }
 function startGame() {
   resetAll();
@@ -1768,7 +2198,7 @@ function startGame() {
   banner('HAYATTA KAL!', 2);
 }
 function togglePause() {
-  if (G.state === 'PLAY') { G.state = 'PAUSED'; joy.active = false; showPauseInfo(); elPaused.classList.add('show'); }
+  if (G.state === 'PLAY') { G.state = 'PAUSED'; releaseSticks(); showPauseInfo(); elPaused.classList.add('show'); }
   else if (G.state === 'PAUSED') { G.state = 'PLAY'; elPaused.classList.remove('show'); }
 }
 function showPauseInfo() {
@@ -1927,6 +2357,8 @@ function loadKnight() {
         actWalk.setEffectiveWeight(1); actRun.setEffectiveWeight(0);
       }
       scene.add(holder);
+      holder.updateMatrixWorld(true);       // kemik dünya ölçeğini okuyabilmek için
+      initGearNodes(holder);                // teçhizat kapsayıcılarını kemiklere bağla
       resolve(holder);
     }, err => { console.error('model', err); resolve(null); });
   });
@@ -1966,6 +2398,7 @@ function frame(now) {
       camTarget.set(Math.sin(now / 6000) * 18, 0, Math.cos(now / 6000) * 10);
     }
   }
+  updateAura(rdt);                 // menüde de dönsün: kuşandığın aura hemen görünür
   if (G.state !== 'MENU' && G.state !== 'LOADING') camTarget.lerp(_v3.set(P.x, 0, P.z), 1 - Math.pow(0.0008, rdt));
 
   // kamera + ekran sallantısı
@@ -1995,6 +2428,7 @@ function frame(now) {
   buildPropGrid();
   initRipples();
   P.model = await loadKnight();
+  refreshGearVisuals();                 // kuşanılan parçaları modele tak
   resetAll();
   G.state = 'MENU';
   document.getElementById('loading').classList.remove('show');
@@ -2005,7 +2439,10 @@ function frame(now) {
 // Test/otomasyon için
 window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS, PASSIVES, COLLIDERS, isWater,
                   addWeapon, getWeapon, recomputeStats, applyCard, spawnEnemy, gainXp, hitEnemy,
-                  buildChoices, cardInfo, openLevelUp, startGame, input, joy, camera, scene,
-                  hurtPlayer, THREE,
+                  buildChoices, cardInfo, openLevelUp, startGame, input, joy, joyL, joyR, mouseAim,
+                  camera, scene, hurtPlayer, THREE, readInput, aimAngle,
+                  GEAR, META, gearNodes, gearBones, refreshGearVisuals, renderGear, renderShop, applyGear,
+                  equippedItem, ownsGear, metaSave,
+                  get auraGroup() { return auraGroup; },
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
