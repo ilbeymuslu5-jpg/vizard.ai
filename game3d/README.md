@@ -87,3 +87,32 @@ olaylar `force` ile bunu atlar. Ölçüm sonrası: sallantı 0.30, hit-stop %16.
 Ayrıca kare başına yapılan tahsisler kaldırıldı: `project()` dizi döndürmüyor,
 silah `stats()` nesnesi önbelleğe alınıyor, döner bıçak nesneleri yeniden
 kullanılıyor, ekran dışı düşmanlar izdüşüm alınmadan eleniyor.
+
+
+## Dünya varlıkları: "World Asset Collection" referansı
+
+Kullanıcının paylaştığı referans sayfasındaki (ağaç, kaya, sütun, saz,
+nilüfer, kaktüs, fıçı, testi, kemik, köprü, merdiven vb.) tüm varlıklar
+`src/world.js` içinde prosedürel olarak modellendi ve 4 biyoma dağıtıldı:
+
+| Biyom | Varlıklar |
+|---|---|
+| Orman | yapraklı ağaç, çam, kütük, yosunlu devrik gövde, çalı, çakıl |
+| Kayalık | kaya sütunu/uçurum, yuvarlak kaya, çalı, kaktüs, çakıl |
+| Harabeler | batık/kırık sütun, döşeme taşı, saz, nilüfer, testi, tahta köprü, merdiven |
+| Volkanik | yanmış kütük, kömürleşmiş gövde, kemik/kafatası, magma havuzu (kabuklu) |
+
+Her nesne türü, birkaç ilkel şeklin `mergeGeometries` ile **tek geometriye
+birleştirilmiş** hâlidir; renk vertex color olarak gömülüdür. Tüm örnekler
+tür başına **tek InstancedMesh** ile çizilir — toplam dünya 34 çizim
+çağrısına sığar (öncesinde nesne başına ayrı mesh vardı, 250+ çağrı).
+
+Zemin dokusu da referanstaki "Texture Swatches" örneklerine göre genişletildi:
+orman için çim tutamları, kayalık için çatlak ağı, harabeler için batık taş
+ızgara + yosun lekesi + su parıltısı, volkanik için kül serpintisi + akkor
+çatlak.
+
+Ağaç/kaya/sütun/fıçı gibi katı nesneler `COLLIDERS` dizisine (x, z, yarıçap)
+kaydedilir; oyuncu bunların içinden geçemez (bkz. bir alttaki performans
+notu — `resolveProps`). Düşmanlar bilinçli olarak geçebilir, yoksa
+yüzlercesi ağaç diplerinde yığılıp sürü akışını bozar.
