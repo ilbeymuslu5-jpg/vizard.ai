@@ -2310,6 +2310,8 @@ function drawToast() {
 function updateBagBtn() {
   if (!elBagBtn) return;
   elBagBtn.classList.toggle('alert', P.bag.length > 0);
+  const n = String(P.bag.length);
+  if (elBagBtn.dataset.n !== n) elBagBtn.dataset.n = n;
 }
 function updateDashBtn() {
   const k = P.dashCd > 0 ? 1 - P.dashCd / DASH_CD : 1;
@@ -2521,66 +2523,104 @@ function drawItemIcon(cv, slot, it) {
   const S = cv.width;
   d.clearRect(0, 0, S, S);
   if (!it) return;
-  const col = '#' + it.col.toString(16).padStart(6, '0');
-  const trim = '#' + it.trim.toString(16).padStart(6, '0');
   const u = S / 100;
+  const hex = v => '#' + v.toString(16).padStart(6, '0');
+  // Aynı rengin koyu/açık tonları: hacim hissi için (düz dolgu yassı duruyordu)
+  const shade = (v, k) => {
+    const r = (v >> 16 & 255), g = (v >> 8 & 255), b = v & 255;
+    const f = c => Math.max(0, Math.min(255, Math.round(k > 0 ? c + (255 - c) * k : c * (1 + k))));
+    return `rgb(${f(r)},${f(g)},${f(b)})`;
+  };
   d.save(); d.translate(S / 2, S / 2);
-  d.lineJoin = 'round'; d.lineWidth = 2.2 * u;
-  d.strokeStyle = 'rgba(20,14,26,.9)';
+  d.lineJoin = d.lineCap = 'round';
+  d.lineWidth = 2.6 * u;
+  d.strokeStyle = 'rgba(16,11,22,.9)';
   const P2 = () => new Path2D();
-  const fill = (path, c) => { d.fillStyle = c; d.fill(path); d.stroke(path); };
+  // Dikey gradyan + koyu kontur: referans sayfadaki hacimli görünüm
+  const grad = (base, y0, y1) => {
+    const g = d.createLinearGradient(0, y0 * u, 0, y1 * u);
+    g.addColorStop(0, shade(base, 0.34));
+    g.addColorStop(0.55, hex(base));
+    g.addColorStop(1, shade(base, -0.38));
+    return g;
+  };
+  const fill = (path, base, y0, y1) => {
+    d.fillStyle = grad(base, y0 === undefined ? -36 : y0, y1 === undefined ? 36 : y1);
+    d.fill(path); d.stroke(path);
+  };
+  const gloss = path => {                       // üstte ince parlama
+    d.save(); d.clip(path);
+    const g = d.createLinearGradient(0, -40 * u, 0, 0);
+    g.addColorStop(0, 'rgba(255,255,255,.34)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    d.fillStyle = g; d.fillRect(-50 * u, -50 * u, 100 * u, 50 * u);
+    d.restore();
+  };
+  const C = it.col, T = it.trim;
   if (slot === 'helm') {
-    const p1 = P2(); p1.arc(0, 2 * u, 30 * u, Math.PI, 0); p1.lineTo(30 * u, 14 * u); p1.lineTo(-30 * u, 14 * u); p1.closePath();
-    fill(p1, col);
-    const p2 = P2(); p2.rect(-34 * u, 12 * u, 68 * u, 9 * u); fill(p2, trim);
-    if (it.det >= 2) { const p3 = P2(); p3.rect(-4 * u, 14 * u, 8 * u, 20 * u); fill(p3, trim); }
-    if (it.det >= 3) { const p4 = P2(); p4.rect(-3 * u, -36 * u, 6 * u, 14 * u); fill(p4, trim); }
+    const dome = P2();
+    dome.arc(0, 4 * u, 30 * u, Math.PI, 0); dome.lineTo(30 * u, 16 * u); dome.lineTo(-30 * u, 16 * u); dome.closePath();
+    fill(dome, C, -30, 18); gloss(dome);
+    const brim = P2(); brim.roundRect(-35 * u, 13 * u, 70 * u, 10 * u, 4 * u); fill(brim, T, 12, 24);
+    if (it.det >= 2) { const n = P2(); n.roundRect(-5 * u, 15 * u, 10 * u, 21 * u, 3 * u); fill(n, T, 14, 37); }
+    if (it.det >= 3) { const c2 = P2(); c2.roundRect(-4 * u, -38 * u, 8 * u, 16 * u, 3 * u); fill(c2, T, -39, -20); }
     if (it.det >= 4) {
-      const p5 = P2(); p5.moveTo(-28 * u, -6 * u); p5.lineTo(-46 * u, -30 * u); p5.lineTo(-20 * u, -18 * u); p5.closePath(); fill(p5, trim);
-      const p6 = P2(); p6.moveTo(28 * u, -6 * u); p6.lineTo(46 * u, -30 * u); p6.lineTo(20 * u, -18 * u); p6.closePath(); fill(p6, trim);
+      const h1 = P2(); h1.moveTo(-28 * u, -4 * u); h1.lineTo(-47 * u, -32 * u); h1.lineTo(-20 * u, -17 * u); h1.closePath(); fill(h1, T, -33, -3);
+      const h2 = P2(); h2.moveTo(28 * u, -4 * u); h2.lineTo(47 * u, -32 * u); h2.lineTo(20 * u, -17 * u); h2.closePath(); fill(h2, T, -33, -3);
     }
   } else if (slot === 'chest') {
-    const p1 = P2();
-    p1.moveTo(-24 * u, -26 * u); p1.lineTo(24 * u, -26 * u); p1.lineTo(30 * u, 30 * u); p1.lineTo(-30 * u, 30 * u); p1.closePath();
-    fill(p1, col);
     const r = it.det >= 3 ? 16 : 12;
-    const p3 = P2(); p3.arc(-28 * u, -20 * u, r * u, Math.PI, 0); p3.closePath(); fill(p3, col);
-    const p4 = P2(); p4.arc(28 * u, -20 * u, r * u, Math.PI, 0); p4.closePath(); fill(p4, col);
-    const p2 = P2(); p2.rect(-32 * u, 18 * u, 64 * u, 11 * u); fill(p2, trim);
-    if (it.det >= 3) { const p5 = P2(); p5.rect(-4 * u, -24 * u, 8 * u, 42 * u); fill(p5, trim); }
+    const s1 = P2(); s1.arc(-28 * u, -18 * u, r * u, Math.PI, 0); s1.closePath(); fill(s1, C, -34, -16);
+    const s2 = P2(); s2.arc(28 * u, -18 * u, r * u, Math.PI, 0); s2.closePath(); fill(s2, C, -34, -16);
+    const body = P2();
+    body.moveTo(-23 * u, -26 * u); body.lineTo(23 * u, -26 * u);
+    body.lineTo(29 * u, 22 * u); body.quadraticCurveTo(0, 34 * u, -29 * u, 22 * u); body.closePath();
+    fill(body, C, -27, 32); gloss(body);
+    const belt = P2(); belt.roundRect(-31 * u, 16 * u, 62 * u, 11 * u, 3 * u); fill(belt, T, 15, 28);
+    if (it.det >= 3) { const st = P2(); st.roundRect(-5 * u, -24 * u, 10 * u, 40 * u, 3 * u); fill(st, T, -25, 17); }
+    if (it.det >= 4) { const gem = P2(); gem.moveTo(0, -14 * u); gem.lineTo(8 * u, -5 * u); gem.lineTo(0, 4 * u); gem.lineTo(-8 * u, -5 * u); gem.closePath(); fill(gem, T, -15, 5); }
   } else if (slot === 'gloves') {
-    const p1 = P2(); p1.rect(-26 * u, -15 * u, 52 * u, 30 * u); fill(p1, col);
-    const p2 = P2(); p2.rect(-32 * u, -19 * u, 11 * u, 38 * u); fill(p2, trim);
-    if (it.det >= 2) { const p3 = P2(); p3.rect(20 * u, -21 * u, 17 * u, 42 * u); fill(p3, col); }
-    if (it.det >= 3) { const p4 = P2(); p4.moveTo(37 * u, -9 * u); p4.lineTo(49 * u, 0); p4.lineTo(37 * u, 9 * u); p4.closePath(); fill(p4, trim); }
+    const arm = P2(); arm.roundRect(-27 * u, -16 * u, 50 * u, 32 * u, 6 * u); fill(arm, C, -17, 17); gloss(arm);
+    const cuff = P2(); cuff.roundRect(-33 * u, -21 * u, 13 * u, 42 * u, 4 * u); fill(cuff, T, -22, 22);
+    if (it.det >= 2) { const hnd = P2(); hnd.roundRect(19 * u, -19 * u, 18 * u, 38 * u, 6 * u); fill(hnd, C, -20, 20); }
+    if (it.det >= 3) { const cl = P2(); cl.moveTo(37 * u, -10 * u); cl.lineTo(50 * u, 0); cl.lineTo(37 * u, 10 * u); cl.closePath(); fill(cl, T, -11, 11); }
   } else if (slot === 'boots') {
-    const p1 = P2();
-    p1.moveTo(-14 * u, -32 * u); p1.lineTo(12 * u, -32 * u); p1.lineTo(12 * u, 8 * u);
-    p1.lineTo(34 * u, 8 * u); p1.lineTo(34 * u, 22 * u); p1.lineTo(-14 * u, 22 * u); p1.closePath();
-    fill(p1, col);
-    const p2 = P2(); p2.rect(-18 * u, 21 * u, 56 * u, 11 * u); fill(p2, trim);
-    if (it.det >= 2) { const p3 = P2(); p3.rect(-16 * u, -10 * u, 30 * u, 8 * u); fill(p3, trim); }
-    if (it.det >= 3) { const p4 = P2(); p4.rect(-17 * u, -36 * u, 32 * u, 10 * u); fill(p4, trim); }
+    const boot = P2();
+    boot.moveTo(-15 * u, -32 * u); boot.lineTo(13 * u, -32 * u); boot.lineTo(13 * u, 6 * u);
+    boot.lineTo(34 * u, 6 * u); boot.quadraticCurveTo(38 * u, 6 * u, 38 * u, 12 * u);
+    boot.lineTo(38 * u, 20 * u); boot.lineTo(-15 * u, 20 * u); boot.closePath();
+    fill(boot, C, -33, 21); gloss(boot);
+    const sole = P2(); sole.roundRect(-19 * u, 19 * u, 59 * u, 11 * u, 4 * u); fill(sole, T, 18, 31);
+    if (it.det >= 2) { const strap = P2(); strap.roundRect(-17 * u, -11 * u, 32 * u, 9 * u, 3 * u); fill(strap, T, -12, -1); }
+    if (it.det >= 3) { const knee = P2(); knee.roundRect(-18 * u, -37 * u, 34 * u, 11 * u, 4 * u); fill(knee, T, -38, -25); }
   } else if (slot === 'cloak') {
-    const p1 = P2();
-    p1.moveTo(-20 * u, -28 * u); p1.lineTo(20 * u, -28 * u); p1.lineTo(34 * u, 32 * u); p1.lineTo(-34 * u, 32 * u); p1.closePath();
-    fill(p1, col);
-    const p2 = P2();
-    p2.moveTo(-23 * u, -30 * u); p2.quadraticCurveTo(0, -14 * u, 23 * u, -30 * u);
-    p2.lineTo(23 * u, -19 * u); p2.quadraticCurveTo(0, -3 * u, -23 * u, -19 * u); p2.closePath();
-    fill(p2, trim);
-    if (it.det >= 2) { const p3 = P2(); p3.rect(-34 * u, 23 * u, 68 * u, 9 * u); fill(p3, trim); }
+    const cl = P2();
+    cl.moveTo(-19 * u, -27 * u); cl.lineTo(19 * u, -27 * u);
+    cl.lineTo(34 * u, 26 * u); cl.quadraticCurveTo(0, 38 * u, -34 * u, 26 * u); cl.closePath();
+    fill(cl, C, -28, 36); gloss(cl);
+    const col = P2();
+    col.moveTo(-24 * u, -31 * u); col.quadraticCurveTo(0, -13 * u, 24 * u, -31 * u);
+    col.lineTo(24 * u, -19 * u); col.quadraticCurveTo(0, -1 * u, -24 * u, -19 * u); col.closePath();
+    fill(col, T, -32, 0);
+    if (it.det >= 2) {
+      const hem = P2(); hem.moveTo(-33 * u, 24 * u); hem.quadraticCurveTo(0, 36 * u, 33 * u, 24 * u);
+      hem.lineTo(34 * u, 31 * u); hem.quadraticCurveTo(0, 43 * u, -34 * u, 31 * u); hem.closePath();
+      fill(hem, T, 23, 33);
+    }
   } else {                                   // kalkan
     if (it.det <= 2) {
-      const p1 = P2(); p1.arc(0, 0, 30 * u, 0, Math.PI * 2); fill(p1, col);
-      const p2 = P2(); p2.arc(0, 0, 9 * u, 0, Math.PI * 2); fill(p2, trim);
+      const b1 = P2(); b1.arc(0, 0, 31 * u, 0, Math.PI * 2); fill(b1, C, -32, 32); gloss(b1);
+      const rim = P2(); rim.arc(0, 0, 31 * u, 0, Math.PI * 2); rim.arc(0, 0, 25 * u, 0, Math.PI * 2, true);
+      fill(rim, T, -32, 32);
+      const bo = P2(); bo.arc(0, 0, 10 * u, 0, Math.PI * 2); fill(bo, T, -11, 11);
     } else {
-      const p1 = P2();
-      p1.moveTo(-26 * u, -30 * u); p1.lineTo(26 * u, -30 * u); p1.lineTo(26 * u, 10 * u);
-      p1.lineTo(0, 34 * u); p1.lineTo(-26 * u, 10 * u); p1.closePath();
-      fill(p1, col);
-      const p2 = P2(); p2.rect(-5 * u, -28 * u, 10 * u, 54 * u); fill(p2, trim);
-      const p3 = P2(); p3.rect(-24 * u, -10 * u, 48 * u, 10 * u); fill(p3, trim);
+      const sh = P2();
+      sh.moveTo(-27 * u, -31 * u); sh.lineTo(27 * u, -31 * u); sh.lineTo(27 * u, 8 * u);
+      sh.quadraticCurveTo(27 * u, 22 * u, 0, 35 * u);
+      sh.quadraticCurveTo(-27 * u, 22 * u, -27 * u, 8 * u); sh.closePath();
+      fill(sh, C, -32, 36); gloss(sh);
+      const v = P2(); v.roundRect(-6 * u, -29 * u, 12 * u, 55 * u, 3 * u); fill(v, T, -30, 27);
+      const h = P2(); h.roundRect(-25 * u, -11 * u, 50 * u, 12 * u, 3 * u); fill(h, T, -12, 2);
+      if (it.det >= 4) { const gem = P2(); gem.moveTo(0, -14 * u); gem.lineTo(9 * u, -5 * u); gem.lineTo(0, 5 * u); gem.lineTo(-9 * u, -5 * u); gem.closePath(); fill(gem, T, -15, 6); }
     }
   }
   d.restore();

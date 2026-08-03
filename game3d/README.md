@@ -280,8 +280,16 @@ düşüyor ve karşılaştırmayı oyuncu envanterden yapıyor. Kopya veya çant
 doluysa altına çevriliyor.
 
 ### Envanter
-🎒 düğmesi (veya **I** tuşu, ya da duraklat ekranından) açar; açıkken oyun
-durur. Kuşanılanlar üstte, çanta altta; her hücrede eşyanın ikonu, adı,
+🎒 düğmesi **üst sağda**, duraklat düğmesinin yanında (veya **I** tuşu, ya da
+duraklat ekranından); açıkken oyun durur.
+
+> **Düzeltilen hata:** düğme ilk sürümde ALT SAĞDAYDI — yani nişan
+> başparmağının tam durduğu yerde. Oyuncu nişan almak için oraya dokununca
+> envanter açılıyor, oyun duruyor ve karakter donmuş gibi görünüyordu.
+> (Atılma düğmesi tam bu sebeple alta ortaya taşınmıştı; aynı hata çantayla
+> tekrarlandı.) Artık ekranın alt yarısında oyunu durduran hiçbir düğme yok —
+> 10×20 ızgarayla taranarak doğrulandı: alt yarıda yalnızca alt-ortadaki
+> atılma düğmesi var, geri kalan her yer kontrol çubuklarına ait. Kuşanılanlar üstte, çanta altta; her hücrede eşyanın ikonu, adı,
 nadirlik rengi ve **yeşil artıları / kırmızı eksileri** görünür. Çantada
 bekleyen eşya varsa 🎒 düğmesi yanıp söner.
 
