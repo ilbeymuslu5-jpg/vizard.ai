@@ -269,3 +269,38 @@ kayda değer maliyet yok (en fazla 10 çizim çağrısı ekliyor).
 Teçhizat ve kalıcı yükseltmeler **sekmeli** tek panelde: alt alta konduğunda
 menü uzayıp "OYUNA BAŞLA" düğmesini telefon ekranında görüş alanının dışına
 itiyordu (390×780 ve 360×640'ta doğrulandı).
+
+## Test sürümü
+
+`npm run build:test` — her şeyin açık olduğu, üstüne **test paneli** eklenmiş
+ayrı bir paket üretir. Oyunun kendisi birebir aynıdır; panel oyun koduna hiç
+dokunmaz, her şeyi `window.__game` üzerinden yapar.
+
+Ayrım derleme zamanında: normal paket `src/main.js`'ten, test paketi
+`src/test-entry.js`'ten derlenir. Yani `testpanel.js`'in **tek satırı bile**
+üretim çıktısına girmez — `build.mjs` bunu çıktıda arayıp doğruluyor
+(sızarsa derleme hata verir).
+
+Açılışta: tüm teçhizat sahiplenilir, kasa 99999, kalıcı yükseltmeler tam.
+`metaSave()` çağrılmaz, böylece test sürümü gerçek kaydı bozmaz.
+
+Panel `🧪` düğmesi veya **T** tuşu ile açılır:
+
+| Bölüm | Neler var |
+|---|---|
+| Teçhizat | Her yuvayı tek tek gez, "en iyi set", "hepsini çıkar" |
+| Silahlar | Silaha tıkla: +1 seviye → Sv.5'te EVO · "Hepsi Sv.5" · "Hepsi EVO" |
+| Pasifler | Hepsi tam / sıfırla |
+| Oyuncu | Ölümsüz, canı doldur, +1 Sv (kart ekranı), +5 Sv (kartsız) |
+| Düşman | +30 / +150 düşman, boss, final boss, hepsini öldür, doğumu kapat |
+| Zaman | +1 dk, +3 dk (boss'lar 3 dakikada bir), zamanı dondur |
+| Diğer | +2000 altın, "her şeyi aç", "kilitli başlat" (yeni oyuncu deneyimi) |
+
+Sürekli etkiler (ölümsüzlük, doğum kapalı, zaman donduruldu) oyun koduna bayrak
+eklemek yerine 50 ms'lik bir zamanlayıcıdan durumu geri yazarak uygulanıyor —
+üretim kodunda tek satır test mantığı olmasın diye. Ölümsüzlük her tikte
+yeniden uygulanıyor: `startGame()` maksimum canı sıfırladığı için tek seferlik
+yazmak yeniden başlatmadan sonra kayboluyordu (ölçüldü).
+
+Doğrulama: paneldeki 34 düğmenin tamamı katı CSP altında tek tek tıklandı,
+sıfır hata; üretim paketinde test kodu aranıp bulunmadığı doğrulandı.

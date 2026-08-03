@@ -2,7 +2,10 @@
   "name": "horde-survivor-3d",
   "private": true,
   "type": "module",
-  "scripts": { "build": "node build.mjs" },
+  "scripts": {
+    "build": "node build.mjs",
+    "build:test": "node build.mjs ../horde-survivor-3d-test.html --test"
+  },
   "devDependencies": {
     "@gltf-transform/core": "^4",
     "@gltf-transform/extensions": "^4",
