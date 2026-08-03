@@ -219,56 +219,79 @@ fazlalıklar sırayla iki yana açılır (0, +s, −s, +2s…).
 Doğrulama: nişan yönündeki düşman 48 hasar alıyor, nişanın tersindeki yakın
 düşman 0; çubuk bırakılınca otomatik hedeflemede ikisi de vuruluyor.
 
-## Giyilebilirler (teçhizat)
+## Teçhizat: koşu içinde gelişen RPG ilerlemesi
 
-Dört yuva — **kask, pelerin, kalkan, aura** — menüdeki kalıcı altınla alınır.
-Kuşanılan parça hem karakterin üstünde görünür hem gerçek istatistik verir
-(zırh, maks. can, hız, mıknatıs, hasar, kritik…). Kuşanma yalnızca menüde
-değiştiği için bonuslar koşu başında bir kez `P.base`'e işleniyor —
-kare başına maliyet yok (`applyGear()`).
+Kahraman artık **sade başlar** ve zırhını oyun sırasında toplar.
 
-### Parçalar kemiğe bağlanıyor
-Parçalar iskeletin ilgili kemiğine (`Head`, `Spine02`, `LeftHand`) çocuk olarak
-ekleniyor, böylece yürüme animasyonuyla birlikte hareket ediyorlar.
+### Model değişimi
+Yeni "base form" modeli iskeletsiz geldi (0 skin, 0 animasyon, 137k üçgen), bu
+yüzden animasyonlu modelden `scripts/transfer_rig.mjs` ile iskelet aktarıldı
+(14k üçgene sadeleştirme + en yakın komşu ağırlık transferi; en uzak eşleşme
+0.21 birim / model boyu 1.70).
 
-Tablodaki `pos`/`rot` **karakter uzayında** (dünya birimi, +Z ileri, +Y yukarı)
-yazılıyor; kod bunları kemiğin karakter uzayındaki dönüşünü tersleyerek kemiğe
-taşıyor. Elle çevirmek hataya çok açıktı: örneğin `LeftHand` kemiğinin +Y'si
-dünyada **aşağıyı** gösteriyor, ilk denemede kalkan yan yatmıştı.
+Meshy'nin "base form" ihracı **kıyafetsiz** bir gövdedir. Oyunun varsayılan
+kahramanı olarak uygun olmadığı için keten tunik, kemer ve pantolon oyun
+tarafında kalıcı geometri olarak ekleniyor (`OUTFIT`); zırhlar bunun üstüne
+biniyor. Ayrıca modelin malzeme rengi `0xd7dde8` (çelik tonu) idi — eski model
+gümüş zırhlıydı ve beyaza doymasın diye böyleydi; ten renkli yeni modeli
+soldurduğu için `0xffffff` yapıldı.
 
-Ölçek de ölçülerek çözüldü: kemik uzayı model birimi (bu modelde ~santimetre),
-`U = 1 / (MODEL_SCALE · kemikÖlçeği)` ile geometri dünya biriminde yazılabiliyor.
+### Sistem
+6 yuva × 4 kademe. Biçim fonksiyonu yuva başına tek; kademe malzemeyi ve
+süslemeyi değiştiriyor, yani 24 parça 6 fonksiyondan üretiliyor.
 
-### Kask neden büyüdü: modelin zaten miğferi var
-İlk kasklar (yarıçap 0.2) görünmüyordu. Kemik konumları ve iskeletli köşe
-konumları ölçüldü (`getVertexPosition` + baskın kemik):
+| Yuva | Kemik | Bonus (kademe t) |
+|---|---|---|
+| ⛑️ Miğfer | `Head` | Zırh +t+1 · Can +12t |
+| 🎽 Göğüslük | `Spine02` | Zırh +2t · Can +22t |
+| 🧤 Kolluk | `Left/RightForeArm` | Hasar +%5t · Saldırı hızı +%4t |
+| 🥾 Bot | `Left/RightFoot` | Hız +%5t · Zırh +⌊t/2⌋ |
+| 🧥 Pelerin | `Spine02` | Mıknatıs +%16t · Rejen 0.18t |
+| 🛡️ Kalkan | `LeftHand` | Zırh +2t · Can +10t |
 
-| Bölge | Dünya kutusu |
-|---|---|
-| `Head` kemiği | y = 1.19 (yani **ense**, kafanın tepesi değil) |
-| Kafayı süren köşeler | y 1.01 → 2.20, yarı genişlik 0.37 |
-| `LeftHand` köşeleri | merkez (0.50, 0.54, 0.15), ~0.19 küp |
+Kademeler: **Deri → Demir → Çelik → Efsanevi**.
 
-Yani `Head` kemiği boynun dibinde; kask oraya konunca omuzların içinde
-kalıyordu. Kasklar kafanın ortasına (y≈1.52) taşındı ve mevcut miğferi
-**saracak** kadar büyütüldü (yarıçap 0.40–0.44).
+### İlerleme
+- Parçalar **düşmandan düşer**: elit %100, boss 2 parça, sıradan düşman %1.2.
+- Düşen parçanın kademesi **seviyeye** bağlı (`tierForLevel`): sv<6 deri,
+  <12 demir, <20 çelik, sonrası efsanevi. Böylece kahraman koşu boyunca
+  gözle görülür şekilde gelişiyor.
+- Düşen parça **en geri kalmış yuvaya** gider, yani tek yuvaya yığılma olmaz.
+- Toplama anında yuva yeniden seçiliyor: düşerken hedeflenen yuva bu arada
+  dolmuş olabilir, sabit tutulsaydı parça boşa gidiyordu.
+- Yuva zaten tamsa parça altına çevriliyor.
 
-### Aura
-Zeminde yatan iki halka + yükselen kıvılcımlar (mevcut parçacık havuzunu
-kullanıyor, yeni çizim nesnesi yok). Halkalar sahne düzeyinde duruyor, karaktere
-bağlı değil — hasar alırken karakter yanıp sönerken auranın kaybolmaması için.
-İlk sürümde halkalar **Z ekseninde** döndürülüyordu: geometri zaten yatırılmış
-olduğu için halkalar yere dik kalkıyordu; dönüş ekseni Y olmalı.
+Ölçülen eğri (tüm yuvalar dolduğunda):
 
-### Maliyet
-Kontrollü A/B (260 düşman, aynı oturumda sıra değiştirilerek 3+3 tur):
-teçhizatsız 10.49 fps · tam teçhizat 10.99 fps → **ölçüm gürültüsünün içinde**,
-kayda değer maliyet yok (en fazla 10 çizim çağrısı ekliyor).
+| Seviye | Teçhizat | Maks. can | Zırh |
+|---|---|---|---|
+| — | sade | 100 | 0 |
+| 1 | deri | 144 | 6 |
+| 8 | demir | 188 | 12 |
+| 14 | çelik | 232 | 17 |
+| 25 | efsanevi | 276 | 23 |
 
 ### Menü
-Teçhizat ve kalıcı yükseltmeler **sekmeli** tek panelde: alt alta konduğunda
-menü uzayıp "OYUNA BAŞLA" düğmesini telefon ekranında görüş alanının dışına
-itiyordu (390×780 ve 360×640'ta doğrulandı).
+Teçhizat dükkânı yerine **koleksiyon** (hangi yuvada en yükseğe çıktın) ve
+**Miras**: altınla alınan kalıcı yükseltme, her koşuya N yuva deri teçhizatla
+başlatır.
+
+### Yerleşim: ölçmeden yapılamıyor
+Parçalar kemiğe bağlı; `pos`/`rot` karakter uzayında yazılıp kemiğin dönüşü
+terslenerek kemiğe taşınıyor. Yeni gövde ölçüldü (`getVertexPosition` +
+baskın kemik) ve üç hata bu sayede bulundu:
+
+1. **Miğfer görünmüyordu.** Kafa neredeyse küre: y 1.6–1.7'de yarı genişlik
+   0.41, tepe 2.15. 0.44 yarıçaplı kubbenin tepesinden kafa taşıyordu.
+2. **Sonra miğfer yüzü tamamen kapattı** (kubbe y 1.30'a kadar iniyordu).
+   Kafanın yalnızca üst yarısını örtecek şekilde ayarlandı.
+3. **Pelerin yakası boyundan yukarı çember yapıyordu.** `rotateX(90°)` ile
+   yatırılan halka sonra `rotateZ` ile döndürülüyordu; bu onu dikleştiriyor.
+   Hizalama dönüşü **Y** ekseninde olmalı. Ölçümde pelerinin tepesi y 1.62
+   çıkıyordu (olması gereken 1.29).
+
+Çarpışma taraması: 8 yön × 120 kare × 290 engel, en kötü nüfuz **0.081 birim**
+(karakter boyunun %3.7'si) — itme çözücüsünün tek karelik artığı.
 
 ## Test sürümü
 
@@ -288,7 +311,7 @@ Panel `🧪` düğmesi veya **T** tuşu ile açılır:
 
 | Bölüm | Neler var |
 |---|---|
-| Teçhizat | Her yuvayı tek tek gez, "en iyi set", "hepsini çıkar" |
+| Teçhizat | Her yuvanın kademesini gez · doğrudan Deri/Demir/Çelik/Efsanevi · yere parça bırak |
 | Silahlar | Silaha tıkla: +1 seviye → Sv.5'te EVO · "Hepsi Sv.5" · "Hepsi EVO" |
 | Pasifler | Hepsi tam / sıfırla |
 | Oyuncu | Ölümsüz, canı doldur, +1 Sv (kart ekranı), +5 Sv (kartsız) |

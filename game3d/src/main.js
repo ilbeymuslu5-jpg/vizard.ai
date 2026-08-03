@@ -420,10 +420,19 @@ const P = {
   base: { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 },
   st: null, model: null, hitPop: 0, inWater: false,
   dashCd: 0, dashT: 0, dashX: 0, dashZ: 0,
+  // Koşu içi teçhizat: yuva -> kademe (0 = yok). Düşen parçalarla yükselir.
+  gear: { helm: 0, chest: 0, gloves: 0, boots: 0, cloak: 0, shield: 0 },
 };
 function recomputeStats() {
   const s = Object.assign({}, P.base);
   for (const id in P.passives) { const lv = P.passives[id]; if (lv) PASSIVES[id].apply(s, lv); }
+  /* Teçhizat koşu SIRASINDA değiştiği için (parçalar düşman düşürüyor)
+     pasifler gibi burada toplanıyor; maks. can ayrı, gainGear() içinde. */
+  for (const slot in P.gear) {
+    const t = P.gear[slot]; if (!t) continue;
+    const st = GEAR[slot].st(t);
+    for (const k in st) if (k !== 'maxHp' && s[k] !== undefined) s[k] += st[k];
+  }
   P.st = s;
 }
 const BASE0 = { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 };
@@ -431,8 +440,9 @@ function resetPlayer() {
   P.x = P.z = 0; P.vx = P.vz = 0; P.maxHp = 100; P.hp = 100;
   // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri + teçhizatı uygula
   Object.assign(P.base, BASE0);
+  for (const slot in P.gear) P.gear[slot] = 0;      // koşu sade başlar
   applyMeta();
-  applyGear();
+  applyStartGear();                                  // kalıcı "miras" varsa
   P.hp = P.maxHp;
   P.iframe = 0; P.yaw = 0; P.walk = 0; P.hitPop = 0; P.dashCd = 0; P.dashT = 0;
   P.weapons = []; P.passives = {};
@@ -961,13 +971,26 @@ const beams = new Pool(() => ({ x: 0, z: 0, a: 0, len: 1, w: 1, life: .2, maxLif
 const beamMat = new THREE.MeshBasicMaterial({ color: 0x9ef1ff, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
 
 const MAX_PICKUPS = LOW_END ? 320 : 460;
-const pickups = new Pool(() => ({ x: 0, z: 0, vx: 0, vz: 0, kind: 'xp1', val: 1, dead: false, t: 0, pulled: false }), MAX_PICKUPS);
+const pickups = new Pool(() => ({ x: 0, z: 0, vx: 0, vz: 0, kind: 'xp1', val: 1, dead: false,
+  t: 0, pulled: false, slot: '', tier: 0 }), MAX_PICKUPS);
 const gemColors = { xp1: 0x4ea8ff, xp5: 0x5dffa0, xp20: 0xffd23f, gold: 0xffb020, heal: 0xff5f7a };
 const gemMesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.28, 0),
   new THREE.MeshBasicMaterial({ color: 0xffffff }), MAX_PICKUPS);
 gemMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 gemMesh.frustumCulled = false; gemMesh.count = 0;
 scene.add(gemMesh);
+/* Teçhizat düşüşü kristallerden ayrılsın diye ayrı biçim: küçük bir sandık.
+   Ayrı bir InstancedMesh (tek fazladan çizim çağrısı), rengi kademeyi gösterir. */
+const GEAR_DROP_MAX = 24;
+const gearDropMesh = new THREE.InstancedMesh(
+  mergeGeometries([
+    ni(put(new THREE.BoxGeometry(0.42, 0.26, 0.3), 0, 0, 0)),
+    ni(put(new THREE.BoxGeometry(0.46, 0.1, 0.34), 0, 0.16, 0)),
+  ], false),
+  new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), GEAR_DROP_MAX);
+gearDropMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+gearDropMesh.frustumCulled = false; gearDropMesh.count = 0;
+scene.add(gearDropMesh);
 
 // Parçacıklar ve hasar sayıları 2B katmanda (dünya koordinatlarıyla)
 const parts = new Pool(() => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: .4, maxLife: .4, r: 3, color: '#fff', dead: false }), LOW_END ? 260 : 420);
@@ -1323,15 +1346,19 @@ const PASSIVES = {
   regen: { name: 'Rejenerasyon', icon: '✚', max: 5, txt: l => `Saniyede ${(l * 0.7).toFixed(1)} HP`, apply: (s, l) => s.regen += 0.7 * l },
 };
 
-/* ============ 8.5) GİYİLEBİLİRLER (TEÇHİZAT) ============
-   Dört yuva: kask, pelerin, kalkan, aura. Parçalar menüden kalıcı altınla
-   satın alınır, kuşanılınca hem KARAKTERİN ÜSTÜNDE GÖRÜNÜR hem de gerçek
-   istatistik verir. Kuşanma yalnızca menüde değişir, bu yüzden bonuslar koşu
-   başında bir kez P.base'e işlenir (kare başına maliyet yok).
+/* ============ 8.5) TEÇHİZAT — KOŞU İÇİNDE GELİŞEN RPG İLERLEMESİ ============
+   Kahraman koşuya SADE başlar (keten tunik + pantolon). Zırh parçaları
+   düşmanlardan DÜŞER; toplayınca hem karakterin üstünde görünür hem de
+   gerçek istatistik verir. Parçanın kademesi oyuncunun seviyesine bağlı,
+   yani seviye atladıkça kahraman gözle görülür şekilde gelişir:
+   çıplak → deri → demir → çelik → efsanevi.
 
-   Görsel taraf: parçalar iskeletin ilgili KEMİĞİNE bağlanır (Head, Spine02,
-   LeftHand), böylece yürüme animasyonuyla birlikte hareket ederler. Geometri
-   dünya biriminde yazılır, kemiğin dünya ölçeğine bölünerek yerleştirilir. */
+   Ölçüler DÜNYA biriminde (karakter 2.2 birim). Gövde ölçüldü:
+     kafa  y 1.01–2.20 (yarı genişlik 0.41, merkez 1.60)
+     gövde y 0.85–1.30      kalça y 0.48–0.98
+     el    merkez (0.63, 0.63, 0.00)   ön kol (0.48, 0.80, -0.03)
+     ayak  merkez (0.24, 0.11, -0.01)
+   Parçalar ilgili KEMİĞE bağlanır, böylece yürüme animasyonuyla hareket eder. */
 const painted = (geo, hex) => {
   geo = ni(geo);
   const n = geo.attributes.position.count;
@@ -1341,233 +1368,290 @@ const painted = (geo, hex) => {
   geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
   return geo;
 };
-/* Ölçüler DÜNYA biriminde yazılır (karakter 2.2 birim boyunda). Modelin
-   kafa bölgesi ölçüldü: y 1.01–2.20, yarı genişlik 0.37 — yani kasklar zaten
-   var olan miğferi SARMALI, yoksa içinde kaybolurlar. */
-const GEAR_MESH = {
-  // --- KASKLAR (Head kemiği) ---
-  /* Kask parçalarının merkezi y=0'dadır; yuvanın pos'u bu merkezi kafanın
-     ortasına (dünyada y≈1.52) taşır. */
-  hood() {                                    // deri kukuleta + ense koruması
-    return [
-      painted(put(new THREE.SphereGeometry(0.42, 10, 7, 0, TAU, 0, Math.PI * 0.68), 0, 0, -0.02), 0x6d4c33),
-      painted(put(new THREE.ConeGeometry(0.17, 0.44, 6), 0, 0.1, -0.32, 0.9, 0, 0), 0x5a3d28),
-      painted(put(new THREE.CylinderGeometry(0.42, 0.36, 0.18, 10), 0, -0.22, -0.02), 0x4a3222),
-    ];
-  },
-  ironHelm() {                                // kubbe + siperlik + burunluk + tepelik
-    return [
-      painted(put(new THREE.SphereGeometry(0.4, 10, 7, 0, TAU, 0, Math.PI * 0.58), 0, 0, -0.03), 0xa4b5cb),
-      painted(put(new THREE.CylinderGeometry(0.44, 0.47, 0.11, 12), 0, -0.1, -0.03), 0x76839a),
-      painted(put(new THREE.BoxGeometry(0.1, 0.32, 0.1), 0, -0.22, 0.34), 0x76839a),
-      painted(put(new THREE.BoxGeometry(0.07, 0.1, 0.8), 0, 0.34, -0.03), 0xc9d6e8),
-    ];
-  },
-  hornedHelm() {                              // miğfer + iki boynuz
-    const g = GEAR_MESH.ironHelm();
-    for (const s of [-1, 1]) {
-      const h = new THREE.ConeGeometry(0.135, 0.56, 6);
-      h.rotateZ(s * 0.78); h.rotateX(-0.18);
-      h.translate(s * 0.42, 0.3, -0.06);
-      g.push(painted(h, 0xe4d9bb));
-    }
-    return g;
-  },
-  // --- PELERİNLER (Spine02 kemiği; açık yarısı öne bakar) ---
-  cloak(colBody, colTrim, len) {
-    const shell = new THREE.CylinderGeometry(0.3, 0.46, len, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
-    shell.translate(0, -len / 2 + 0.16, 0);
-    const out = [painted(shell, colBody)];
-    const collar = new THREE.TorusGeometry(0.29, 0.06, 5, 12, Math.PI * 1.2);
-    collar.rotateX(Math.PI / 2); collar.rotateZ(Math.PI * 0.42);
-    collar.translate(0, 0.17, 0);
-    out.push(painted(collar, colTrim));
-    if (colTrim !== colBody) {                // etek kenarı şeridi
-      const hem = new THREE.CylinderGeometry(0.465, 0.465, 0.09, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
-      hem.translate(0, -len + 0.20, 0);
-      out.push(painted(hem, colTrim));
+
+/* Kademe paleti: parça biçimleri aynı kalır, malzeme ve süsleme değişir.
+   Böylece 6 yuva × 4 kademe = 24 parça, 6 şekil fonksiyonuyla üretiliyor. */
+const TIER = [
+  { name: 'Deri',      col: 0x7d5a3a, trim: 0x5a3f28, metal: false },
+  { name: 'Demir',     col: 0x9aa3b0, trim: 0x6d7683, metal: true },
+  { name: 'Çelik',     col: 0xc0cde0, trim: 0xffd479, metal: true },
+  { name: 'Efsanevi',  col: 0xffd45e, trim: 0xfff3c0, metal: true },
+];
+const TIER_MAX = TIER.length;
+
+/* --- Parça biçimleri (t: 1..4) --- */
+const SHAPE = {
+  // Miğfer: kafayı saran kubbe + siperlik; üst kademelerde burunluk, tepelik, boynuz
+  helm(t) {
+    /* Kafa neredeyse küre: y 1.6–1.7'de yarı genişlik 0.41, tepede 2.15.
+       Kubbe kafanın ÜST yarısını örtmeli — tamamını kaplayınca karakterin
+       yüzü kayboluyor ve yürüyen bir miğfere dönüşüyordu (ölçüldü: kubbe
+       y 1.30'a kadar iniyordu, yüz 1.40–1.75 arası). */
+    const C = TIER[t - 1], out = [];
+    out.push(painted(put(new THREE.SphereGeometry(0.46, 12, 8, 0, TAU, 0, Math.PI * (t === 1 ? 0.6 : 0.56)), 0, 0, -0.02), C.col));
+    out.push(painted(put(new THREE.CylinderGeometry(0.47, 0.5, 0.1, 14), 0, -0.08, -0.02), C.trim));
+    if (t >= 2) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.3, 0.1), 0, -0.24, 0.42), C.trim));     // burunluk
+    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.08, 0.13, 0.9), 0, 0.36, -0.02), C.trim));   // tepelik
+    if (t >= 4) for (const s of [-1, 1]) {                                                                 // kanat/boynuz
+      const h = new THREE.ConeGeometry(0.1, 0.52, 6);
+      h.rotateZ(s * 0.8); h.rotateX(-0.15); h.translate(s * 0.44, 0.2, -0.05);
+      out.push(painted(h, C.trim));
     }
     return out;
   },
-  woolCloak() { return GEAR_MESH.cloak(0x6f5f47, 0x8b7a5c, 0.95); },
-  royalCloak() { return GEAR_MESH.cloak(0xa32340, 0xffc94d, 1.2); },
-  // --- KALKANLAR (LeftHand kemiği; el ~0.19 birim) ---
-  buckler() {
-    return [
-      painted(put(new THREE.CylinderGeometry(0.21, 0.21, 0.06, 12), 0, 0, 0, Math.PI / 2, 0, 0), 0xa9b6c8),
-      painted(put(new THREE.SphereGeometry(0.085, 7, 5), 0, 0, 0.05), 0xffd479),
-      painted(put(new THREE.TorusGeometry(0.205, 0.035, 4, 14), 0, 0, 0), 0x76839a),
-    ];
+  // Göğüslük: gövdeyi saran kabuk + omuzluklar
+  chest(t) {
+    const C = TIER[t - 1], out = [];
+    const body = new THREE.CylinderGeometry(0.34, 0.4, 0.52, 12, 1, false);
+    out.push(painted(put(body, 0, 0, 0), C.col));
+    out.push(painted(put(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 12), 0, 0.24, 0), C.trim));   // yaka
+    out.push(painted(put(new THREE.CylinderGeometry(0.42, 0.42, 0.07, 12), 0, -0.24, 0), C.trim));  // kemer
+    for (const s of [-1, 1]) {                                                                       // omuzluk
+      const r = t >= 3 ? 0.23 : 0.19;
+      out.push(painted(put(new THREE.SphereGeometry(r, 8, 6, 0, TAU, 0, Math.PI * 0.55), s * 0.33, 0.15, 0, 0, 0, s * 0.4), C.col));
+      if (t >= 2) out.push(painted(put(new THREE.TorusGeometry(r * 0.95, 0.032, 4, 10), s * 0.33, 0.14, 0, Math.PI / 2, 0, s * 0.4), C.trim));
+    }
+    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.1, 0.44, 0.03), 0, 0, 0.4), C.trim));   // göğüs şeridi
+    if (t >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.06, 0.42), C.trim)); // mücevher
+    return out;
   },
-  towerShield() {
-    const body = new THREE.BoxGeometry(0.38, 0.5, 0.08);
-    const tip = new THREE.ConeGeometry(0.19, 0.2, 4); tip.rotateY(Math.PI / 4); tip.rotateX(Math.PI); tip.translate(0, -0.34, 0);
-    return [
-      painted(body, 0x8fa0bb), painted(tip, 0x8fa0bb),
-      painted(put(new THREE.BoxGeometry(0.09, 0.6, 0.025), 0, -0.03, 0.05), 0xffd479),
-      painted(put(new THREE.BoxGeometry(0.4, 0.09, 0.025), 0, 0.1, 0.05), 0xffd479),
-      painted(put(new THREE.SphereGeometry(0.07, 7, 5), 0, 0.1, 0.07), 0xf0f4fb),
-    ];
+  // Eldiven / kolluk: ön kolu saran bilezik + el plakası
+  gloves(t) {
+    const C = TIER[t - 1], out = [];
+    out.push(painted(put(new THREE.CylinderGeometry(0.13, 0.15, 0.26, 8), 0, 0, 0, 0, 0, Math.PI / 2), C.col));
+    out.push(painted(put(new THREE.TorusGeometry(0.145, 0.028, 4, 10), 0.1, 0, 0, 0, Math.PI / 2, 0), C.trim));
+    if (t >= 2) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.1, 0.16), -0.16, 0, 0), C.col));
+    if (t >= 3) out.push(painted(put(new THREE.ConeGeometry(0.07, 0.16, 4), 0.2, 0.05, 0, 0, 0, -Math.PI / 2), C.trim));
+    return out;
+  },
+  // Bot: ayağı saran gövde + bilek/dizlik
+  boots(t) {
+    const C = TIER[t - 1], out = [];
+    out.push(painted(put(new THREE.BoxGeometry(0.19, 0.13, 0.3), 0, -0.03, 0.02), C.col));
+    out.push(painted(put(new THREE.CylinderGeometry(0.11, 0.13, 0.2, 8), 0, 0.11, -0.05), C.col));
+    out.push(painted(put(new THREE.BoxGeometry(0.21, 0.05, 0.32), 0, -0.09, 0.02), C.trim));      // taban
+    if (t >= 2) out.push(painted(put(new THREE.TorusGeometry(0.12, 0.03, 4, 10), 0, 0.06, -0.04), C.trim));
+    if (t >= 3) out.push(painted(put(new THREE.BoxGeometry(0.16, 0.2, 0.06), 0, 0.18, 0.06), C.trim));  // dizlik
+    if (t >= 4) out.push(painted(put(new THREE.ConeGeometry(0.05, 0.14, 4), 0, 0.06, 0.2, Math.PI / 2, 0, 0), C.trim));
+    return out;
+  },
+  // Pelerin: sırttan sarkan kabuk (açık yarısı öne bakar)
+  cloak(t) {
+    const C = TIER[t - 1], out = [];
+    const len = 0.6 + t * 0.09;
+    const shell = new THREE.CylinderGeometry(0.29, 0.4, len, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
+    shell.translate(0, -len / 2 + 0.14, 0);
+    out.push(painted(shell, t >= 3 ? 0xa32340 : C.col));
+    /* Yaka YATAY kalmalı: rotateX(90°) ile yatırdıktan sonra hizalama dönüşü
+       Y ekseninde olmalı. Z'de döndürülünce halka dikleşip boynun etrafında
+       kafaya kadar çıkan bir çembere dönüşüyordu (ölçüldü: tepe y 1.62). */
+    const collar = new THREE.TorusGeometry(0.29, 0.05, 5, 12, Math.PI * 1.2);
+    collar.rotateX(Math.PI / 2); collar.rotateY(-Math.PI * 0.42); collar.translate(0, 0.15, 0);
+    out.push(painted(collar, C.trim));
+    if (t >= 2) {
+      const hem = new THREE.CylinderGeometry(0.405, 0.405, 0.07, 10, 1, true, Math.PI * 0.42, Math.PI * 1.16);
+      hem.translate(0, -len + 0.17, 0);
+      out.push(painted(hem, C.trim));
+    }
+    return out;
+  },
+  // Kalkan: kademeye göre siperlikten kule kalkanına
+  shield(t) {
+    const C = TIER[t - 1], out = [];
+    if (t <= 2) {
+      out.push(painted(put(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 12), 0, 0, 0, Math.PI / 2, 0, 0), C.col));
+      out.push(painted(put(new THREE.TorusGeometry(0.195, 0.03, 4, 14), 0, 0, 0), C.trim));
+      out.push(painted(put(new THREE.SphereGeometry(0.075, 7, 5), 0, 0, 0.05), C.trim));
+    } else {
+      out.push(painted(new THREE.BoxGeometry(0.38, 0.5, 0.07), C.col));
+      const tip = new THREE.ConeGeometry(0.19, 0.2, 4);
+      tip.rotateY(Math.PI / 4); tip.rotateX(Math.PI); tip.translate(0, -0.34, 0);
+      out.push(painted(tip, C.col));
+      out.push(painted(put(new THREE.BoxGeometry(0.08, 0.6, 0.025), 0, -0.03, 0.05), C.trim));
+      out.push(painted(put(new THREE.BoxGeometry(0.4, 0.08, 0.025), 0, 0.1, 0.05), C.trim));
+      if (t >= 4) out.push(painted(put(new THREE.OctahedronGeometry(0.09, 0), 0, 0.1, 0.08), C.trim));
+    }
+    return out;
   },
 };
-/* pos/rot KARAKTER uzayında (dünya birimi, +Z ileri, +Y yukarı) yazılır;
-   kod bunları kemiğin kendi eksenlerine çevirir. Kemik yönleri modele göre
-   değiştiği için elle çevirmek hataya çok açıktı. */
+
+/* Kahramanın HER ZAMAN üstünde olan temel kıyafeti. Modelin kendisi
+   "base form" (kıyafetsiz temel gövde) olarak geldiği için tunik ve pantolon
+   oyun tarafında ekleniyor; zırhlar bunun üstüne biniyor. */
+const OUTFIT = {
+  torso: () => [
+    painted(put(new THREE.CylinderGeometry(0.33, 0.38, 0.56, 12), 0, 0, 0), 0x8d7d5f),   // keten tunik
+    painted(put(new THREE.CylinderGeometry(0.39, 0.39, 0.07, 12), 0, -0.26, 0), 0x5d4a33), // kemer
+    painted(put(new THREE.BoxGeometry(0.11, 0.09, 0.05), 0, -0.26, 0.38), 0xb99149),       // toka
+  ],
+  hips: () => [
+    painted(put(new THREE.CylinderGeometry(0.31, 0.27, 0.34, 10), 0, 0, 0), 0x4f4334),     // pantolon
+  ],
+  foot: () => [
+    painted(put(new THREE.BoxGeometry(0.17, 0.09, 0.28), 0, -0.05, 0.02), 0x4a3a2a),       // basit ayakkabı
+  ],
+};
+
 const GEAR = {
-  helm: { name: 'Kask', icon: '⛑️', bone: 'Head',
-    pos: [0, 0.33, -0.08], rot: [0, 0, 0],
-    items: [
-      { id: 'none', name: 'Açık Baş', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
-      { id: 'hood', name: 'Deri Başlık', icon: '🪖', cost: 120, mesh: 'hood',
-        st: { armor: 1, maxHp: 10 }, txt: 'Zırh +1 · Maks. can +10' },
-      { id: 'iron', name: 'Demir Miğfer', icon: '⛑️', cost: 300, mesh: 'ironHelm',
-        st: { armor: 3, maxHp: 20 }, txt: 'Zırh +3 · Maks. can +20' },
-      { id: 'horned', name: 'Boynuzlu Tolga', icon: '🐃', cost: 760, mesh: 'hornedHelm',
-        st: { armor: 5, maxHp: 45, dmg: 0.08 }, txt: 'Zırh +5 · Can +45 · Hasar +%8' },
-    ] },
-  cloak: { name: 'Pelerin', icon: '🧥', bone: 'Spine02',
-    pos: [0, 0.16, -0.2], rot: [0.1, 0, 0],
-    items: [
-      { id: 'none', name: 'Yok', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
-      { id: 'wool', name: 'Yün Pelerin', icon: '🧣', cost: 220, mesh: 'woolCloak',
-        st: { speedMul: 0.06, magnet: 0.2 }, txt: 'Hız +%6 · Mıknatıs +%20' },
-      { id: 'royal', name: 'Kraliyet Pelerini', icon: '👑', cost: 680, mesh: 'royalCloak',
-        st: { speedMul: 0.12, magnet: 0.45, regen: 0.4 }, txt: 'Hız +%12 · Mıknatıs +%45 · 0.4 HP/sn' },
-    ] },
-  shield: { name: 'Kalkan', icon: '🛡️', bone: 'LeftHand',
-    pos: [0.14, 0.02, 0.04], rot: [0, 0.5, 0],
-    items: [
-      { id: 'none', name: 'Yok', icon: '·', cost: 0, mesh: null, st: null, txt: 'Boş yuva' },
-      { id: 'buckler', name: 'Siperlik', icon: '🔘', cost: 300, mesh: 'buckler',
-        st: { armor: 2, maxHp: 15 }, txt: 'Zırh +2 · Maks. can +15' },
-      { id: 'tower', name: 'Kule Kalkanı', icon: '🛡️', cost: 860, mesh: 'towerShield',
-        st: { armor: 6, maxHp: 50, speedMul: -0.05 }, txt: 'Zırh +6 · Can +50 · Hız −%5' },
-    ] },
-  aura: { name: 'Aura', icon: '✨', bone: null,     // zemine oturur, kemiğe bağlı değil
-    items: [
-      { id: 'none', name: 'Yok', icon: '·', cost: 0, aura: null, st: null, txt: 'Boş yuva' },
-      { id: 'ember', name: 'Kor Aurası', icon: '🔥', cost: 380, aura: { color: 0xff8a3d, r: 1.15, spin: 1.2 },
-        st: { crit: 0.06, area: 0.08 }, txt: 'Kritik +%6 · Etki alanı +%8' },
-      { id: 'void', name: 'Boşluk Aurası', icon: '🌀', cost: 980, aura: { color: 0xb07bff, r: 1.35, spin: -1.8 },
-        st: { dmg: 0.12, atkSpeed: 0.1, crit: 0.05 }, txt: 'Hasar +%12 · Saldırı hızı +%10 · Kritik +%5' },
-    ] },
+  helm:   { name: 'Miğfer',    icon: '⛑️', bones: ['Head'],
+            pos: [0, 0.63, -0.11], rot: [0, 0, 0], shape: 'helm',
+            st: t => ({ armor: t + 1, maxHp: t * 12 }),
+            txt: t => `Zırh +${t + 1} · Maks. can +${t * 12}` },
+  chest:  { name: 'Göğüslük',  icon: '🎽', bones: ['Spine02'],
+            pos: [0, 0.19, -0.11], rot: [0.06, 0, 0], shape: 'chest',
+            st: t => ({ armor: t * 2, maxHp: t * 22 }),
+            txt: t => `Zırh +${t * 2} · Maks. can +${t * 22}` },
+  gloves: { name: 'Kolluk',    icon: '🧤', bones: ['LeftForeArm', 'RightForeArm'], mirror: true,
+            pos: [0.09, -0.05, -0.1], rot: [0, 0, 0], shape: 'gloves',
+            st: t => ({ dmg: t * 0.05, atkSpeed: t * 0.04 }),
+            txt: t => `Hasar +%${t * 5} · Saldırı hızı +%${t * 4}` },
+  boots:  { name: 'Bot',       icon: '🥾', bones: ['LeftFoot', 'RightFoot'], mirror: true,
+            pos: [0.03, -0.01, -0.09], rot: [0, 0, 0], shape: 'boots',
+            st: t => ({ speedMul: t * 0.05, armor: Math.floor(t / 2) }),
+            txt: t => `Hareket hızı +%${t * 5}` + (t >= 2 ? ` · Zırh +${Math.floor(t / 2)}` : '') },
+  cloak:  { name: 'Pelerin',   icon: '🧥', bones: ['Spine02'],
+            pos: [0, 0.22, -0.26], rot: [0.1, 0, 0], shape: 'cloak',
+            st: t => ({ magnet: t * 0.16, regen: t * 0.18 }),
+            txt: t => `Mıknatıs +%${t * 16} · ${(t * 0.18).toFixed(2)} HP/sn` },
+  shield: { name: 'Kalkan',    icon: '🛡️', bones: ['LeftHand'],
+            pos: [0.11, 0, -0.1], rot: [0, 0.45, 0], shape: 'shield',
+            st: t => ({ armor: t * 2, maxHp: t * 10 }),
+            txt: t => `Zırh +${t * 2} · Maks. can +${t * 10}` },
 };
-const gearItem = (slot, id) => GEAR[slot].items.find(i => i.id === id) || GEAR[slot].items[0];
-const equippedItem = slot => gearItem(slot, META.eq[slot]);
-/* Kuşanılan parçaların bonusları koşu başında temel değerlere işlenir */
-function applyGear() {
-  for (const slot in GEAR) {
-    const st = equippedItem(slot).st;
-    if (!st) continue;
-    if (st.maxHp) P.maxHp += st.maxHp;
-    for (const k in st) if (k !== 'maxHp' && P.base[k] !== undefined) P.base[k] += st[k];
-  }
-}
+const GEAR_SLOTS = Object.keys(GEAR);
+const gearName = (slot, t) => TIER[t - 1].name + ' ' + GEAR[slot].name;
+/* Seviyeye göre düşebilecek en yüksek kademe: kahraman koşu boyunca
+   sade -> deri -> demir -> çelik -> efsanevi diye ilerlesin. */
+const tierForLevel = lv => lv >= 20 ? 4 : lv >= 12 ? 3 : lv >= 6 ? 2 : 1;
 
 /* --- Teçhizatın 3B tarafı --- */
 const gearMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const gearOutlineMat = new THREE.MeshBasicMaterial({ color: 0x241c2e, side: THREE.BackSide });
-const gearNodes = {};                 // slot -> kemiğe bağlı kapsayıcı
+const gearNodes = {};                 // slot -> kemiğe bağlı kapsayıcı dizisi
 const gearBones = {};
-let auraGroup = null;
 function findBone(root, name) {
   let hit = null;
   root.traverse(o => { if (!hit && o.isBone && o.name === name) hit = o; });
   return hit;
 }
-/* Kemik uzayı model birimindedir (bu modelde ~santimetre) ve her kemiğin
-   ekseni farklı yöne bakar — mesela LeftHand'in +Y'si dünyada AŞAĞIYI
-   gösteriyor. Bu yüzden parçalar karakter uzayında tanımlanır, burada
-   kemiğin karakter uzayındaki dönüşü TERSLENEREK kemiğe taşınır.
-   Böylece tablodaki sayılar "ileri/yukarı/sağa" olarak okunabilir kalıyor. */
+/* Kemik uzayı model birimindedir (~santimetre) ve her kemiğin ekseni farklı
+   yöne bakar (mesela LeftHand'in +Y'si dünyada AŞAĞIYI gösterir). Bu yüzden
+   parçalar KARAKTER uzayında tanımlanır, burada kemiğin dönüşü terslenerek
+   kemiğe taşınır — tablodaki sayılar "ileri/yukarı/sağa" olarak okunur kalır. */
 const _relM = new THREE.Matrix4(), _rootInv = new THREE.Matrix4();
 const _bp = new THREE.Vector3(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3();
 const _inv = new THREE.Quaternion(), _eul = new THREE.Euler(), _off = new THREE.Vector3();
+function attachNode(root, boneName, pos, rot) {
+  const bone = findBone(root, boneName);
+  if (!bone) { console.warn('kemik yok:', boneName); return null; }
+  bone.updateWorldMatrix(true, false);
+  _relM.multiplyMatrices(_rootInv, bone.matrixWorld);      // kemik -> karakter uzayı
+  _relM.decompose(_bp, _bq, _bs);
+  _inv.copy(_bq).invert();
+  const U = 1 / (MODEL_SCALE * (_bs.x || 1));              // 1 dünya birimi = U kemik birimi
+  const holder = new THREE.Group();
+  holder.scale.setScalar(U);
+  _off.fromArray(pos).multiplyScalar(U).applyQuaternion(_inv);
+  holder.position.copy(_off);
+  _eul.set(rot[0], rot[1], rot[2]);
+  holder.quaternion.copy(_inv).multiply(new THREE.Quaternion().setFromEuler(_eul));
+  bone.add(holder);
+  return holder;
+}
+let outfitNodes = [];
 function initGearNodes(root) {
   root.updateMatrixWorld(true);
   _rootInv.copy(root.matrixWorld).invert();
-  for (const slot in GEAR) {
+  for (const slot of GEAR_SLOTS) {
     const def = GEAR[slot];
-    if (!def.bone) continue;
-    const bone = findBone(root, def.bone);
-    if (!bone) { console.warn('kemik yok:', def.bone); continue; }
-    bone.updateWorldMatrix(true, false);
-    _relM.multiplyMatrices(_rootInv, bone.matrixWorld);   // kemik -> karakter uzayı
-    _relM.decompose(_bp, _bq, _bs);
-    _inv.copy(_bq).invert();
-    // 1 dünya birimi kaç kemik birimi eder
-    const U = 1 / (MODEL_SCALE * (_bs.x || 1));
-    const holder = new THREE.Group();
-    holder.scale.setScalar(U);
-    _off.fromArray(def.pos).multiplyScalar(U).applyQuaternion(_inv);
-    holder.position.copy(_off);
-    _eul.set(def.rot[0], def.rot[1], def.rot[2]);
-    holder.quaternion.copy(_inv).multiply(new THREE.Quaternion().setFromEuler(_eul));
-    bone.add(holder);
-    gearNodes[slot] = holder; gearBones[slot] = bone;
+    gearNodes[slot] = []; gearBones[slot] = [];
+    def.bones.forEach((bn, i) => {
+      // Sağ taraf: aynı parça, x ekseninde aynalanmış konum/dönüş
+      const m = def.mirror && i === 1 ? -1 : 1;
+      const h = attachNode(root, bn, [def.pos[0] * m, def.pos[1], def.pos[2]],
+                                     [def.rot[0], def.rot[1] * m, def.rot[2] * m]);
+      if (h) { gearNodes[slot].push(h); gearBones[slot].push(findBone(root, bn)); }
+    });
   }
-  auraGroup = new THREE.Group();
-  auraGroup.visible = false;
-  scene.add(auraGroup);
-}
-// Kuşanılanları sahneye yansıt (menüde değiştikçe anında görünür)
-function refreshGearVisuals() {
-  for (const slot in gearNodes) {
-    const holder = gearNodes[slot];
-    while (holder.children.length) {
-      const c = holder.children.pop();
-      if (c.geometry) c.geometry.dispose();
-    }
-    const it = equippedItem(slot);
-    if (!it.mesh || !GEAR_MESH[it.mesh]) continue;
-    const geo = mergeGeometries(GEAR_MESH[it.mesh](), false);
+  // Temel kıyafet: koşu boyunca hiç değişmez, bir kez kurulur
+  const outfit = [
+    [OUTFIT.torso, 'Spine02', [0, 0.22, -0.1], [0.06, 0, 0]],
+    [OUTFIT.hips, 'Hips', [0, -0.05, -0.11], [0, 0, 0]],
+    [OUTFIT.foot, 'LeftFoot', [0.03, -0.01, -0.09], [0, 0, 0]],
+    [OUTFIT.foot, 'RightFoot', [-0.03, -0.01, -0.09], [0, 0, 0]],
+  ];
+  outfitNodes = [];
+  for (const [make, bone, pos, rot] of outfit) {
+    const h = attachNode(root, bone, pos, rot);
+    if (!h) continue;
+    const geo = mergeGeometries(make(), false);
     if (!geo) continue;
-    const m = new THREE.Mesh(geo, gearMat);
-    m.frustumCulled = false;
-    const ol = new THREE.Mesh(geo, gearOutlineMat);   // ters kabuk dış çizgi
-    ol.scale.setScalar(1.07); ol.renderOrder = -1; ol.frustumCulled = false;
-    holder.add(m); holder.add(ol);
-  }
-  // Aura: ayakların dibinde dönen halka(lar), sahne düzeyinde
-  if (auraGroup) {
-    while (auraGroup.children.length) {
-      const c = auraGroup.children.pop();
-      c.geometry.dispose(); c.material.dispose();
-    }
-    const a = equippedItem('aura').aura;
-    auraGroup.visible = !!a;
-    if (a) {
-      for (let i = 0; i < 2; i++) {
-        const g = new THREE.RingGeometry(a.r * (i ? 0.62 : 0.86), a.r * (i ? 0.72 : 1), i ? 12 : 28);
-        g.rotateX(-Math.PI / 2);
-        const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
-          color: a.color, transparent: true, opacity: i ? 0.38 : 0.6,
-          depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-        mesh.userData.spin = a.spin * (i ? -0.7 : 1);
-        auraGroup.add(mesh);
-      }
-    }
+    addPiece(h, geo);
+    outfitNodes.push(h);
   }
 }
-let auraEmit = 0;
-function updateAura(dt) {
-  if (!auraGroup || !auraGroup.visible) return;
-  auraGroup.position.set(P.x, 0.12, P.z);
-  // Halkalar zeminde yatıyor; dönüş ekseni Y olmalı (Z olsaydı yere dik dururlardı)
-  for (const m of auraGroup.children) m.rotation.y += m.userData.spin * dt;
-  const a = equippedItem('aura').aura;
-  auraEmit -= dt;
-  if (a && auraEmit <= 0) {                   // yükselen kıvılcımlar
-    auraEmit = 0.09;
-    const ang = rnd(TAU);
-    const p = parts.get();
-    if (p) {
-      p.x = P.x + Math.cos(ang) * a.r * 0.85; p.z = P.z + Math.sin(ang) * a.r * 0.85; p.y = 0.15;
-      p.vx = p.vz = 0; p.vy = rnd(3.4, 1.8);
-      p.r = 2.6; p.color = '#' + a.color.toString(16).padStart(6, '0');
-      p.life = p.maxLife = rnd(0.7, 0.4);
+// Parça + ters kabuk dış çizgi (karakterin çizgisiyle aynı dil)
+function addPiece(holder, geo) {
+  const m = new THREE.Mesh(geo, gearMat);
+  m.frustumCulled = false;
+  const ol = new THREE.Mesh(geo, gearOutlineMat);
+  ol.scale.setScalar(1.07); ol.renderOrder = -1; ol.frustumCulled = false;
+  holder.add(m); holder.add(ol);
+}
+// Kuşanılanları sahneye yansıt (kademe değiştikçe çağrılır)
+function refreshGearVisuals() {
+  for (const slot of GEAR_SLOTS) {
+    const holders = gearNodes[slot]; if (!holders) continue;
+    const t = P.gear[slot] | 0;
+    for (const holder of holders) {
+      while (holder.children.length) {
+        const c = holder.children.pop();
+        if (c.geometry) c.geometry.dispose();
+      }
+      if (!t) continue;
+      const geo = mergeGeometries(SHAPE[GEAR[slot].shape](t), false);
+      if (geo) addPiece(holder, geo);
     }
   }
+  // Göğüslük giyilince tunik gövdesi altında kalır; z-kavgası olmasın diye gizle
+  if (outfitNodes[0]) outfitNodes[0].visible = !P.gear.chest;
+  if (outfitNodes[2]) outfitNodes[2].visible = !P.gear.boots;
+  if (outfitNodes[3]) outfitNodes[3].visible = !P.gear.boots;
+}
+
+function gearStat(slot, t, key) { return t ? (GEAR[slot].st(t)[key] || 0) : 0; }
+/* Kademeyi doğrudan ayarla (her iki yöne). Maks. can farkı burada işlenir,
+   çünkü teçhizat koşu ortasında değişiyor ve can barı anında güncellenmeli. */
+function setGearTier(slot, tier) {
+  const cur = P.gear[slot] | 0;
+  if (tier === cur) return false;
+  const d = gearStat(slot, tier, 'maxHp') - gearStat(slot, cur, 'maxHp');
+  P.gear[slot] = tier;
+  if (d) { P.maxHp = Math.max(1, P.maxHp + d); P.hp = clamp(P.hp + Math.max(0, d), 1, P.maxHp); }
+  recomputeStats();
+  refreshGearVisuals();
+  return true;
+}
+/* Oyun içi kazanım: kademe yalnızca YÜKSELİR ve koleksiyona işlenir. */
+function gainGear(slot, tier) {
+  if (tier <= (P.gear[slot] | 0)) return false;
+  setGearTier(slot, tier);
+  META.seen[slot] = Math.max(META.seen[slot] | 0, tier);
+  metaSave();
+  return true;
+}
+/* Düşen parçanın hangi yuvaya gideceği: EN GERİ kalmış yuva seçilir, böylece
+   kahraman dengeli gelişir ve tek bir yuvaya yığılma olmaz. */
+function pickGearDrop() {
+  const cap = tierForLevel(G.level);
+  let best = null, bestT = 99;
+  for (const slot of GEAR_SLOTS) {
+    const t = P.gear[slot] | 0;
+    if (t >= cap) continue;
+    if (t < bestT || (t === bestT && Math.random() < 0.5)) { bestT = t; best = slot; }
+  }
+  if (!best) return null;
+  return { slot: best, tier: Math.min(cap, bestT + 1) };
 }
 
 // Döner bıçak mesh havuzu
@@ -1640,18 +1724,30 @@ function beamHit(x, z, a, len, w, dmg, colorHex, big) {
    Erken tempo aynı kalsın diye ilk 12 seviye neredeyse değişmedi; sonrasında
    üstel terim devreye girip seviye başına süreyi ~10 saniyeye çıkarıyor. */
 const xpForLevel = lv => Math.floor(6 + lv * 5 + lv * lv * 0.35 + Math.pow(Math.max(0, lv - 12), 2.6));
-function spawnPickup(x, z, kind, val) {
+function spawnPickup(x, z, kind, val, gear) {
   const p = pickups.get();
   if (!p) { if (kind.startsWith('xp')) gainXp(val); return; }
   p.x = x; p.z = z; p.kind = kind; p.val = val; p.t = rnd(TAU); p.pulled = false;
+  p.slot = gear ? gear.slot : ''; p.tier = gear ? gear.tier : 0;
   const a = rnd(TAU), s = rnd(2.8, 0.9);
   p.vx = Math.cos(a) * s; p.vz = Math.sin(a) * s;
+}
+/* Teçhizat düşürme: elit ve boss garanti, sıradan düşman seyrek.
+   Kademe oyuncunun seviyesine bağlı (tierForLevel), yani kahraman koşu
+   ilerledikçe deri -> demir -> çelik -> efsanevi diye gelişir. */
+function dropGear(x, z, n) {
+  for (let i = 0; i < n; i++) {
+    const g = pickGearDrop();
+    if (!g) { spawnPickup(x + rnd(1, -1), z + rnd(1, -1), 'gold', 15); continue; }
+    spawnPickup(x + rnd(1, -1), z + rnd(1, -1), 'gear', 0, g);
+  }
 }
 function dropLoot(e) {
   if (e.boss) {
     for (let i = 0; i < 12; i++) spawnPickup(e.x + rnd(3, -3), e.z + rnd(3, -3), 'xp20', 20);
     for (let i = 0; i < 6; i++) spawnPickup(e.x + rnd(3.5, -3.5), e.z + rnd(3.5, -3.5), 'gold', 10);
     spawnPickup(e.x, e.z + 1, 'heal', 35);
+    dropGear(e.x, e.z, 2);
     return;
   }
   let kind = 'xp1', val = 1;
@@ -1659,12 +1755,14 @@ function dropLoot(e) {
   spawnPickup(e.x, e.z, kind, val);
   if (Math.random() < (e.elite ? 1 : 0.05)) spawnPickup(e.x + rnd(.7, -.7), e.z + rnd(.7, -.7), 'gold', e.elite ? 8 : rndi(4, 1));
   if (Math.random() < 0.012) spawnPickup(e.x, e.z, 'heal', 20);
+  if (e.elite) dropGear(e.x, e.z, 1);
+  else if (Math.random() < 0.012) dropGear(e.x, e.z, 1);
 }
 function updatePickups(dt) {
   const A = pickups.active;
   const magR = 5.6 * P.st.magnet, magR2 = magR * magR;
   const pickR2 = (P.r + 0.8) * (P.r + 0.8);
-  let n = 0;
+  let n = 0, ng = 0;
   for (let i = 0; i < A.length; i++) {
     const p = A[i];
     p.t += dt;
@@ -1682,6 +1780,19 @@ function updatePickups(dt) {
       p.x += (P.x - p.x) / d * sp * dt; p.z += (P.z - p.z) / d * sp * dt;
     }
     if (d2 < pickR2) { collect(p); p.dead = true; continue; }
+    if (p.kind === 'gear') {
+      if (ng < GEAR_DROP_MAX) {
+        _v3.set(p.x, 0.42 + Math.sin(p.t * 3.4) * 0.1, p.z);
+        _q.setFromAxisAngle(_AXIS_Y, p.t * 1.1);
+        _s3.setScalar(1);
+        _m4.compose(_v3, _q, _s3);
+        gearDropMesh.setMatrixAt(ng, _m4);
+        _col.setHex(TIER[clamp(p.tier, 1, TIER_MAX) - 1].col);
+        gearDropMesh.setColorAt(ng, _col);
+        ng++;
+      }
+      continue;
+    }
     _v3.set(p.x, 0.45 + Math.sin(p.t * 5) * 0.12, p.z);
     _q.setFromAxisAngle(_AXIS_Y, p.t * 2);
     _s3.setScalar(p.kind === 'xp20' ? 1.3 : p.kind === 'xp5' ? 1.1 : 1);
@@ -1693,9 +1804,29 @@ function updatePickups(dt) {
   gemMesh.count = n;
   gemMesh.instanceMatrix.needsUpdate = true;
   if (gemMesh.instanceColor) gemMesh.instanceColor.needsUpdate = true;
+  gearDropMesh.count = ng;
+  gearDropMesh.instanceMatrix.needsUpdate = true;
+  if (gearDropMesh.instanceColor) gearDropMesh.instanceColor.needsUpdate = true;
   pickups.sweep();
 }
 function collect(p) {
+  if (p.kind === 'gear') {
+    /* Düşerken seçilen yuva bu arada dolmuş olabilir; toplama anında
+       yeniden karar veriliyor, yoksa parça boşa gidiyordu. */
+    let slot = p.slot, tier = p.tier;
+    if (!slot || tier <= (P.gear[slot] | 0)) {
+      const g = pickGearDrop();
+      if (g) { slot = g.slot; tier = g.tier; } else slot = '';
+    }
+    if (slot && gainGear(slot, tier)) {
+      const C = TIER[tier - 1];
+      banner(GEAR[slot].icon + ' ' + gearName(slot, tier), 1.7);
+      SFX.levelup(); addShake(0.25);
+      for (let i = 0; i < 22; i++) particle(P.x, 1.1, P.z, '#' + C.trim.toString(16).padStart(6, '0'), 4, 9);
+    } else { G.gold += 20; addText(p.x, 1, p.z, 20, false); }   // zaten tam: altına çevir
+    SFX.pickup();
+    return;
+  }
   if (p.kind === 'gold') { G.gold += p.val; addText(p.x, 1, p.z, p.val, false); }
   else if (p.kind === 'heal') { P.hp = Math.min(P.maxHp, P.hp + p.val); for (let i = 0; i < 8; i++) particle(P.x, 1, P.z, '#ff7a94', 3, 5); }
   else gainXp(p.val);
@@ -1956,6 +2087,25 @@ function drawHUD() {
   }
   if (hasP) iy += 24;
 
+  /* Teçhizat şeridi: 6 yuva, kademe rengiyle. RPG ilerlemesinin nerede
+     olduğunu tek bakışta göstermek için — boş yuvalar sönük duruyor. */
+  ix = 8;
+  for (const slot of GEAR_SLOTS) {
+    const t = P.gear[slot] | 0;
+    ctx.fillStyle = t ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.28)';
+    ctx.fillRect(ix, iy - 10, 21, 20);
+    if (t) {
+      ctx.fillStyle = '#' + TIER[t - 1].col.toString(16).padStart(6, '0');
+      ctx.fillRect(ix, iy + 7, 21, 3);
+    }
+    ctx.globalAlpha = t ? 1 : 0.32;
+    ctx.font = '12px sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(GEAR[slot].icon, ix + 2, iy);
+    ctx.globalAlpha = 1;
+    ix += 24;
+  }
+  iy += 26;
+
   // boss barı
   if (G.boss) {
     const bw = Math.min(VW - 40, 460), bx = (VW - bw) / 2, by = iy - 2;
@@ -2051,15 +2201,26 @@ const UPGRADES = {
   armor:  { icon: '🛡️', name: 'Zırh',         desc: 'Gelen hasar -1',    max: 5, cost: l => 90 + l * 140 },
 };
 const META_KEY = 'hordeSurvivor3D.meta';
-/* eq: kuşanılan parçalar · own: satın alınmış "yuva.parça" anahtarları
-   (bedava parçalar zaten sahip sayılır, listede tutulmaz) */
+/* seen: koleksiyonda görülmüş en yüksek kademe (yuva -> kademe)
+   heir: "Miras" — her koşuya kaç yuva deri teçhizatla başlanacağı */
 const META = {
   bank: 0,
   up: { hp: 0, dmg: 0, spd: 0, magnet: 0, armor: 0 },
-  eq: { helm: 'none', cloak: 'none', shield: 'none', aura: 'none' },
-  own: [],
+  seen: {},
+  heir: 0,
 };
-const ownsGear = (slot, it) => it.cost === 0 || META.own.indexOf(slot + '.' + it.id) >= 0;
+const HEIR_MAX = 6, heirCost = l => 150 + l * 220;
+/* Miras: koşuya bedava deri parçalarla başla. Yuvalar sabit sırayla dolar ki
+   yükseltmenin ne getirdiği tahmin edilebilir olsun. */
+const HEIR_ORDER = ['chest', 'boots', 'helm', 'gloves', 'shield', 'cloak'];
+function applyStartGear() {
+  for (let i = 0; i < Math.min(META.heir, HEIR_ORDER.length); i++) {
+    const slot = HEIR_ORDER[i];
+    P.gear[slot] = 1;
+    P.maxHp += gearStat(slot, 1, 'maxHp');
+  }
+  recomputeStats();
+}
 function metaLoad() {
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -2068,15 +2229,10 @@ function metaLoad() {
     if (typeof d.bank === 'number') META.bank = Math.max(0, d.bank | 0);
     if (d.up) for (const k in META.up)
       if (typeof d.up[k] === 'number') META.up[k] = clamp(d.up[k] | 0, 0, UPGRADES[k].max);
-    // Teçhizat: kaydedilmiş ama artık var olmayan parçalar sessizce elenir
-    if (Array.isArray(d.own)) META.own = d.own.filter(k => {
-      const [s, i] = String(k).split('.');
-      return GEAR[s] && GEAR[s].items.some(it => it.id === i);
-    });
-    if (d.eq) for (const slot in META.eq) {
-      const it = GEAR[slot].items.find(i => i.id === d.eq[slot]);
-      if (it && ownsGear(slot, it)) META.eq[slot] = it.id;
-    }
+    // Koleksiyon: artık var olmayan yuvalar sessizce elenir
+    if (d.seen) for (const slot of GEAR_SLOTS)
+      if (typeof d.seen[slot] === 'number') META.seen[slot] = clamp(d.seen[slot] | 0, 0, TIER_MAX);
+    if (typeof d.heir === 'number') META.heir = clamp(d.heir | 0, 0, HEIR_MAX);
   } catch (e) { /* erişilemiyor: bellekte devam */ }
 }
 function metaSave() {
@@ -2126,38 +2282,55 @@ function renderShop() {
   }
   renderGear();
 }
-/* Teçhizat paneli: her yuva bir satır, parçalar yan yana rozetler.
-   Sahip olunan parçaya dokunmak kuşanır, olunmayana dokunmak satın alır. */
+/* Teçhizat paneli artık bir DÜKKAN değil, KOLEKSİYON + MİRAS:
+   parçalar koşu sırasında düşmanlardan düşüyor, menüde yalnızca ne bulduğun
+   ve her koşuya kaç parçayla başladığın görünüyor. */
 const elGear = document.getElementById('gear');
 function renderGear() {
   if (!elGear) return;
   elGear.innerHTML = '';
-  for (const slot in GEAR) {
-    const def = GEAR[slot];
+
+  // --- Miras: altının kalıcı karşılığı ---
+  const heir = document.createElement('div');
+  heir.className = 'gslot';
+  const maxed = META.heir >= HEIR_MAX;
+  const cost = maxed ? 0 : heirCost(META.heir);
+  heir.innerHTML = `<div class="ghead"><span>🎁 Miras</span>
+    <small>${META.heir ? META.heir + ' yuva deri teçhizatla başla' : 'Koşuya sade başlıyorsun'}</small></div>`;
+  const hrow = document.createElement('div');
+  hrow.className = 'gitems';
+  hrow.innerHTML = `<div class="dots" style="flex:1;align-items:center;display:flex;gap:4px">${
+    Array.from({ length: HEIR_MAX }, (_, i) =>
+      `<div class="dot${i < META.heir ? ' on' : ''}"></div>`).join('')}</div>`;
+  const hb = document.createElement('button');
+  hb.className = 'buy' + (maxed ? ' max' : '');
+  hb.textContent = maxed ? 'TAM' : '💰 ' + cost;
+  hb.disabled = maxed || META.bank < cost;
+  hb.onclick = () => {
+    if (META.heir >= HEIR_MAX || META.bank < heirCost(META.heir)) return;
+    META.bank -= heirCost(META.heir); META.heir++;
+    metaSave(); renderShop(); SFX.levelup();
+  };
+  hrow.appendChild(hb);
+  heir.appendChild(hrow);
+  elGear.appendChild(heir);
+
+  // --- Koleksiyon: hangi yuvada en yükseğe kadar çıktın ---
+  for (const slot of GEAR_SLOTS) {
+    const def = GEAR[slot], seen = META.seen[slot] | 0;
     const row = document.createElement('div');
     row.className = 'gslot';
-    const head = document.createElement('div');
-    head.className = 'ghead';
-    head.innerHTML = `<span>${def.icon} ${def.name}</span><small>${equippedItem(slot).txt}</small>`;
-    row.appendChild(head);
+    row.innerHTML = `<div class="ghead"><span>${def.icon} ${def.name}</span>
+      <small>${seen ? def.txt(seen) : 'Henüz bulunmadı'}</small></div>`;
     const list = document.createElement('div');
     list.className = 'gitems';
-    for (const it of def.items) {
-      const owned = ownsGear(slot, it), on = META.eq[slot] === it.id;
-      const b = document.createElement('button');
-      b.className = 'gitem' + (on ? ' on' : '') + (owned ? '' : ' locked');
-      b.title = it.name + (it.txt ? ' — ' + it.txt : '');
-      b.innerHTML = `<span class="gi">${it.icon}</span><span class="gn">${it.name}</span>` +
-        (owned ? '' : `<span class="gc">💰 ${it.cost}</span>`);
-      if (!owned && META.bank < it.cost) b.disabled = true;
-      b.onclick = () => {
-        if (!ownsGear(slot, it)) {
-          if (META.bank < it.cost) return;
-          META.bank -= it.cost; META.own.push(slot + '.' + it.id);
-        }
-        META.eq[slot] = it.id;
-        metaSave(); refreshGearVisuals(); renderShop(); SFX.levelup();
-      };
+    for (let t = 1; t <= TIER_MAX; t++) {
+      const found = seen >= t;
+      const b = document.createElement('div');
+      b.className = 'gitem' + (found ? ' on' : ' locked');
+      b.title = gearName(slot, t) + ' — ' + def.txt(t);
+      b.innerHTML = `<span class="gi">${found ? def.icon : '🔒'}</span>` +
+        `<span class="gn">${TIER[t - 1].name}</span>`;
       list.appendChild(b);
     }
     row.appendChild(list);
@@ -2324,10 +2497,13 @@ function loadKnight() {
       m.traverse(o => {
         if (o.isMesh || o.isSkinnedMesh) {
           o.frustumCulled = false;
+          /* Eski model gümüş zırhlıydı ve beyaza doymasın diye çelik tonuyla
+             çarpılıyordu; yeni model TEN renkli olduğu için aynı ton onu
+             soldurup gri gösteriyordu. Dokunun kendi rengi korunuyor. */
           o.material = new THREE.MeshLambertMaterial({
             map,
-            color: 0xd7dde8,                 // hafif çelik tonu: beyaza doymayı önler
-            emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.16,
+            color: 0xffffff,
+            emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.1,
           });
           // Dış çizgi: aynı geometri + iskelet, ters yüzeyle çizilir
           const om = makeOutlineMat();
@@ -2398,7 +2574,6 @@ function frame(now) {
       camTarget.set(Math.sin(now / 6000) * 18, 0, Math.cos(now / 6000) * 10);
     }
   }
-  updateAura(rdt);                 // menüde de dönsün: kuşandığın aura hemen görünür
   if (G.state !== 'MENU' && G.state !== 'LOADING') camTarget.lerp(_v3.set(P.x, 0, P.z), 1 - Math.pow(0.0008, rdt));
 
   // kamera + ekran sallantısı
@@ -2441,8 +2616,8 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   addWeapon, getWeapon, recomputeStats, applyCard, spawnEnemy, gainXp, hitEnemy,
                   buildChoices, cardInfo, openLevelUp, startGame, input, joy, joyL, joyR, mouseAim,
                   camera, scene, hurtPlayer, THREE, readInput, aimAngle,
-                  GEAR, META, gearNodes, gearBones, refreshGearVisuals, renderGear, renderShop, applyGear,
-                  equippedItem, ownsGear, metaSave,
-                  get auraGroup() { return auraGroup; },
+                  GEAR, GEAR_SLOTS, TIER, TIER_MAX, META, gearNodes, gearBones,
+                  refreshGearVisuals, renderGear, renderShop, gainGear, setGearTier, pickGearDrop,
+                  tierForLevel, gearName, dropGear, metaSave, spawnPickup,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

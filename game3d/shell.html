@@ -115,9 +115,11 @@
   .upg .ico{ font-size:18px; width:22px; text-align:center; }
   .upg .nm{ flex:1; text-align:left; font-size:12.5px; font-weight:700; }
   .upg .nm small{ display:block; font-weight:400; color:#8b95ad; font-size:10.5px; }
-  .upg .dots{ display:flex; gap:3px; }
-  .upg .dot{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.16); }
-  .upg .dot.on{ background:#5dffa0; box-shadow:0 0 6px rgba(93,255,160,.6); }
+  /* Noktalar hem yükseltme satırında hem Miras satırında kullanılıyor;
+     kural .upg altına kapsanınca Miras'takiler görünmez oluyordu. */
+  .dots{ display:flex; gap:3px; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.16); }
+  .dot.on{ background:#5dffa0; box-shadow:0 0 6px rgba(93,255,160,.6); }
   .buy{ border:none; border-radius:7px; padding:6px 10px; font-size:11.5px; font-weight:800;
     cursor:pointer; background:linear-gradient(180deg,#ffd479,#ff9a3c); color:#12121c;
     min-width:62px; font-variant-numeric:tabular-nums; }
@@ -166,7 +168,8 @@
   <div class="title">Horde Survivor 3D</div>
   <div class="subtitle">
     İzometrik arenada sonsuz sürüye karşı 15 dakika hayatta kal.
-    Silahların <b>otomatik</b> ateş eder — senin işin kaçmak, kristal toplamak ve doğru kartı seçmek.
+    Kahraman <b>sade</b> başlar; düşen zırh parçalarıyla üstü adım adım donanır.
+    Silahların <b>otomatik</b> ateş eder — senin işin kaçmak, ganimet toplamak ve doğru kartı seçmek.
   </div>
   <div class="biomes">
     <span class="biome" style="border-color:#4a8b3a">🌲 Yaprak Dökücü Orman</span>
@@ -180,14 +183,15 @@
   <div class="shopWrap">
     <div class="shopHead">
       <div class="tabs">
-        <button class="tab on" data-pane="gearPane">TEÇHİZAT</button>
+        <button class="tab on" data-pane="gearPane">KOLEKSİYON</button>
         <button class="tab" data-pane="shopPane">YÜKSELTMELER</button>
       </div>
       <span id="bank">💰 0</span>
     </div>
     <div id="gearPane">
       <div id="gear"></div>
-      <div class="hint" style="margin-top:6px">Kuşandığın parça karakterin üstünde görünür ve gerçek bonus verir.</div>
+      <div class="hint" style="margin-top:6px">Zırh parçaları koşu sırasında düşmanlardan düşer.
+        Seviyen yükseldikçe daha iyi kademeler düşmeye başlar: deri → demir → çelik → efsanevi.</div>
     </div>
     <div id="shopPane" hidden>
       <div id="shop"></div>

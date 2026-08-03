@@ -66,11 +66,9 @@ export function initTestPanel() {
      metaSave ÇAĞRILMAZ; test sürümü gerçek kaydı bozmasın. ---- */
   function unlockAll() {
     g.META.bank = Math.max(g.META.bank, 99999);
-    for (const slot in g.GEAR) for (const it of g.GEAR[slot].items) {
-      const key = slot + '.' + it.id;
-      if (!g.ownsGear(slot, it) && g.META.own.indexOf(key) < 0) g.META.own.push(key);
-    }
-    for (const id in g.META.up) g.META.up[id] = 5;      // kalıcı yükseltmeler de tam
+    for (const id in g.META.up) g.META.up[id] = 5;      // kalıcı yükseltmeler tam
+    g.META.heir = 6;                                    // her koşuya deri setle başla
+    for (const slot of g.GEAR_SLOTS) g.META.seen[slot] = g.TIER_MAX;  // koleksiyon dolu
     g.renderShop();
   }
   unlockAll();
@@ -90,23 +88,12 @@ export function initTestPanel() {
 
   // --- eylemler ---
   const A = {
-    gearNext(slot) {
-      const items = g.GEAR[slot].items;
-      const i = items.findIndex(x => x.id === g.META.eq[slot]);
-      g.META.eq[slot] = items[(i + 1) % items.length].id;
-      g.refreshGearVisuals(); g.renderGear();
-    },
-    gearBest() {
-      for (const slot in g.GEAR) {
-        const items = g.GEAR[slot].items;
-        g.META.eq[slot] = items[items.length - 1].id;
-      }
-      g.refreshGearVisuals(); g.renderGear();
-    },
-    gearNone() {
-      for (const slot in g.GEAR) g.META.eq[slot] = g.GEAR[slot].items[0].id;
-      g.refreshGearVisuals(); g.renderGear();
-    },
+    // Kademeyi tur tur gez: 0 (yok) -> 1..4 -> 0
+    gearNext(slot) { g.setGearTier(slot, ((g.P.gear[slot] | 0) + 1) % (g.TIER_MAX + 1)); },
+    gearBest() { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, g.TIER_MAX); },
+    gearNone() { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, 0); },
+    gearTier(t) { for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, t); },
+    gearDrop() { g.dropGear(g.P.x + 1.2, g.P.z, 3); },   // yere 3 parça bırak
     weapon(id) {
       const w = g.getWeapon(id);
       if (!w) g.addWeapon(id);
@@ -150,10 +137,10 @@ export function initTestPanel() {
     // Yeni oyuncu deneyimini denemek için: her şey kilitli, kasa boş
     wipe() {
       try { localStorage.removeItem('hordeSurvivor3D.meta'); } catch (e) {}
-      g.META.bank = 0; g.META.own.length = 0;
+      g.META.bank = 0; g.META.heir = 0; g.META.seen = {};
       for (const id in g.META.up) g.META.up[id] = 0;
-      for (const slot in g.GEAR) g.META.eq[slot] = g.GEAR[slot].items[0].id;
-      g.refreshGearVisuals(); g.renderShop();
+      for (const slot of g.GEAR_SLOTS) g.setGearTier(slot, 0);
+      g.renderShop();
     },
     unlock() { unlockAll(); g.renderGear(); },   // kilitliden geri dönüş yolu
   };
@@ -161,9 +148,11 @@ export function initTestPanel() {
   // --- panel çizimi (etiketler her eylemden sonra tazelenir) ---
   const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
   function render() {
-    const gearRow = Object.keys(g.GEAR).map(slot => {
-      const it = g.equippedItem(slot);
-      return `<button class="b half" data-a="gearNext" data-x="${slot}">${g.GEAR[slot].icon} ${esc(it.name)}</button>`;
+    const gearRow = g.GEAR_SLOTS.map(slot => {
+      const t = g.P.gear[slot] | 0;
+      const nm = t ? g.TIER[t - 1].name : 'yok';
+      return `<button class="b half${t ? ' on' : ''}" data-a="gearNext" data-x="${slot}">` +
+             `${g.GEAR[slot].icon} ${esc(g.GEAR[slot].name)}: ${nm}</button>`;
     }).join('');
     const wRow = Object.keys(g.WEAPONS).map(id => {
       const w = g.getWeapon(id), d = g.WEAPONS[id];
@@ -175,11 +164,14 @@ export function initTestPanel() {
       <div class="note">Her şey açık: tüm teçhizat sahiplenildi, kasa dolu,
         kalıcı yükseltmeler tam.</div>
 
-      <h4>TEÇHİZAT</h4>
+      <h4>TEÇHİZAT <span style="color:#5a6379">(tıkla: kademe gez)</span></h4>
       <div class="row">${gearRow}</div>
       <div class="row" style="margin-top:4px">
-        <button class="b half" data-a="gearBest">En iyi set</button>
+        ${[1, 2, 3, 4].map(t => `<button class="b" data-a="gearTier" data-x="${t}">${g.TIER[t - 1].name}</button>`).join('')}
+      </div>
+      <div class="row" style="margin-top:4px">
         <button class="b half" data-a="gearNone">Hepsini çıkar</button>
+        <button class="b half" data-a="gearDrop">Yere 3 parça bırak</button>
       </div>
 
       <h4>SİLAHLAR <span style="color:#5a6379">(tıkla: +1 sv → EVO)</span></h4>
@@ -237,7 +229,8 @@ export function initTestPanel() {
         // koşu gerektiren eylemler menüde sessizce atlanmasın
         const runOnly = ['weapon', 'allMax', 'allEvo', 'weaponsClear', 'passivesMax',
                          'passivesClear', 'god', 'heal', 'levelCard', 'level5',
-                         'spawn', 'boss', 'finalBoss', 'killAll', 'time', 'freeze'];
+                         'spawn', 'boss', 'finalBoss', 'killAll', 'time', 'freeze',
+                         'gearNext', 'gearBest', 'gearNone', 'gearTier', 'gearDrop'];
         if (runOnly.indexOf(el.dataset.a) >= 0 && !playing()) { g.startGame(); }
         fn(el.dataset.x !== undefined ? (isNaN(+el.dataset.x) ? el.dataset.x : +el.dataset.x) : undefined);
         if (g.recomputeStats) g.recomputeStats();
