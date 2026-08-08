@@ -1,0 +1,16 @@
+{
+  "name": "merge-restore",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Merge & Restore - hybrid-casual merge/story mobile game",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
