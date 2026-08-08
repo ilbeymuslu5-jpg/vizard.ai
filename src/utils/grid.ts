@@ -1,4 +1,4 @@
-import { GRID_CELL_COUNT, GRID_COLS, GRID_ROWS } from '../constants/gameConfig';
+import { GRID_CELL_COUNT, GRID_COLS, GRID_ROWS, STARTING_ROWS } from '../constants/gameConfig';
 import type {
   CellIndex,
   GridCell,
@@ -10,13 +10,31 @@ import type {
   ItemType,
 } from '../types/game';
 
-/** Builds an empty 5x6 board. */
-export function createEmptyGrid(rows: number = GRID_ROWS, cols: number = GRID_COLS): GridState {
+/**
+ * Builds an empty board with only the first `unlockedRows` rows playable.
+ *
+ * The locked rows are rendered, not hidden: a player who can see the two dead
+ * rows at the bottom of every board has a reason to want coins.
+ */
+export function createEmptyGrid(
+  rows: number = GRID_ROWS,
+  cols: number = GRID_COLS,
+  unlockedRows: number = STARTING_ROWS,
+): GridState {
   const cells: GridCell[] = new Array<GridCell>(rows * cols);
   for (let index = 0; index < rows * cols; index += 1) {
-    cells[index] = { index, item: null, locked: false };
+    cells[index] = { index, item: null, locked: Math.floor(index / cols) >= unlockedRows };
   }
   return { rows, cols, cells };
+}
+
+/** Unlocks every cell above `unlockedRows`; used when an expansion is bought. */
+export function withUnlockedRows(grid: GridState, unlockedRows: number): GridState {
+  const cells = grid.cells.map((cell) => {
+    const locked = Math.floor(cell.index / grid.cols) >= unlockedRows;
+    return locked === cell.locked ? cell : { index: cell.index, item: cell.item, locked };
+  });
+  return { rows: grid.rows, cols: grid.cols, cells };
 }
 
 export function indexToCoord(index: CellIndex, cols: number = GRID_COLS): GridCoord {

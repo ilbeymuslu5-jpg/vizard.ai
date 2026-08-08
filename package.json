@@ -6,7 +6,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:web": "node scripts/build-web.mjs",
-    "test:e2e": "node scripts/e2e.mjs"
+    "test:logic": "node scripts/logic-test.mjs",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test": "npm run typecheck && npm run test:logic && npm run build:web && npm run test:e2e"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.0",

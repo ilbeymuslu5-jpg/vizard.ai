@@ -2,44 +2,37 @@
 <style>
   /* ---------------------------------------------------------------------
      Merge & Restore — workshop identity.
-     One committed visual world (a dim workshop at dusk: walnut, brass and
-     blueprint), so the palette is painted explicitly rather than reacting to
-     the host theme. Every color is a token; nothing is defined inside a media
-     query, so the page renders identically on any ground.
+
+     One committed visual world (a workshop at dusk: walnut, brass, blueprint
+     and lamplight), so the palette is painted explicitly rather than reacting
+     to the host theme. Every colour is a token and nothing is declared inside
+     a media query, so the page renders the same on any ground.
      --------------------------------------------------------------------- */
   :root {
-    --ink:        #17130f;  /* deepest ground: walnut shadow            */
-    --bench:      #221c16;  /* raised panels                            */
-    --slate:      #2b231b;  /* board bed                                */
-    --slate-lip:  #3a3025;  /* hairline edges                           */
-    --brass:      #c9973f;  /* primary accent: tools, currency, focus   */
+    --ink:        #15110d;
+    --bench:      #221b15;
+    --lip:        #3b3025;
+    --lip-soft:   #2f2720;
+    --brass:      #d0a04a;
     --brass-dim:  #8d6a2c;
-    --blueprint:  #6fb3b8;  /* secondary: energy, plans, guides         */
-    --paper:      #ede3d2;  /* primary text                             */
-    --paper-dim:  #a4937c;  /* secondary text (warm neutral, not grey)  */
-    --sap:        #7fa05a;  /* semantic: ready / restored               */
-    --rust:       #b4553a;  /* semantic: blocked / empty                */
+    --blueprint:  #6fb3b8;
+    --paper:      #f0e7d6;
+    --paper-dim:  #a8977f;
+    --sap:        #86a95f;
+    --rust:       #bb5a3d;
 
-    /* Level ramp: bone -> brass -> verdigris -> lamplight. Every step is a
-       visible jump in both hue and luminance, so level reads before the badge
-       does. All ten sit above 4.5:1 on the board bed. */
-    --tile-1: #cbb79a;
-    --tile-2: #e0c79c;
-    --tile-3: #f0c274;
-    --tile-4: #ffb64b;
-    --tile-5: #ff9a4d;
-    --tile-6: #b9c98a;
-    --tile-7: #8fd18c;
-    --tile-8: #6fd3d8;
-    --tile-9: #9fe0ff;
-    --tile-10: #fff1c2;
+    /* Level ramp — bone, brass, verdigris, lamplight. Each step jumps in hue
+       and luminance so the level reads before the numeral does. */
+    --tile-1: #b9a88f; --tile-2: #d6bd94; --tile-3: #eec177; --tile-4: #ffb44b;
+    --tile-5: #ff9145; --tile-6: #c3cd85; --tile-7: #86d189; --tile-8: #63d2d8;
+    --tile-9: #9adcff; --tile-10: #fff0bd;
 
     --display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
     --ui: ui-sans-serif, 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --data: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
-    --r: 5px;                /* the house radius: crisp, joinery-like   */
-    --gap: 10px;
+    --r: 6px;
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
   }
 
   * { box-sizing: border-box; }
@@ -50,51 +43,46 @@
     font-family: var(--ui);
     color: var(--paper);
     background:
-      radial-gradient(120% 80% at 50% -10%, #2a2119 0%, rgba(23,19,15,0) 60%),
-      repeating-linear-gradient(94deg, rgba(255,255,255,.014) 0 2px, rgba(0,0,0,0) 2px 7px),
+      var(--grain),
+      radial-gradient(130% 70% at 50% -8%, #33291f 0%, rgba(21,17,13,0) 62%),
       var(--ink);
     -webkit-tap-highlight-color: transparent;
   }
 
   .app {
-    max-width: 460px;
+    max-width: 470px;
     margin: 0 auto;
-    padding: 18px 14px 76px; /* room for the toast so it never covers a button */
+    padding: 16px 14px 96px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 13px;
   }
 
   /* -- header ---------------------------------------------------------- */
-  .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .crest { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .crest__text { min-width: 0; }
   .crest__title {
-    margin: 0;
-    font-family: var(--display);
-    font-size: 25px;
-    font-weight: 600;
-    letter-spacing: .01em;
-    line-height: 1.05;
-    text-wrap: balance;
+    margin: 0; font-family: var(--display); font-size: 21px; font-weight: 600;
+    line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .crest__sub {
-    margin: 3px 0 0;
-    font-size: 10.5px;
-    letter-spacing: .16em;
-    text-transform: uppercase;
+    margin: 2px 0 0; font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
     color: var(--paper-dim);
   }
+  .levelring { position: relative; width: 38px; height: 38px; flex: none; }
+  .levelring svg { transform: rotate(-90deg); display: block; }
+  .levelring__n {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--data); font-size: 12.5px; font-weight: 700; color: var(--brass);
+  }
 
-  .wallet { display: flex; gap: 7px; }
+  .wallet { display: flex; gap: 6px; flex: none; }
   .chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 9px 5px 6px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    font-family: var(--data);
-    font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+    font-family: var(--data); font-size: 12px; font-variant-numeric: tabular-nums;
   }
   .chip b { font-weight: 600; }
   .chip--coin b { color: var(--brass); }
@@ -102,248 +90,266 @@
 
   /* -- energy ---------------------------------------------------------- */
   .energy {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px 10px;
-    padding: 10px 12px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
+    display: grid; gap: 6px;
+    padding: 9px 12px 11px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
   }
   .energy__label {
-    grid-column: 1 / -1;
     display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-dim);
+    font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--paper-dim);
   }
-  .energy__count { font-family: var(--data); font-size: 12.5px; letter-spacing: 0; text-transform: none; color: var(--paper); font-variant-numeric: tabular-nums; }
+  .energy__count {
+    font-family: var(--data); font-size: 12px; letter-spacing: 0; text-transform: none;
+    color: var(--paper); font-variant-numeric: tabular-nums;
+  }
   .energy__count em { font-style: normal; color: var(--paper-dim); }
   .meter {
-    grid-column: 1 / -1;
-    position: relative; height: 9px;
-    background: #191410;
-    border: 1px solid var(--slate-lip);
-    border-radius: 2px;
-    overflow: hidden;
+    position: relative; height: 9px; background: #17120e;
+    border: 1px solid var(--lip); border-radius: 2px; overflow: hidden;
   }
   .meter__fill {
-    height: 100%;
-    background: linear-gradient(90deg, #35707a, var(--blueprint));
-    box-shadow: 0 0 10px rgba(111,179,184,.35);
-    transition: width .28s ease;
+    height: 100%; background: linear-gradient(90deg, #2f6a74, var(--blueprint));
+    box-shadow: 0 0 10px rgba(111,179,184,.35); transition: width .28s ease;
   }
-  /* quarter marks: enough to read the bar as a gauge, few enough to stay calm */
   .meter::after {
-    content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 calc(25% - 1px), rgba(23,19,15,.55) calc(25% - 1px) 25%);
-    pointer-events: none;
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 calc(25% - 1px), rgba(21,17,13,.55) calc(25% - 1px) 25%);
   }
 
-  /* -- tasks ----------------------------------------------------------- */
+  /* -- shared blocks --------------------------------------------------- */
   .section-label {
-    display: flex; align-items: baseline; justify-content: space-between;
-    font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-dim);
-    margin-bottom: -6px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--paper-dim);
   }
-  .tasks { display: flex; flex-direction: column; gap: 8px; }
+  .muted { color: var(--paper-dim); }
+  .note { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--paper-dim); }
+
+  /* -- buttons --------------------------------------------------------- */
+  .btn {
+    font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .03em;
+    color: var(--paper); background: #2e2418; border: 1px solid var(--lip);
+    border-radius: 4px; padding: 8px 12px; cursor: pointer; white-space: nowrap;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--brass-dim); background: #35291a; }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .btn--go { background: linear-gradient(180deg, #86a95f, #5f7c40); border-color: #4d6633; color: #11170c; }
+  .btn--buy { background: linear-gradient(180deg, #3a2c18, #2a2013); border-color: var(--brass-dim); color: var(--brass); }
+  .btn--quiet { background: transparent; color: var(--paper-dim); }
+  .btn--wide { width: 100%; }
+
+  /* -- tasks ----------------------------------------------------------- */
+  .tasks { display: flex; flex-direction: column; gap: 7px; }
   .task {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 10px;
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
     padding: 7px 8px 7px 10px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-left: 2px solid var(--slate-lip);
+    background: var(--bench); border: 1px solid var(--lip); border-left: 2px solid var(--lip);
     border-radius: var(--r);
   }
-  .task.is-ready { border-left-color: var(--sap); background: linear-gradient(90deg, rgba(127,160,90,.09), rgba(0,0,0,0) 55%), var(--bench); }
+  .task.is-ready {
+    border-left-color: var(--sap);
+    background: linear-gradient(90deg, rgba(134,169,95,.1), rgba(0,0,0,0) 55%), var(--bench);
+  }
   .task .btn { padding: 7px 11px; }
-  .task__lines { display: flex; flex-wrap: wrap; gap: 6px; }
+  .task__lines { display: flex; flex-wrap: wrap; gap: 5px; }
   .req {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 7px 3px 4px;
-    background: #191410;
-    border: 1px solid var(--slate-lip);
-    border-radius: 3px;
-    font-family: var(--data); font-size: 11.5px; font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px 3px 4px;
+    background: #17120e; border: 1px solid var(--lip); border-radius: 3px;
+    font-family: var(--data); font-size: 11px; font-variant-numeric: tabular-nums;
     color: var(--paper-dim);
   }
-  .req.is-met { color: var(--sap); border-color: rgba(127,160,90,.45); }
+  .req.is-met { color: var(--sap); border-color: rgba(134,169,95,.45); }
   .req svg { display: block; }
   .task__reward {
-    margin-top: 4px;
-    font-size: 11px; color: var(--paper-dim);
+    margin-top: 4px; font-size: 10.5px; color: var(--paper-dim);
     font-family: var(--data); font-variant-numeric: tabular-nums;
   }
   .task__reward b { color: var(--brass); font-weight: 600; }
   .task__reward i { font-style: normal; color: var(--blueprint); }
 
-  /* -- buttons --------------------------------------------------------- */
-  .btn {
-    font-family: var(--ui);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    color: var(--paper);
-    background: #2f2519;
-    border: 1px solid var(--slate-lip);
-    border-radius: 3px;
-    padding: 8px 12px;
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
-  }
-  .btn:hover:not(:disabled) { border-color: var(--brass-dim); }
-  .btn:active:not(:disabled) { transform: translateY(1px); }
-  .btn:disabled { opacity: .38; cursor: not-allowed; }
-  .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
-  .btn--go { background: linear-gradient(180deg, #7fa05a, #5f7c40); border-color: #4d6633; color: #10160b; }
-  .btn--quiet { background: transparent; color: var(--paper-dim); }
-
   /* -- board ----------------------------------------------------------- */
   .boardwrap {
     padding: 9px;
-    background:
-      linear-gradient(180deg, rgba(111,179,184,.05), rgba(0,0,0,0) 45%),
-      #1d1710;
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    box-shadow: inset 0 1px 0 rgba(237,227,210,.05), 0 12px 28px -18px #000;
+    background: linear-gradient(180deg, rgba(111,179,184,.05), rgba(0,0,0,0) 45%), #1b150f;
+    border: 1px solid var(--lip); border-radius: var(--r);
+    box-shadow: inset 0 1px 0 rgba(240,231,214,.05), 0 14px 30px -20px #000;
   }
-  .board {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: var(--gap);
-    touch-action: none;
-  }
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; touch-action: none; }
   .cell {
-    position: relative;
-    aspect-ratio: 1;
-    display: grid; place-items: center;
-    background: #171209;
-    background: rgba(0,0,0,.22);
-    border: 1px solid rgba(237,227,210,.055);
-    border-radius: 3px;
-    padding: 0;
-    cursor: default;
+    position: relative; aspect-ratio: 1; display: grid; place-items: center;
+    background: rgba(0,0,0,.24); border: 1px solid rgba(240,231,214,.05);
+    border-radius: 3px; padding: 0; cursor: default;
   }
-  /* Empty sockets get a faint centre mark instead of a dashed outline: the
-     board reads as a bench with drilled holes, not as 30 loud dotted boxes. */
   .cell:empty::after {
-    content: '';
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: rgba(111,179,184,.16);
+    content: ''; width: 5px; height: 5px; border-radius: 50%; background: rgba(111,179,184,.16);
   }
-  .cell.is-target { border-color: var(--brass); border-style: solid; background: #2a2116; }
+  .cell.is-locked {
+    background: repeating-linear-gradient(45deg, rgba(0,0,0,.35) 0 5px, rgba(255,255,255,.02) 5px 10px);
+    border-style: dashed; border-color: rgba(208,160,74,.22);
+  }
+  .cell.is-locked::after {
+    content: ''; width: 11px; height: 11px; border-radius: 50%; background: none;
+    border: 2px solid rgba(208,160,74,.35);
+  }
+  .cell.is-target { border-color: var(--brass); background: #2b2116; }
   .cell.is-source { opacity: .35; }
 
   .tile {
-    position: absolute; inset: 2px;
-    display: grid; place-items: center;
+    position: absolute; inset: 2px; display: grid; place-items: center;
     color: var(--tile-1);
-    background: linear-gradient(180deg, #4a3b2a, #2b2118);
-    border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+    background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    border: 1px solid color-mix(in srgb, currentColor 58%, transparent);
     border-radius: 3px;
-    box-shadow: inset 0 1px 0 rgba(237,227,210,.09), 0 2px 6px -3px #000;
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
+    box-shadow: inset 0 1px 0 rgba(240,231,214,.1), 0 2px 6px -3px #000;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
   }
+  /* Emblem keeps its chain colour; the frame carries the level ramp. */
+  .tile__art { display: block; color: var(--chain, currentColor); }
   .tile::after {
     content: attr(data-level);
-    position: absolute; right: 3px; bottom: 1px;
-    font-family: var(--data); font-size: 10px; font-weight: 700;
-    color: currentColor;
-    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+    position: absolute; right: 2px; bottom: 0;
+    font-family: var(--data); font-size: 9.5px; font-weight: 700;
+    color: currentColor; text-shadow: 0 1px 2px rgba(0,0,0,.85);
   }
-  .tile.is-gen {
-    background: linear-gradient(180deg, #5a4526, #302516);
-    cursor: pointer;
-  }
+  .tile.is-gen { background: linear-gradient(180deg, #5d4726, #302516); cursor: pointer; }
   .tile.is-gen::before {
-    content: '';
-    position: absolute; inset: -1px;
-    border-radius: 3px;
-    box-shadow: 0 0 0 1px rgba(201,151,63,.35), 0 0 12px -2px rgba(201,151,63,.4);
-    pointer-events: none;
+    content: ''; position: absolute; inset: -1px; border-radius: 3px; pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(208,160,74,.4), 0 0 14px -3px rgba(208,160,74,.55);
   }
   .ghost {
-    position: fixed; z-index: 40;
-    width: 54px; height: 54px;
-    display: grid; place-items: center;
-    border-radius: 3px;
-    border: 1px solid currentColor;
-    background: linear-gradient(180deg, #3d3123, #251d16);
-    box-shadow: 0 14px 24px -10px #000;
-    pointer-events: none;
-    transform: translate(-50%, -50%) scale(1.06);
+    position: fixed; z-index: 40; width: 54px; height: 54px;
+    display: grid; place-items: center; border-radius: 3px;
+    border: 1px solid currentColor; background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    box-shadow: 0 16px 26px -12px #000; pointer-events: none;
+    transform: translate(-50%, -50%) scale(1.08);
   }
 
-  @keyframes pop { 0% { transform: scale(.62); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+  @keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
   @keyframes spawn { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .tile.anim-pop { animation: pop .34s cubic-bezier(.2,.9,.3,1.4); }
   .tile.anim-spawn { animation: spawn .22s ease-out; }
 
-  /* -- action bar ------------------------------------------------------ */
-  .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .actions .btn { width: 100%; }
-  .actions__wide { grid-column: 1 / -1; display: flex; gap: 8px; }
-  .actions__wide .btn { flex: 1; }
+  /* -- views & tabs ---------------------------------------------------- */
+  .view { display: none; flex-direction: column; gap: 11px; }
+  .view.is-active { display: flex; }
 
-  /* -- modal ----------------------------------------------------------- */
-  .scrim {
-    position: fixed; inset: 0; z-index: 50;
-    display: none; place-items: center;
-    padding: 20px;
-    background: rgba(12,9,7,.72);
+  .tabs {
+    position: fixed; left: 50%; bottom: 0; z-index: 30;
+    transform: translateX(-50%);
+    width: min(470px, 100%);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    background: linear-gradient(180deg, rgba(21,17,13,.86), var(--ink) 45%);
+    border-top: 1px solid var(--lip);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    backdrop-filter: blur(8px);
   }
-  .scrim.is-open { display: grid; }
-  .sheet {
-    width: 100%; max-width: 400px;
-    padding: 16px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    box-shadow: 0 30px 60px -30px #000;
+  .tab {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 2px; background: none; border: 0; border-radius: 5px;
+    color: var(--paper-dim); font-family: var(--ui); font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
   }
-  .sheet__title { margin: 0 0 3px; font-family: var(--display); font-size: 19px; font-weight: 600; }
-  .sheet__note { margin: 0 0 12px; font-size: 12px; color: var(--paper-dim); line-height: 1.5; }
-  .rooms { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .tab svg { display: block; }
+  .tab.is-active { color: var(--brass); background: rgba(208,160,74,.08); }
+  .tab:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  .tab__dot {
+    position: absolute; top: 3px; right: calc(50% - 20px);
+    width: 6px; height: 6px; border-radius: 50%; background: var(--sap);
+  }
+
+  /* -- crew ------------------------------------------------------------ */
+  .crew { display: flex; flex-direction: column; gap: 9px; }
+  .member {
+    display: grid; grid-template-columns: auto 1fr; gap: 11px;
+    padding: 11px; background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+  }
+  .member.is-locked { background: var(--lip-soft); }
+  .member__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .member__head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+  .member__name { font-family: var(--display); font-size: 16px; font-weight: 600; }
+  .member__role {
+    font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--paper-dim);
+  }
+  .member__blurb { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--paper-dim); }
+  .member__perk {
+    font-family: var(--data); font-size: 11.5px; color: var(--sap);
+    font-variant-numeric: tabular-nums;
+  }
+  .member__perk.is-capped { color: var(--brass); }
+  .member__next { font-size: 11px; color: var(--paper-dim); font-family: var(--data); }
+  .pips { display: flex; gap: 3px; }
+  .pip { width: 11px; height: 4px; border-radius: 1px; background: #17120e; border: 1px solid var(--lip); }
+  .pip.is-on { background: var(--brass); border-color: var(--brass); }
+  .member__foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  }
+  .member__foot .btn { max-width: 100%; }
+
+  /* -- house ----------------------------------------------------------- */
+  .scene {
+    position: relative; aspect-ratio: 16 / 11; overflow: hidden;
+    border: 1px solid var(--lip); border-radius: var(--r);
+    box-shadow: inset 0 0 40px -12px #000;
+  }
+  .scene svg { display: block; width: 100%; height: 100%; }
+  .scene__caption {
+    position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
+    padding: 26px 12px 8px;
+    background: linear-gradient(180deg, rgba(21,17,13,0) 0%, rgba(21,17,13,.55) 45%, rgba(21,17,13,.92) 100%);
+    font-family: var(--display); font-size: 12.5px; line-height: 1.35;
+  }
+  .rooms { display: flex; flex-direction: column; gap: 8px; }
   .room {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
     padding: 9px 10px;
-    background: #191410; border: 1px solid var(--slate-lip); border-radius: 3px;
-    font-size: 13px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
   }
-  .room__state { font-family: var(--data); font-size: 11px; color: var(--paper-dim); }
-  .room.is-done { border-color: rgba(127,160,90,.4); }
-  .room.is-done .room__state { color: var(--sap); }
+  .room.is-done { border-color: rgba(134,169,95,.35); background: rgba(134,169,95,.06); }
+  .room.is-next { border-left: 2px solid var(--brass); }
+  .room__name { font-size: 13px; font-weight: 600; }
+  .room__meta {
+    margin-top: 3px; font-family: var(--data); font-size: 10.5px; color: var(--paper-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .room__story { margin: 4px 0 0; font-size: 11px; line-height: 1.45; color: var(--paper-dim); font-style: italic; }
+  .bar { margin-top: 6px; height: 4px; background: #17120e; border-radius: 2px; overflow: hidden; }
+  .bar__fill { height: 100%; background: var(--brass); transition: width .3s ease; }
+  .room.is-done .bar__fill { background: var(--sap); }
+
+  /* -- shop ------------------------------------------------------------ */
+  .offers { display: flex; flex-direction: column; gap: 8px; }
+  .offer {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+    padding: 9px 10px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+  }
+  .offer__art {
+    width: 38px; height: 38px; display: grid; place-items: center; flex: none;
+    background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    border: 1px solid var(--lip); border-radius: 4px; color: var(--brass);
+  }
+  .offer__name { font-size: 13px; font-weight: 600; }
+  .offer__blurb { margin: 2px 0 0; font-size: 11px; line-height: 1.4; color: var(--paper-dim); }
+  .offer.is-locked { opacity: .55; }
 
   /* -- toast ----------------------------------------------------------- */
   .toast {
-    position: fixed; left: 50%; bottom: 18px; z-index: 60;
+    position: fixed; left: 50%; bottom: 84px; z-index: 60;
     transform: translate(-50%, 10px);
     padding: 9px 14px;
-    background: #2f2519;
-    border: 1px solid var(--slate-lip);
-    border-left: 2px solid var(--brass);
-    border-radius: 3px;
-    font-size: 12.5px;
-    opacity: 0;
-    pointer-events: none;
+    background: #33281a; border: 1px solid var(--lip); border-left: 2px solid var(--brass);
+    border-radius: 4px; font-size: 12.5px; opacity: 0; pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
     max-width: min(90vw, 380px);
   }
-  .toast.is-up { opacity: 1; transform: translate(-50%, 0); box-shadow: 0 16px 30px -18px #000; }
+  .toast.is-up { opacity: 1; transform: translate(-50%, 0); box-shadow: 0 18px 32px -20px #000; }
   .toast.is-bad { border-left-color: var(--rust); }
   .toast.is-good { border-left-color: var(--sap); }
 
-  .hint {
-    font-size: 11.5px; line-height: 1.6; color: var(--paper-dim);
-    text-align: center;
-    margin: 0;
-  }
+  .hint { margin: 0; font-size: 11px; line-height: 1.55; color: var(--paper-dim); text-align: center; }
   .hint b { color: var(--paper); font-weight: 600; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -354,16 +360,26 @@
 <div class="app">
   <header class="topbar">
     <div class="crest">
-      <h1 class="crest__title">Merge &amp; Restore</h1>
-      <p class="crest__sub">Willow House · <span id="progress">0 of 3 restored</span></p>
+      <div class="levelring" title="Player level">
+        <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+          <circle cx="19" cy="19" r="16" fill="none" stroke="#3b3025" stroke-width="3"/>
+          <circle id="xpArc" cx="19" cy="19" r="16" fill="none" stroke="#d0a04a" stroke-width="3"
+                  stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="100.5"/>
+        </svg>
+        <span class="levelring__n" id="playerLevel">1</span>
+      </div>
+      <div class="crest__text">
+        <h1 class="crest__title">Merge &amp; Restore</h1>
+        <p class="crest__sub" id="progress">Willow House · 0 of 6</p>
+      </div>
     </div>
     <div class="wallet">
       <span class="chip chip--coin" title="Coins">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="#c9973f"/><circle cx="12" cy="12" r="5.4" fill="rgba(0,0,0,.28)"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="#d0a04a"/><circle cx="12" cy="12" r="5.4" fill="rgba(0,0,0,.3)"/></svg>
         <b id="coins">0</b>
       </span>
       <span class="chip chip--gem" title="Gems">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="#6fb3b8"/><path d="M12 3.2 20 10H4z" fill="rgba(255,255,255,.22)"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="#6fb3b8"/><path d="M12 3.2 20 10H4z" fill="rgba(255,255,255,.22)"/></svg>
         <b id="gems">0</b>
       </span>
     </div>
@@ -377,32 +393,74 @@
     <div class="meter"><div class="meter__fill" id="energyFill" style="width:0%"></div></div>
   </section>
 
-  <div class="section-label"><span>Requests</span><span id="taskCount">3 open</span></div>
-  <section class="tasks" id="tasks"></section>
-
-  <section class="boardwrap">
-    <div class="board" id="board" aria-label="Merge board"></div>
+  <!-- BOARD ------------------------------------------------------------- -->
+  <section class="view is-active" id="viewBoard">
+    <div class="section-label"><span>Requests</span><span id="taskCount">3 open</span></div>
+    <div class="tasks" id="tasks"></div>
+    <div class="boardwrap"><div class="board" id="board" aria-label="Merge board"></div></div>
+    <p class="hint">Tap the <b>glowing toolbox</b> to make parts. Drag two matching parts together to merge.</p>
+    <div class="section-label"><span>Out of energy?</span></div>
+    <div class="offers">
+      <div class="offer">
+        <div class="offer__art">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>
+        </div>
+        <div><div class="offer__name">Watch an ad</div><p class="offer__blurb" id="adBlurb">+30 energy, no cost.</p></div>
+        <button class="btn" id="btnAd" type="button">Watch</button>
+      </div>
+      <div class="offer">
+        <div class="offer__art">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="currentColor"/></svg>
+        </div>
+        <div><div class="offer__name">Full refill</div><p class="offer__blurb">Top the meter up instantly.</p></div>
+        <button class="btn btn--buy" id="btnRefill" type="button">25 gems</button>
+      </div>
+    </div>
   </section>
 
-  <p class="hint">Tap a <b>glowing generator</b> to spend energy and make parts. Drag two matching parts together to merge.</p>
+  <!-- CREW -------------------------------------------------------------- -->
+  <section class="view" id="viewCrew">
+    <div class="section-label"><span>Your crew</span><span id="crewCount">0 hired</span></div>
+    <p class="note">Hire help with coins, then raise them. Every level costs more than the last and every perk has a ceiling — decide who carries your long game.</p>
+    <div class="crew" id="crew"></div>
+  </section>
 
-  <nav class="actions">
-    <div class="actions__wide">
-      <button class="btn" id="btnAd" type="button">Watch ad · +30 energy</button>
-      <button class="btn" id="btnRefill" type="button">Refill · 25 gems</button>
-    </div>
-    <button class="btn btn--quiet" id="btnRooms" type="button">Willow House</button>
-    <button class="btn btn--quiet" id="btnReset" type="button">Start over</button>
-  </nav>
-</div>
-
-<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-  <div class="sheet">
-    <h2 class="sheet__title" id="sheetTitle">Willow House</h2>
-    <p class="sheet__note">Every request you deliver brings back one more corner of the house.</p>
+  <!-- HOUSE ------------------------------------------------------------- -->
+  <section class="view" id="viewHouse">
+    <div class="scene" id="scene"><p class="scene__caption" id="sceneCaption"></p></div>
+    <div class="section-label"><span>Willow House</span><span id="houseCount">0 of 6</span></div>
     <div class="rooms" id="rooms"></div>
-    <button class="btn" id="btnCloseRooms" type="button" style="width:100%">Close</button>
-  </div>
+  </section>
+
+  <!-- SHOP -------------------------------------------------------------- -->
+  <section class="view" id="viewShop">
+    <div class="section-label"><span>Generators</span><span class="muted">price rises per copy</span></div>
+    <p class="note">Two of the same generator merge into a better one — that is how new chains open up.</p>
+    <div class="offers" id="shopOffers"></div>
+    <div class="section-label"><span>Board</span></div>
+    <div class="offers" id="expansions"></div>
+    <div class="section-label"><span>Danger zone</span></div>
+    <button class="btn btn--quiet btn--wide" id="btnReset" type="button">Start over</button>
+  </section>
 </div>
+
+<nav class="tabs" aria-label="Sections">
+  <button class="tab is-active" data-view="viewBoard" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="1.4"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.4" opacity=".55"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.4" opacity=".55"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.4"/></g></svg>
+    Board
+  </button>
+  <button class="tab" data-view="viewCrew" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3.2-6.5 7-6.5S16 17 16 21z"/><circle cx="17.5" cy="9.5" r="3" opacity=".55"/><path d="M15 21c0-3 1.6-5 4.2-5 1.7 0 2.8 1 2.8 3v2z" opacity=".55"/></g></svg>
+    Crew
+  </button>
+  <button class="tab" data-view="viewHouse" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z" fill="currentColor"/></svg>
+    House
+  </button>
+  <button class="tab" data-view="viewShop" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 8h16l-1.4 12.2H5.4z" fill="currentColor"/><path d="M8.5 8a3.5 3.5 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    Shop
+  </button>
+</nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

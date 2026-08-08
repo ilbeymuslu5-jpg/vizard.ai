@@ -2,44 +2,37 @@
 <style>
   /* ---------------------------------------------------------------------
      Merge & Restore — workshop identity.
-     One committed visual world (a dim workshop at dusk: walnut, brass and
-     blueprint), so the palette is painted explicitly rather than reacting to
-     the host theme. Every color is a token; nothing is defined inside a media
-     query, so the page renders identically on any ground.
+
+     One committed visual world (a workshop at dusk: walnut, brass, blueprint
+     and lamplight), so the palette is painted explicitly rather than reacting
+     to the host theme. Every colour is a token and nothing is declared inside
+     a media query, so the page renders the same on any ground.
      --------------------------------------------------------------------- */
   :root {
-    --ink:        #17130f;  /* deepest ground: walnut shadow            */
-    --bench:      #221c16;  /* raised panels                            */
-    --slate:      #2b231b;  /* board bed                                */
-    --slate-lip:  #3a3025;  /* hairline edges                           */
-    --brass:      #c9973f;  /* primary accent: tools, currency, focus   */
+    --ink:        #15110d;
+    --bench:      #221b15;
+    --lip:        #3b3025;
+    --lip-soft:   #2f2720;
+    --brass:      #d0a04a;
     --brass-dim:  #8d6a2c;
-    --blueprint:  #6fb3b8;  /* secondary: energy, plans, guides         */
-    --paper:      #ede3d2;  /* primary text                             */
-    --paper-dim:  #a4937c;  /* secondary text (warm neutral, not grey)  */
-    --sap:        #7fa05a;  /* semantic: ready / restored               */
-    --rust:       #b4553a;  /* semantic: blocked / empty                */
+    --blueprint:  #6fb3b8;
+    --paper:      #f0e7d6;
+    --paper-dim:  #a8977f;
+    --sap:        #86a95f;
+    --rust:       #bb5a3d;
 
-    /* Level ramp: bone -> brass -> verdigris -> lamplight. Every step is a
-       visible jump in both hue and luminance, so level reads before the badge
-       does. All ten sit above 4.5:1 on the board bed. */
-    --tile-1: #cbb79a;
-    --tile-2: #e0c79c;
-    --tile-3: #f0c274;
-    --tile-4: #ffb64b;
-    --tile-5: #ff9a4d;
-    --tile-6: #b9c98a;
-    --tile-7: #8fd18c;
-    --tile-8: #6fd3d8;
-    --tile-9: #9fe0ff;
-    --tile-10: #fff1c2;
+    /* Level ramp — bone, brass, verdigris, lamplight. Each step jumps in hue
+       and luminance so the level reads before the numeral does. */
+    --tile-1: #b9a88f; --tile-2: #d6bd94; --tile-3: #eec177; --tile-4: #ffb44b;
+    --tile-5: #ff9145; --tile-6: #c3cd85; --tile-7: #86d189; --tile-8: #63d2d8;
+    --tile-9: #9adcff; --tile-10: #fff0bd;
 
     --display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
     --ui: ui-sans-serif, 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --data: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
-    --r: 5px;                /* the house radius: crisp, joinery-like   */
-    --gap: 10px;
+    --r: 6px;
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
   }
 
   * { box-sizing: border-box; }
@@ -50,51 +43,46 @@
     font-family: var(--ui);
     color: var(--paper);
     background:
-      radial-gradient(120% 80% at 50% -10%, #2a2119 0%, rgba(23,19,15,0) 60%),
-      repeating-linear-gradient(94deg, rgba(255,255,255,.014) 0 2px, rgba(0,0,0,0) 2px 7px),
+      var(--grain),
+      radial-gradient(130% 70% at 50% -8%, #33291f 0%, rgba(21,17,13,0) 62%),
       var(--ink);
     -webkit-tap-highlight-color: transparent;
   }
 
   .app {
-    max-width: 460px;
+    max-width: 470px;
     margin: 0 auto;
-    padding: 18px 14px 76px; /* room for the toast so it never covers a button */
+    padding: 16px 14px 96px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 13px;
   }
 
   /* -- header ---------------------------------------------------------- */
-  .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .crest { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .crest__text { min-width: 0; }
   .crest__title {
-    margin: 0;
-    font-family: var(--display);
-    font-size: 25px;
-    font-weight: 600;
-    letter-spacing: .01em;
-    line-height: 1.05;
-    text-wrap: balance;
+    margin: 0; font-family: var(--display); font-size: 21px; font-weight: 600;
+    line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .crest__sub {
-    margin: 3px 0 0;
-    font-size: 10.5px;
-    letter-spacing: .16em;
-    text-transform: uppercase;
+    margin: 2px 0 0; font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
     color: var(--paper-dim);
   }
+  .levelring { position: relative; width: 38px; height: 38px; flex: none; }
+  .levelring svg { transform: rotate(-90deg); display: block; }
+  .levelring__n {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--data); font-size: 12.5px; font-weight: 700; color: var(--brass);
+  }
 
-  .wallet { display: flex; gap: 7px; }
+  .wallet { display: flex; gap: 6px; flex: none; }
   .chip {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 9px 5px 6px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    font-family: var(--data);
-    font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+    font-family: var(--data); font-size: 12px; font-variant-numeric: tabular-nums;
   }
   .chip b { font-weight: 600; }
   .chip--coin b { color: var(--brass); }
@@ -102,248 +90,266 @@
 
   /* -- energy ---------------------------------------------------------- */
   .energy {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 6px 10px;
-    padding: 10px 12px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
+    display: grid; gap: 6px;
+    padding: 9px 12px 11px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
   }
   .energy__label {
-    grid-column: 1 / -1;
     display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-dim);
+    font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--paper-dim);
   }
-  .energy__count { font-family: var(--data); font-size: 12.5px; letter-spacing: 0; text-transform: none; color: var(--paper); font-variant-numeric: tabular-nums; }
+  .energy__count {
+    font-family: var(--data); font-size: 12px; letter-spacing: 0; text-transform: none;
+    color: var(--paper); font-variant-numeric: tabular-nums;
+  }
   .energy__count em { font-style: normal; color: var(--paper-dim); }
   .meter {
-    grid-column: 1 / -1;
-    position: relative; height: 9px;
-    background: #191410;
-    border: 1px solid var(--slate-lip);
-    border-radius: 2px;
-    overflow: hidden;
+    position: relative; height: 9px; background: #17120e;
+    border: 1px solid var(--lip); border-radius: 2px; overflow: hidden;
   }
   .meter__fill {
-    height: 100%;
-    background: linear-gradient(90deg, #35707a, var(--blueprint));
-    box-shadow: 0 0 10px rgba(111,179,184,.35);
-    transition: width .28s ease;
+    height: 100%; background: linear-gradient(90deg, #2f6a74, var(--blueprint));
+    box-shadow: 0 0 10px rgba(111,179,184,.35); transition: width .28s ease;
   }
-  /* quarter marks: enough to read the bar as a gauge, few enough to stay calm */
   .meter::after {
-    content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 calc(25% - 1px), rgba(23,19,15,.55) calc(25% - 1px) 25%);
-    pointer-events: none;
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 calc(25% - 1px), rgba(21,17,13,.55) calc(25% - 1px) 25%);
   }
 
-  /* -- tasks ----------------------------------------------------------- */
+  /* -- shared blocks --------------------------------------------------- */
   .section-label {
-    display: flex; align-items: baseline; justify-content: space-between;
-    font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--paper-dim);
-    margin-bottom: -6px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--paper-dim);
   }
-  .tasks { display: flex; flex-direction: column; gap: 8px; }
+  .muted { color: var(--paper-dim); }
+  .note { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--paper-dim); }
+
+  /* -- buttons --------------------------------------------------------- */
+  .btn {
+    font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .03em;
+    color: var(--paper); background: #2e2418; border: 1px solid var(--lip);
+    border-radius: 4px; padding: 8px 12px; cursor: pointer; white-space: nowrap;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--brass-dim); background: #35291a; }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .btn--go { background: linear-gradient(180deg, #86a95f, #5f7c40); border-color: #4d6633; color: #11170c; }
+  .btn--buy { background: linear-gradient(180deg, #3a2c18, #2a2013); border-color: var(--brass-dim); color: var(--brass); }
+  .btn--quiet { background: transparent; color: var(--paper-dim); }
+  .btn--wide { width: 100%; }
+
+  /* -- tasks ----------------------------------------------------------- */
+  .tasks { display: flex; flex-direction: column; gap: 7px; }
   .task {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 10px;
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
     padding: 7px 8px 7px 10px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-left: 2px solid var(--slate-lip);
+    background: var(--bench); border: 1px solid var(--lip); border-left: 2px solid var(--lip);
     border-radius: var(--r);
   }
-  .task.is-ready { border-left-color: var(--sap); background: linear-gradient(90deg, rgba(127,160,90,.09), rgba(0,0,0,0) 55%), var(--bench); }
+  .task.is-ready {
+    border-left-color: var(--sap);
+    background: linear-gradient(90deg, rgba(134,169,95,.1), rgba(0,0,0,0) 55%), var(--bench);
+  }
   .task .btn { padding: 7px 11px; }
-  .task__lines { display: flex; flex-wrap: wrap; gap: 6px; }
+  .task__lines { display: flex; flex-wrap: wrap; gap: 5px; }
   .req {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 7px 3px 4px;
-    background: #191410;
-    border: 1px solid var(--slate-lip);
-    border-radius: 3px;
-    font-family: var(--data); font-size: 11.5px; font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px 3px 4px;
+    background: #17120e; border: 1px solid var(--lip); border-radius: 3px;
+    font-family: var(--data); font-size: 11px; font-variant-numeric: tabular-nums;
     color: var(--paper-dim);
   }
-  .req.is-met { color: var(--sap); border-color: rgba(127,160,90,.45); }
+  .req.is-met { color: var(--sap); border-color: rgba(134,169,95,.45); }
   .req svg { display: block; }
   .task__reward {
-    margin-top: 4px;
-    font-size: 11px; color: var(--paper-dim);
+    margin-top: 4px; font-size: 10.5px; color: var(--paper-dim);
     font-family: var(--data); font-variant-numeric: tabular-nums;
   }
   .task__reward b { color: var(--brass); font-weight: 600; }
   .task__reward i { font-style: normal; color: var(--blueprint); }
 
-  /* -- buttons --------------------------------------------------------- */
-  .btn {
-    font-family: var(--ui);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    color: var(--paper);
-    background: #2f2519;
-    border: 1px solid var(--slate-lip);
-    border-radius: 3px;
-    padding: 8px 12px;
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
-  }
-  .btn:hover:not(:disabled) { border-color: var(--brass-dim); }
-  .btn:active:not(:disabled) { transform: translateY(1px); }
-  .btn:disabled { opacity: .38; cursor: not-allowed; }
-  .btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
-  .btn--go { background: linear-gradient(180deg, #7fa05a, #5f7c40); border-color: #4d6633; color: #10160b; }
-  .btn--quiet { background: transparent; color: var(--paper-dim); }
-
   /* -- board ----------------------------------------------------------- */
   .boardwrap {
     padding: 9px;
-    background:
-      linear-gradient(180deg, rgba(111,179,184,.05), rgba(0,0,0,0) 45%),
-      #1d1710;
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    box-shadow: inset 0 1px 0 rgba(237,227,210,.05), 0 12px 28px -18px #000;
+    background: linear-gradient(180deg, rgba(111,179,184,.05), rgba(0,0,0,0) 45%), #1b150f;
+    border: 1px solid var(--lip); border-radius: var(--r);
+    box-shadow: inset 0 1px 0 rgba(240,231,214,.05), 0 14px 30px -20px #000;
   }
-  .board {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: var(--gap);
-    touch-action: none;
-  }
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; touch-action: none; }
   .cell {
-    position: relative;
-    aspect-ratio: 1;
-    display: grid; place-items: center;
-    background: #171209;
-    background: rgba(0,0,0,.22);
-    border: 1px solid rgba(237,227,210,.055);
-    border-radius: 3px;
-    padding: 0;
-    cursor: default;
+    position: relative; aspect-ratio: 1; display: grid; place-items: center;
+    background: rgba(0,0,0,.24); border: 1px solid rgba(240,231,214,.05);
+    border-radius: 3px; padding: 0; cursor: default;
   }
-  /* Empty sockets get a faint centre mark instead of a dashed outline: the
-     board reads as a bench with drilled holes, not as 30 loud dotted boxes. */
   .cell:empty::after {
-    content: '';
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: rgba(111,179,184,.16);
+    content: ''; width: 5px; height: 5px; border-radius: 50%; background: rgba(111,179,184,.16);
   }
-  .cell.is-target { border-color: var(--brass); border-style: solid; background: #2a2116; }
+  .cell.is-locked {
+    background: repeating-linear-gradient(45deg, rgba(0,0,0,.35) 0 5px, rgba(255,255,255,.02) 5px 10px);
+    border-style: dashed; border-color: rgba(208,160,74,.22);
+  }
+  .cell.is-locked::after {
+    content: ''; width: 11px; height: 11px; border-radius: 50%; background: none;
+    border: 2px solid rgba(208,160,74,.35);
+  }
+  .cell.is-target { border-color: var(--brass); background: #2b2116; }
   .cell.is-source { opacity: .35; }
 
   .tile {
-    position: absolute; inset: 2px;
-    display: grid; place-items: center;
+    position: absolute; inset: 2px; display: grid; place-items: center;
     color: var(--tile-1);
-    background: linear-gradient(180deg, #4a3b2a, #2b2118);
-    border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+    background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    border: 1px solid color-mix(in srgb, currentColor 58%, transparent);
     border-radius: 3px;
-    box-shadow: inset 0 1px 0 rgba(237,227,210,.09), 0 2px 6px -3px #000;
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
+    box-shadow: inset 0 1px 0 rgba(240,231,214,.1), 0 2px 6px -3px #000;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
   }
+  /* Emblem keeps its chain colour; the frame carries the level ramp. */
+  .tile__art { display: block; color: var(--chain, currentColor); }
   .tile::after {
     content: attr(data-level);
-    position: absolute; right: 3px; bottom: 1px;
-    font-family: var(--data); font-size: 10px; font-weight: 700;
-    color: currentColor;
-    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+    position: absolute; right: 2px; bottom: 0;
+    font-family: var(--data); font-size: 9.5px; font-weight: 700;
+    color: currentColor; text-shadow: 0 1px 2px rgba(0,0,0,.85);
   }
-  .tile.is-gen {
-    background: linear-gradient(180deg, #5a4526, #302516);
-    cursor: pointer;
-  }
+  .tile.is-gen { background: linear-gradient(180deg, #5d4726, #302516); cursor: pointer; }
   .tile.is-gen::before {
-    content: '';
-    position: absolute; inset: -1px;
-    border-radius: 3px;
-    box-shadow: 0 0 0 1px rgba(201,151,63,.35), 0 0 12px -2px rgba(201,151,63,.4);
-    pointer-events: none;
+    content: ''; position: absolute; inset: -1px; border-radius: 3px; pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(208,160,74,.4), 0 0 14px -3px rgba(208,160,74,.55);
   }
   .ghost {
-    position: fixed; z-index: 40;
-    width: 54px; height: 54px;
-    display: grid; place-items: center;
-    border-radius: 3px;
-    border: 1px solid currentColor;
-    background: linear-gradient(180deg, #3d3123, #251d16);
-    box-shadow: 0 14px 24px -10px #000;
-    pointer-events: none;
-    transform: translate(-50%, -50%) scale(1.06);
+    position: fixed; z-index: 40; width: 54px; height: 54px;
+    display: grid; place-items: center; border-radius: 3px;
+    border: 1px solid currentColor; background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    box-shadow: 0 16px 26px -12px #000; pointer-events: none;
+    transform: translate(-50%, -50%) scale(1.08);
   }
 
-  @keyframes pop { 0% { transform: scale(.62); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+  @keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
   @keyframes spawn { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .tile.anim-pop { animation: pop .34s cubic-bezier(.2,.9,.3,1.4); }
   .tile.anim-spawn { animation: spawn .22s ease-out; }
 
-  /* -- action bar ------------------------------------------------------ */
-  .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .actions .btn { width: 100%; }
-  .actions__wide { grid-column: 1 / -1; display: flex; gap: 8px; }
-  .actions__wide .btn { flex: 1; }
+  /* -- views & tabs ---------------------------------------------------- */
+  .view { display: none; flex-direction: column; gap: 11px; }
+  .view.is-active { display: flex; }
 
-  /* -- modal ----------------------------------------------------------- */
-  .scrim {
-    position: fixed; inset: 0; z-index: 50;
-    display: none; place-items: center;
-    padding: 20px;
-    background: rgba(12,9,7,.72);
+  .tabs {
+    position: fixed; left: 50%; bottom: 0; z-index: 30;
+    transform: translateX(-50%);
+    width: min(470px, 100%);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    background: linear-gradient(180deg, rgba(21,17,13,.86), var(--ink) 45%);
+    border-top: 1px solid var(--lip);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    backdrop-filter: blur(8px);
   }
-  .scrim.is-open { display: grid; }
-  .sheet {
-    width: 100%; max-width: 400px;
-    padding: 16px;
-    background: var(--bench);
-    border: 1px solid var(--slate-lip);
-    border-radius: var(--r);
-    box-shadow: 0 30px 60px -30px #000;
+  .tab {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 2px; background: none; border: 0; border-radius: 5px;
+    color: var(--paper-dim); font-family: var(--ui); font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
   }
-  .sheet__title { margin: 0 0 3px; font-family: var(--display); font-size: 19px; font-weight: 600; }
-  .sheet__note { margin: 0 0 12px; font-size: 12px; color: var(--paper-dim); line-height: 1.5; }
-  .rooms { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .tab svg { display: block; }
+  .tab.is-active { color: var(--brass); background: rgba(208,160,74,.08); }
+  .tab:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  .tab__dot {
+    position: absolute; top: 3px; right: calc(50% - 20px);
+    width: 6px; height: 6px; border-radius: 50%; background: var(--sap);
+  }
+
+  /* -- crew ------------------------------------------------------------ */
+  .crew { display: flex; flex-direction: column; gap: 9px; }
+  .member {
+    display: grid; grid-template-columns: auto 1fr; gap: 11px;
+    padding: 11px; background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+  }
+  .member.is-locked { background: var(--lip-soft); }
+  .member__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .member__head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+  .member__name { font-family: var(--display); font-size: 16px; font-weight: 600; }
+  .member__role {
+    font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--paper-dim);
+  }
+  .member__blurb { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--paper-dim); }
+  .member__perk {
+    font-family: var(--data); font-size: 11.5px; color: var(--sap);
+    font-variant-numeric: tabular-nums;
+  }
+  .member__perk.is-capped { color: var(--brass); }
+  .member__next { font-size: 11px; color: var(--paper-dim); font-family: var(--data); }
+  .pips { display: flex; gap: 3px; }
+  .pip { width: 11px; height: 4px; border-radius: 1px; background: #17120e; border: 1px solid var(--lip); }
+  .pip.is-on { background: var(--brass); border-color: var(--brass); }
+  .member__foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  }
+  .member__foot .btn { max-width: 100%; }
+
+  /* -- house ----------------------------------------------------------- */
+  .scene {
+    position: relative; aspect-ratio: 16 / 11; overflow: hidden;
+    border: 1px solid var(--lip); border-radius: var(--r);
+    box-shadow: inset 0 0 40px -12px #000;
+  }
+  .scene svg { display: block; width: 100%; height: 100%; }
+  .scene__caption {
+    position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
+    padding: 26px 12px 8px;
+    background: linear-gradient(180deg, rgba(21,17,13,0) 0%, rgba(21,17,13,.55) 45%, rgba(21,17,13,.92) 100%);
+    font-family: var(--display); font-size: 12.5px; line-height: 1.35;
+  }
+  .rooms { display: flex; flex-direction: column; gap: 8px; }
   .room {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
     padding: 9px 10px;
-    background: #191410; border: 1px solid var(--slate-lip); border-radius: 3px;
-    font-size: 13px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
   }
-  .room__state { font-family: var(--data); font-size: 11px; color: var(--paper-dim); }
-  .room.is-done { border-color: rgba(127,160,90,.4); }
-  .room.is-done .room__state { color: var(--sap); }
+  .room.is-done { border-color: rgba(134,169,95,.35); background: rgba(134,169,95,.06); }
+  .room.is-next { border-left: 2px solid var(--brass); }
+  .room__name { font-size: 13px; font-weight: 600; }
+  .room__meta {
+    margin-top: 3px; font-family: var(--data); font-size: 10.5px; color: var(--paper-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .room__story { margin: 4px 0 0; font-size: 11px; line-height: 1.45; color: var(--paper-dim); font-style: italic; }
+  .bar { margin-top: 6px; height: 4px; background: #17120e; border-radius: 2px; overflow: hidden; }
+  .bar__fill { height: 100%; background: var(--brass); transition: width .3s ease; }
+  .room.is-done .bar__fill { background: var(--sap); }
+
+  /* -- shop ------------------------------------------------------------ */
+  .offers { display: flex; flex-direction: column; gap: 8px; }
+  .offer {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+    padding: 9px 10px;
+    background: var(--bench); border: 1px solid var(--lip); border-radius: var(--r);
+  }
+  .offer__art {
+    width: 38px; height: 38px; display: grid; place-items: center; flex: none;
+    background: linear-gradient(180deg, #4c3d2b, #2a2017);
+    border: 1px solid var(--lip); border-radius: 4px; color: var(--brass);
+  }
+  .offer__name { font-size: 13px; font-weight: 600; }
+  .offer__blurb { margin: 2px 0 0; font-size: 11px; line-height: 1.4; color: var(--paper-dim); }
+  .offer.is-locked { opacity: .55; }
 
   /* -- toast ----------------------------------------------------------- */
   .toast {
-    position: fixed; left: 50%; bottom: 18px; z-index: 60;
+    position: fixed; left: 50%; bottom: 84px; z-index: 60;
     transform: translate(-50%, 10px);
     padding: 9px 14px;
-    background: #2f2519;
-    border: 1px solid var(--slate-lip);
-    border-left: 2px solid var(--brass);
-    border-radius: 3px;
-    font-size: 12.5px;
-    opacity: 0;
-    pointer-events: none;
+    background: #33281a; border: 1px solid var(--lip); border-left: 2px solid var(--brass);
+    border-radius: 4px; font-size: 12.5px; opacity: 0; pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
     max-width: min(90vw, 380px);
   }
-  .toast.is-up { opacity: 1; transform: translate(-50%, 0); box-shadow: 0 16px 30px -18px #000; }
+  .toast.is-up { opacity: 1; transform: translate(-50%, 0); box-shadow: 0 18px 32px -20px #000; }
   .toast.is-bad { border-left-color: var(--rust); }
   .toast.is-good { border-left-color: var(--sap); }
 
-  .hint {
-    font-size: 11.5px; line-height: 1.6; color: var(--paper-dim);
-    text-align: center;
-    margin: 0;
-  }
+  .hint { margin: 0; font-size: 11px; line-height: 1.55; color: var(--paper-dim); text-align: center; }
   .hint b { color: var(--paper); font-weight: 600; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -354,16 +360,26 @@
 <div class="app">
   <header class="topbar">
     <div class="crest">
-      <h1 class="crest__title">Merge &amp; Restore</h1>
-      <p class="crest__sub">Willow House · <span id="progress">0 of 3 restored</span></p>
+      <div class="levelring" title="Player level">
+        <svg viewBox="0 0 38 38" width="38" height="38" aria-hidden="true">
+          <circle cx="19" cy="19" r="16" fill="none" stroke="#3b3025" stroke-width="3"/>
+          <circle id="xpArc" cx="19" cy="19" r="16" fill="none" stroke="#d0a04a" stroke-width="3"
+                  stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="100.5"/>
+        </svg>
+        <span class="levelring__n" id="playerLevel">1</span>
+      </div>
+      <div class="crest__text">
+        <h1 class="crest__title">Merge &amp; Restore</h1>
+        <p class="crest__sub" id="progress">Willow House · 0 of 6</p>
+      </div>
     </div>
     <div class="wallet">
       <span class="chip chip--coin" title="Coins">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="#c9973f"/><circle cx="12" cy="12" r="5.4" fill="rgba(0,0,0,.28)"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="#d0a04a"/><circle cx="12" cy="12" r="5.4" fill="rgba(0,0,0,.3)"/></svg>
         <b id="coins">0</b>
       </span>
       <span class="chip chip--gem" title="Gems">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="#6fb3b8"/><path d="M12 3.2 20 10H4z" fill="rgba(255,255,255,.22)"/></svg>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="#6fb3b8"/><path d="M12 3.2 20 10H4z" fill="rgba(255,255,255,.22)"/></svg>
         <b id="gems">0</b>
       </span>
     </div>
@@ -377,38 +393,166 @@
     <div class="meter"><div class="meter__fill" id="energyFill" style="width:0%"></div></div>
   </section>
 
-  <div class="section-label"><span>Requests</span><span id="taskCount">3 open</span></div>
-  <section class="tasks" id="tasks"></section>
-
-  <section class="boardwrap">
-    <div class="board" id="board" aria-label="Merge board"></div>
+  <!-- BOARD ------------------------------------------------------------- -->
+  <section class="view is-active" id="viewBoard">
+    <div class="section-label"><span>Requests</span><span id="taskCount">3 open</span></div>
+    <div class="tasks" id="tasks"></div>
+    <div class="boardwrap"><div class="board" id="board" aria-label="Merge board"></div></div>
+    <p class="hint">Tap the <b>glowing toolbox</b> to make parts. Drag two matching parts together to merge.</p>
+    <div class="section-label"><span>Out of energy?</span></div>
+    <div class="offers">
+      <div class="offer">
+        <div class="offer__art">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>
+        </div>
+        <div><div class="offer__name">Watch an ad</div><p class="offer__blurb" id="adBlurb">+30 energy, no cost.</p></div>
+        <button class="btn" id="btnAd" type="button">Watch</button>
+      </div>
+      <div class="offer">
+        <div class="offer__art">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3.2 20 10l-8 10.8L4 10z" fill="currentColor"/></svg>
+        </div>
+        <div><div class="offer__name">Full refill</div><p class="offer__blurb">Top the meter up instantly.</p></div>
+        <button class="btn btn--buy" id="btnRefill" type="button">25 gems</button>
+      </div>
+    </div>
   </section>
 
-  <p class="hint">Tap a <b>glowing generator</b> to spend energy and make parts. Drag two matching parts together to merge.</p>
+  <!-- CREW -------------------------------------------------------------- -->
+  <section class="view" id="viewCrew">
+    <div class="section-label"><span>Your crew</span><span id="crewCount">0 hired</span></div>
+    <p class="note">Hire help with coins, then raise them. Every level costs more than the last and every perk has a ceiling — decide who carries your long game.</p>
+    <div class="crew" id="crew"></div>
+  </section>
 
-  <nav class="actions">
-    <div class="actions__wide">
-      <button class="btn" id="btnAd" type="button">Watch ad · +30 energy</button>
-      <button class="btn" id="btnRefill" type="button">Refill · 25 gems</button>
-    </div>
-    <button class="btn btn--quiet" id="btnRooms" type="button">Willow House</button>
-    <button class="btn btn--quiet" id="btnReset" type="button">Start over</button>
-  </nav>
-</div>
-
-<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-  <div class="sheet">
-    <h2 class="sheet__title" id="sheetTitle">Willow House</h2>
-    <p class="sheet__note">Every request you deliver brings back one more corner of the house.</p>
+  <!-- HOUSE ------------------------------------------------------------- -->
+  <section class="view" id="viewHouse">
+    <div class="scene" id="scene"><p class="scene__caption" id="sceneCaption"></p></div>
+    <div class="section-label"><span>Willow House</span><span id="houseCount">0 of 6</span></div>
     <div class="rooms" id="rooms"></div>
-    <button class="btn" id="btnCloseRooms" type="button" style="width:100%">Close</button>
-  </div>
+  </section>
+
+  <!-- SHOP -------------------------------------------------------------- -->
+  <section class="view" id="viewShop">
+    <div class="section-label"><span>Generators</span><span class="muted">price rises per copy</span></div>
+    <p class="note">Two of the same generator merge into a better one — that is how new chains open up.</p>
+    <div class="offers" id="shopOffers"></div>
+    <div class="section-label"><span>Board</span></div>
+    <div class="offers" id="expansions"></div>
+    <div class="section-label"><span>Danger zone</span></div>
+    <button class="btn btn--quiet btn--wide" id="btnReset" type="button">Start over</button>
+  </section>
 </div>
+
+<nav class="tabs" aria-label="Sections">
+  <button class="tab is-active" data-view="viewBoard" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="1.4"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.4" opacity=".55"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.4" opacity=".55"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.4"/></g></svg>
+    Board
+  </button>
+  <button class="tab" data-view="viewCrew" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="currentColor"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3.2-6.5 7-6.5S16 17 16 21z"/><circle cx="17.5" cy="9.5" r="3" opacity=".55"/><path d="M15 21c0-3 1.6-5 4.2-5 1.7 0 2.8 1 2.8 3v2z" opacity=".55"/></g></svg>
+    Crew
+  </button>
+  <button class="tab" data-view="viewHouse" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z" fill="currentColor"/></svg>
+    House
+  </button>
+  <button class="tab" data-view="viewShop" type="button">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 8h16l-1.4 12.2H5.4z" fill="currentColor"/><path d="M8.5 8a3.5 3.5 0 0 1 7 0" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    Shop
+  </button>
+</nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-"use strict";(()=>{var ie="merge-restore/save";var w={nail:{itemType:"nail",maxLevel:6,baseValue:2,names:["Bent Nail","Nail","Nail Pack","Screw","Bolt Set","Hardware Kit"]},plank:{itemType:"plank",maxLevel:7,baseValue:3,names:["Splinter","Plank","Board","Panel","Shelf","Cabinet Door","Cabinet"]},hammer:{itemType:"hammer",maxLevel:8,baseValue:5,names:["Rusty Head","Small Hammer","Hammer","Claw Hammer","Mallet","Sledgehammer","Power Hammer","Master Hammer"]},paint:{itemType:"paint",maxLevel:6,baseValue:4,names:["Pigment","Paint Tube","Paint Jar","Paint Bucket","Paint Barrel","Paint Station"]},flower:{itemType:"flower",maxLevel:5,baseValue:6,names:["Seed","Sprout","Bud","Flower","Bouquet"]},toolbox:{itemType:"toolbox",maxLevel:3,baseValue:0,names:["Old Toolbox","Toolbox","Pro Toolbox"],generator:{produces:"nail",producesLevel:1,energyCost:1}},lumberPile:{itemType:"lumberPile",maxLevel:3,baseValue:0,names:["Scrap Wood","Lumber Pile","Timber Stack"],generator:{produces:"plank",producesLevel:1,energyCost:1}},paintCan:{itemType:"paintCan",maxLevel:3,baseValue:0,names:["Dried Can","Paint Can","Paint Mixer"],generator:{produces:"paint",producesLevel:1,energyCost:1}}},z=Object.keys(w);function H(e){return w[e]}function G(e){return w[e].maxLevel}function A(e,r){let t=w[e];return t.names[Math.min(r,t.maxLevel)-1]??t.itemType}function ce(e,r){let t=w[e];return Math.round(t.baseValue*Math.pow(2.35,r-1))}function C(e){return w[e].generator!==void 0}var Q=new Map;function Ve(){try{let e="__merge_restore_probe__";return window.localStorage.setItem(e,"1"),window.localStorage.removeItem(e),window.localStorage}catch{return null}}var R=Ve(),qe={async getItem(e){return R!==null?R.getItem(e):Q.get(e)??null},async setItem(e,r){R!==null?R.setItem(e,r):Q.set(e,r)},async removeItem(e){R!==null?R.removeItem(e):Q.delete(e)}},de=qe;function ee(e,r){let t;try{t=e()}catch{return}return{getItem:l=>{var o;let s=d=>d===null?null:JSON.parse(d,r?.reviver),a=(o=t.getItem(l))!=null?o:null;return a instanceof Promise?a.then(s):s(a)},setItem:(l,o)=>t.setItem(l,JSON.stringify(o,r?.replacer)),removeItem:l=>t.removeItem(l)}}var Z=e=>r=>{try{let t=e(r);return t instanceof Promise?t:{then(n){return Z(n)(t)},catch(n){return this}}}catch(t){return{then(n){return this},catch(n){return Z(n)(t)}}}},Ye=(e,r)=>(t,n,l)=>{let o={storage:ee(()=>window.localStorage),partialize:m=>m,version:0,merge:(m,k)=>({...k,...m}),...r},s=!1,a=0,d=new Set,u=new Set,p=o.storage;if(!p)return e((...m)=>{console.warn(`[zustand persist middleware] Unable to update item '${o.name}', the given storage is currently unavailable.`),t(...m)},n,l);let f=()=>{let m=o.partialize({...n()});return p.setItem(o.name,{state:m,version:o.version})},M=l.setState;l.setState=(m,k)=>(M(m,k),f());let b=e((...m)=>(t(...m),f()),n,l);l.getInitialState=()=>b;let L,ae=()=>{var m,k;if(!p)return;let U=++a;s=!1,d.forEach(x=>{var S;return x((S=n())!=null?S:b)});let $=((k=o.onRehydrateStorage)==null?void 0:k.call(o,(m=n())!=null?m:b))||void 0;return Z(p.getItem.bind(p))(o.name).then(x=>{if(x)if(typeof x.version=="number"&&x.version!==o.version){if(o.migrate){let S=o.migrate(x.state,x.version);return S instanceof Promise?S.then(J=>[!0,J]):[!0,S]}console.error("State loaded from storage couldn't be migrated since no migrate function was provided")}else return[!1,x.state];return[!1,void 0]}).then(x=>{var S;if(U!==a)return;let[J,He]=x;if(L=o.merge(He,(S=n())!=null?S:b),t(L,!0),J)return f()}).then(()=>{U===a&&($?.(n(),void 0),L=n(),s=!0,u.forEach(x=>x(L)))}).catch(x=>{U===a&&$?.(void 0,x)})};return l.persist={setOptions:m=>{o={...o,...m},m.storage&&(p=m.storage)},clearStorage:()=>{p?.removeItem(o.name)},getOptions:()=>o,rehydrate:()=>ae(),hasHydrated:()=>s,onHydrate:m=>(d.add(m),()=>{d.delete(m)}),onFinishHydration:m=>(u.add(m),()=>{u.delete(m)})},o.skipHydration||ae(),L||b},ue=Ye;var me=e=>{let r,t=new Set,n=(u,p)=>{let f=typeof u=="function"?u(r):u;if(!Object.is(f,r)){let M=r;r=p??(typeof f!="object"||f===null)?f:Object.assign({},r,f),t.forEach(b=>b(r,M))}},l=()=>r,a={setState:n,getState:l,getInitialState:()=>d,subscribe:u=>(t.add(u),()=>t.delete(u))},d=r=e(n,l,a);return a},pe=e=>e?me(e):me;function fe(e,r=Date.now()){let t=e.max>0?e.max:100;if(e.current>=t)return{current:t,lastTickAt:r,gained:0,msToNextPoint:0};let n=Math.max(0,r-e.lastTickAt),l=Math.floor(n/12e4),o=Math.min(l,t-e.current),s=e.current+o,a=o>0?e.lastTickAt+o*12e4:e.lastTickAt,d=s>=t?0:Math.max(0,12e4-(r-a));return{current:s,lastTickAt:a,gained:o,msToNextPoint:d}}function I(e,r=Date.now()){let t=fe(e,r);return{current:t.current,max:e.max,lastTickAt:t.lastTickAt}}function ge(e,r=Date.now()){let t=fe(e,r),n=e.max-t.current;return n<=0?0:t.msToNextPoint+(n-1)*12e4}function ye(e){let r=Math.max(0,Math.ceil(e/1e3)),t=Math.floor(r/3600),n=Math.floor(r%3600/60),l=r%60,o=s=>s.toString().padStart(2,"0");return t>0?`${t}:${o(n)}:${o(l)}`:`${n}:${o(l)}`}function xe(e,r,t=Date.now()){let n=I(e,t);if(n.current<r)return null;let l=n.current>=n.max;return{current:n.current-r,max:n.max,lastTickAt:l?t:n.lastTickAt}}function te(e,r,t=Date.now()){let n=I(e,t);return{current:Math.min(n.max,n.current+r),max:n.max,lastTickAt:n.lastTickAt}}function he(e=6,r=5){let t=new Array(e*r);for(let n=0;n<e*r;n+=1)t[n]={index:n,item:null,locked:!1};return{rows:e,cols:r,cells:t}}function Se(e,r=5){return{row:Math.floor(e/r),col:e%r}}function q(e,r){return Number.isInteger(r)&&r>=0&&r<e.cells.length}function D(e,r){return q(e,r)?e.cells[r]??null:null}function We(e){return`itm_${e}`}function N(e,r,t,n=!1){return{id:We(e),itemType:r,level:t,isNew:n}}function T(e,r){if(r.length===0)return e;let t=e.cells.slice();for(let{index:n,item:l}of r){let o=t[n];o!==void 0&&(t[n]={index:o.index,item:l,locked:o.locked})}return{rows:e.rows,cols:e.cols,cells:t}}function ve(e,r){let t=Se(r,e.cols),n=-1,l=Number.POSITIVE_INFINITY;for(let o of e.cells){if(o.locked||o.item!==null)continue;let s=Se(o.index,e.cols),a=Math.max(Math.abs(s.row-t.row),Math.abs(s.col-t.col));a<l&&(n=o.index,l=a)}return n}function ne(e,r,t){let n=0;for(let l of e.cells)l.item!==null&&l.item.itemType===r&&l.item.level===t&&(n+=1);return n}function be(e,r,t,n){let l=[];for(let o of e.cells){if(l.length>=n)break;o.item!==null&&o.item.itemType===r&&o.item.level===t&&l.push(o.index)}return l}function Ie(e){return e.rows>0&&e.cols>0&&e.cells.length===e.rows*e.cols&&e.cells.length===30}function Xe(e,r){return e===null||r===null||e.id===r.id||e.itemType!==r.itemType||e.level!==r.level?!1:e.level<G(e.itemType)}function Ue(e){return e.level>=G(e.itemType)}function Ee(e,r,t,n){let l=a=>({grid:e,outcome:{kind:"rejected",reason:a},consumedItemIds:[],mergedInto:null,nextItemSeq:n});if(r===t)return l("same-cell");if(!q(e,r)||!q(e,t))return l("out-of-bounds");let o=D(e,r),s=D(e,t);if(o===null||s===null)return l("out-of-bounds");if(o.item===null)return l("empty-source");if(s.locked)return l("locked-cell");if(Xe(o.item,s.item)&&s.item!==null){let a=N(n,o.item.itemType,o.item.level+1,!0);return{grid:T(e,[{index:r,item:null},{index:t,item:a}]),outcome:{kind:"merged",resultItem:a,at:t},consumedItemIds:[o.item.id,s.item.id],mergedInto:a,nextItemSeq:n+1}}return s.item!==null&&s.item.itemType===o.item.itemType&&s.item.level===o.item.level&&Ue(o.item)?l("max-level"):s.item===null?{grid:T(e,[{index:r,item:null},{index:t,item:o.item}]),outcome:{kind:"moved",from:r,to:t},consumedItemIds:[],mergedInto:null,nextItemSeq:n}:{grid:T(e,[{index:r,item:s.item},{index:t,item:o.item}]),outcome:{kind:"swapped",from:r,to:t},consumedItemIds:[],mergedInto:null,nextItemSeq:n}}var Je=new Set(z.map(e=>H(e).generator?.produces).filter(e=>e!==void 0)),ke=z.filter(e=>!C(e)&&Je.has(e)),Ke=1.15,ze=4;function Qe(e,r){let t=0,n=0;for(let l of e){let o=ce(l.itemType,l.level)*l.count;t+=o,n+=Math.max(1,Math.round(o/2))}return{coins:Math.max(10,Math.round(t*Ke)),gems:r%ze===0?1+r%2:0,xp:Math.max(5,n)}}function re(e){let{playerLevel:r,seq:t,restoreTargetId:n=null}=e,l=e.random??Math.random,o=r>=5&&l()<.4?2:1,s=[];for(let a=0;a<o;a+=1){let d=Ze(l,s),u=G(d),p=Math.min(u,2+Math.floor(r/2)+(l()<.3?1:0)),f=Math.max(1,p),M=f<=2&&l()<.5?2:1;s.push({itemType:d,level:f,count:M})}return{id:`task_${t}`,title:et(s),requirements:s,reward:Qe(s,t),status:"active",restoreTargetId:n}}function Ze(e,r){let t=ke.filter(o=>!C(o)&&!r.some(s=>s.itemType===o)),n=t.length>0?t:ke,l=Math.min(n.length-1,Math.floor(e()*n.length));return n[l]??"nail"}function et(e){return e.map(r=>`${r.count}x ${A(r.itemType,r.level)}`).join(" + ")}function we(e,r){return r.requirements.map(t=>{let n=ne(e,t.itemType,t.level);return{...t,owned:n,satisfied:n>=t.count}})}function _(e,r){return r.requirements.every(t=>ne(e,t.itemType,t.level)>=t.count)}function Ce(e,r){if(!_(e,r))return e;let t=[];for(let n of r.requirements)for(let l of be(e,n.itemType,n.level,n.count))t.push({index:l,item:null});return T(e,t)}var Me=[{id:"porch",name:"Front Porch",restored:!1,coinCost:0},{id:"kitchen",name:"Kitchen",restored:!1,coinCost:150},{id:"garden",name:"Garden",restored:!1,coinCost:300}];function at(){return{level:1,xp:0,xpToNextLevel:100,tasksCompleted:0}}function it(e){return Math.round(100*Math.pow(1.28,e-1))}function ct(e){let r=e,t=[{index:10,type:"toolbox"},{index:12,type:"lumberPile"},{index:14,type:"paintCan"}];return{grid:T(he(),t.map(({index:l,type:o})=>{let s=N(r,o,1);return r+=1,{index:l,item:s}})),nextItemSeq:r}}function dt(e,r){let t=[],n=r,l=Me.map(o=>o.id);for(let o=0;o<3;o+=1)t.push(re({playerLevel:e,seq:n,restoreTargetId:l[o%l.length]??null})),n+=1;return{tasks:t,nextTaskSeq:n}}function Y(){let{grid:e,nextItemSeq:r}=ct(1),t=at(),{tasks:n,nextTaskSeq:l}=dt(t.level,1);return{grid:e,energy:{current:100,max:100,lastTickAt:Date.now()},wallet:{coins:100,gems:10},player:t,activeTasks:n,restorations:Me.map(o=>({...o})),nextItemSeq:r,nextTaskSeq:l,lastOutcome:null}}function Re(e,r){let{level:t,xp:n,xpToNextLevel:l}=e,o=0;for(n+=r;n>=l;)n-=l,t+=1,o+=1,l=it(t);return{player:{level:t,xp:n,xpToNextLevel:l,tasksCompleted:e.tasksCompleted},levelsGained:o}}var c=pe()(ue((e,r)=>({...Y(),hydrated:!1,resetGame:()=>{e({...Y(),hydrated:!0})},refreshEnergy:()=>{let{energy:t}=r(),n=I(t);(n.current!==t.current||n.lastTickAt!==t.lastTickAt)&&e({energy:n})},tapGenerator:t=>{let n=r(),l=D(n.grid,t);if(l===null)return{ok:!1,reason:"out-of-bounds"};if(l.item===null)return{ok:!1,reason:"empty-cell"};let o=H(l.item.itemType).generator;if(o===void 0)return{ok:!1,reason:"not-a-generator"};let s=ve(n.grid,t);if(s<0)return{ok:!1,reason:"board-full"};let a=xe(n.energy,o.energyCost);if(a===null)return{ok:!1,reason:"no-energy"};let d=N(n.nextItemSeq,o.produces,o.producesLevel,!0);return e({grid:T(n.grid,[{index:s,item:d}]),energy:a,nextItemSeq:n.nextItemSeq+1}),{ok:!0,item:d,at:s}},dropItem:(t,n)=>{let l=r(),o=Ee(l.grid,t,n,l.nextItemSeq);if(o.outcome.kind==="rejected")return e({lastOutcome:o.outcome}),o.outcome;let s=o.mergedInto!==null?o.mergedInto.level:0,{player:a}=Re(l.player,s);return e({grid:o.grid,nextItemSeq:o.nextItemSeq,player:a,lastOutcome:o.outcome}),o.outcome},clearOutcome:()=>e({lastOutcome:null}),deliverTask:t=>{let n=r(),l=n.activeTasks.find(f=>f.id===t);if(l===void 0||l.status!=="active"||!_(n.grid,l))return!1;let o=Ce(n.grid,l),{player:s,levelsGained:a}=Re(n.player,l.reward.xp),d=re({playerLevel:s.level,seq:n.nextTaskSeq,restoreTargetId:l.restoreTargetId}),u=n.activeTasks.map(f=>f.id===t?d:f),p=l.restoreTargetId===null?n.restorations:n.restorations.map(f=>f.id===l.restoreTargetId?{...f,restored:!0}:f);return e({grid:o,activeTasks:u,restorations:p,nextTaskSeq:n.nextTaskSeq+1,wallet:{coins:n.wallet.coins+l.reward.coins,gems:n.wallet.gems+l.reward.gems},player:{...s,tasksCompleted:s.tasksCompleted+1},energy:a>0?te(n.energy,a*20):I(n.energy)}),!0},refillEnergyWithGems:()=>{let t=r();if(t.wallet.gems<25)return!1;let n=I(t.energy);return n.current>=n.max?!1:(e({wallet:{...t.wallet,gems:t.wallet.gems-25},energy:{current:n.max,max:n.max,lastTickAt:Date.now()}}),!0)},claimRewardedAd:t=>{let n=r();if(t==="energy"){e({energy:te(n.energy,30)});return}e({wallet:{...n.wallet,gems:n.wallet.gems+2}})},addCoins:t=>{t<=0||e(n=>({wallet:{...n.wallet,coins:n.wallet.coins+t}}))},spendCoins:t=>{let n=r();return t<=0||n.wallet.coins<t?!1:(e({wallet:{...n.wallet,coins:n.wallet.coins-t}}),!0)},addGems:t=>{t<=0||e(n=>({wallet:{...n.wallet,gems:n.wallet.gems+t}}))},restore:t=>{let n=r(),l=n.restorations.find(o=>o.id===t);return l===void 0||l.restored||n.wallet.coins<l.coinCost?!1:(e({wallet:{...n.wallet,coins:n.wallet.coins-l.coinCost},restorations:n.restorations.map(o=>o.id===t?{...o,restored:!0}:o)}),!0)}}),{name:ie,version:1,storage:ee(()=>de),partialize:e=>({grid:e.grid,energy:e.energy,wallet:e.wallet,player:e.player,activeTasks:e.activeTasks,restorations:e.restorations,nextItemSeq:e.nextItemSeq,nextTaskSeq:e.nextTaskSeq}),onRehydrateStorage:()=>(e,r)=>{if(r!==void 0||e===void 0){c.setState({...Y(),hydrated:!0});return}if(!Ie(e.grid)){c.setState({...Y(),hydrated:!0});return}c.setState({energy:I(e.energy),hydrated:!0})}}));var ut={nail:{body:`
+"use strict";(()=>{var $e=[{row:5,cost:900},{row:6,cost:2600}];var De=2.35,q=100,R=2*60*1e3,B=1,D=25,re=30,Oe=2,Ne=60,Pe=10,ue=120,Ae=1.34,He=25,qe=3,me=2,Be="merge-restore/save";var I=[{id:"apprentice",name:"Nell",role:"Apprentice",blurb:"Quick hands. Sometimes gets a part out of the box for free.",hireCost:250,upgradeBaseCost:180,upgradeGrowth:1.6,maxLevel:8,perk:{kind:"freeTap",base:.04,perLevel:.025,cap:.22}},{id:"carpenter",name:"Osgood",role:"Carpenter",blurb:"Knows good stock when he sees it. Pulls better parts from a tap.",hireCost:900,upgradeBaseCost:520,upgradeGrowth:1.6,maxLevel:8,perk:{kind:"luckySpawn",base:.05,perLevel:.03,cap:.26}},{id:"gardener",name:"Marisol",role:"Gardener",blurb:"Keeps the place breathing. You recover faster between visits.",hireCost:3200,upgradeBaseCost:1400,upgradeGrowth:1.6,maxLevel:8,perk:{kind:"energyRegen",base:.06,perLevel:.042,cap:.35}},{id:"curator",name:"Aunt Iris",role:"Curator",blurb:"Handles the ledger. Every delivery is worth more with her name on it.",hireCost:11e3,upgradeBaseCost:4200,upgradeGrowth:1.6,maxLevel:8,perk:{kind:"taskCoins",base:.08,perLevel:.05,cap:.45}}],dr=I.map(e=>e.id);function F(e){let t=I.find(n=>n.id===e);if(t===void 0)throw new Error(`[crew] unknown member "${e}"`);return t}var O=[{itemType:"toolbox",name:"Toolbox",blurb:"Makes nails. Merge two to reach hammers.",baseCost:150,costGrowth:1.85,requiresPlayerLevel:1},{itemType:"lumberPile",name:"Lumber Pile",blurb:"Makes planks \u2014 the backbone of every repair.",baseCost:400,costGrowth:1.85,requiresPlayerLevel:2},{itemType:"paintCan",name:"Paint Can",blurb:"Makes paint. Nothing looks finished without it.",baseCost:1600,costGrowth:1.85,requiresPlayerLevel:4},{itemType:"gardenBed",name:"Garden Bed",blurb:"Makes flowers for the grounds and the glasshouse.",baseCost:5200,costGrowth:1.85,requiresPlayerLevel:7}];var ne=$e;var G={nail:{itemType:"nail",maxLevel:6,baseValue:2,names:["Bent Nail","Nail","Nail Pack","Screw","Bolt Set","Hardware Kit"]},plank:{itemType:"plank",maxLevel:7,baseValue:3,names:["Splinter","Plank","Board","Panel","Shelf","Cabinet Door","Cabinet"]},hammer:{itemType:"hammer",maxLevel:8,baseValue:5,names:["Rusty Head","Small Hammer","Hammer","Claw Hammer","Mallet","Sledgehammer","Power Hammer","Master Hammer"]},paint:{itemType:"paint",maxLevel:6,baseValue:4,names:["Pigment","Paint Tube","Paint Jar","Paint Bucket","Paint Barrel","Paint Station"]},flower:{itemType:"flower",maxLevel:5,baseValue:6,names:["Seed","Sprout","Bud","Flower","Bouquet"]},toolbox:{itemType:"toolbox",maxLevel:3,baseValue:0,names:["Old Toolbox","Toolbox","Master Toolbox"],generator:{energyCost:B,tables:[[{produces:"nail",level:1,weight:1}],[{produces:"nail",level:1,weight:6},{produces:"nail",level:2,weight:2},{produces:"hammer",level:1,weight:3}],[{produces:"nail",level:2,weight:4},{produces:"hammer",level:1,weight:4},{produces:"hammer",level:2,weight:2}]]}},lumberPile:{itemType:"lumberPile",maxLevel:3,baseValue:0,names:["Scrap Wood","Lumber Pile","Timber Yard"],generator:{energyCost:B,tables:[[{produces:"plank",level:1,weight:1}],[{produces:"plank",level:1,weight:7},{produces:"plank",level:2,weight:3}],[{produces:"plank",level:1,weight:4},{produces:"plank",level:2,weight:5},{produces:"plank",level:3,weight:1}]]}},paintCan:{itemType:"paintCan",maxLevel:3,baseValue:0,names:["Dried Can","Paint Can","Paint Mixer"],generator:{energyCost:B,tables:[[{produces:"paint",level:1,weight:1}],[{produces:"paint",level:1,weight:7},{produces:"paint",level:2,weight:3}],[{produces:"paint",level:1,weight:3},{produces:"paint",level:2,weight:5},{produces:"paint",level:3,weight:2}]]}},gardenBed:{itemType:"gardenBed",maxLevel:3,baseValue:0,names:["Weed Patch","Garden Bed","Glasshouse Bed"],generator:{energyCost:B,tables:[[{produces:"flower",level:1,weight:1}],[{produces:"flower",level:1,weight:7},{produces:"flower",level:2,weight:3}],[{produces:"flower",level:1,weight:4},{produces:"flower",level:2,weight:4},{produces:"flower",level:3,weight:2}]]}}},Fe=Object.keys(G);function z(e){return G[e]}function V(e){return G[e].maxLevel}function N(e,t){let n=G[e];return n.names[Math.min(t,n.maxLevel)-1]??n.itemType}function ze(e,t){let n=G[e];return Math.round(n.baseValue*Math.pow(De,t-1))}function M(e){return G[e].generator!==void 0}function pe(e,t){let n=G[e].generator;if(n===void 0)return[];let r=Math.min(Math.max(1,t),n.tables.length)-1;return n.tables[r]??[]}function Ve(e,t=Math.random){if(e.length===0)return null;let n=e.reduce((o,a)=>o+a.weight,0),r=t()*n;for(let o of e)if(r-=o.weight,r<0)return o;return e[e.length-1]??null}var fe=new Map;function It(){try{let e="__merge_restore_probe__";return window.localStorage.setItem(e,"1"),window.localStorage.removeItem(e),window.localStorage}catch{return null}}var P=It(),Mt={async getItem(e){return P!==null?P.getItem(e):fe.get(e)??null},async setItem(e,t){P!==null?P.setItem(e,t):fe.set(e,t)},async removeItem(e){P!==null?P.removeItem(e):fe.delete(e)}},We=Mt;function ge(e,t){let n;try{n=e()}catch{return}return{getItem:o=>{var a;let l=p=>p===null?null:JSON.parse(p,t?.reviver),s=(a=n.getItem(o))!=null?a:null;return s instanceof Promise?s.then(l):l(s)},setItem:(o,a)=>n.setItem(o,JSON.stringify(a,t?.replacer)),removeItem:o=>n.removeItem(o)}}var he=e=>t=>{try{let n=e(t);return n instanceof Promise?n:{then(r){return he(r)(n)},catch(r){return this}}}catch(n){return{then(r){return this},catch(r){return he(r)(n)}}}},Rt=(e,t)=>(n,r,o)=>{let a={storage:ge(()=>window.localStorage),partialize:m=>m,version:0,merge:(m,T)=>({...T,...m}),...t},l=!1,s=0,p=new Set,u=new Set,d=a.storage;if(!d)return e((...m)=>{console.warn(`[zustand persist middleware] Unable to update item '${a.name}', the given storage is currently unavailable.`),n(...m)},r,o);let c=()=>{let m=a.partialize({...r()});return d.setItem(a.name,{state:m,version:a.version})},g=o.setState;o.setState=(m,T)=>(g(m,T),c());let h=e((...m)=>(n(...m),c()),r,o);o.getInitialState=()=>h;let S,v=()=>{var m,T;if(!d)return;let $=++s;l=!1,p.forEach(w=>{var C;return w((C=r())!=null?C:h)});let te=((T=a.onRehydrateStorage)==null?void 0:T.call(a,(m=r())!=null?m:h))||void 0;return he(d.getItem.bind(d))(a.name).then(w=>{if(w)if(typeof w.version=="number"&&w.version!==a.version){if(a.migrate){let C=a.migrate(w.state,w.version);return C instanceof Promise?C.then(de=>[!0,de]):[!0,C]}console.error("State loaded from storage couldn't be migrated since no migrate function was provided")}else return[!1,w.state];return[!1,void 0]}).then(w=>{var C;if($!==s)return;let[de,Ct]=w;if(S=a.merge(Ct,(C=r())!=null?C:h),n(S,!0),de)return c()}).then(()=>{$===s&&(te?.(r(),void 0),S=r(),l=!0,u.forEach(w=>w(S)))}).catch(w=>{$===s&&te?.(void 0,w)})};return o.persist={setOptions:m=>{a={...a,...m},m.storage&&(d=m.storage)},clearStorage:()=>{d?.removeItem(a.name)},getOptions:()=>a,rehydrate:()=>v(),hasHydrated:()=>l,onHydrate:m=>(p.add(m),()=>{p.delete(m)}),onFinishHydration:m=>(u.add(m),()=>{u.delete(m)})},a.skipHydration||v(),S||h},Ye=Rt;var je=e=>{let t,n=new Set,r=(u,d)=>{let c=typeof u=="function"?u(t):u;if(!Object.is(c,t)){let g=t;t=d??(typeof c!="object"||c===null)?c:Object.assign({},t,c),n.forEach(h=>h(t,g))}},o=()=>t,s={setState:r,getState:o,getInitialState:()=>p,subscribe:u=>(n.add(u),()=>n.delete(u))},p=t=e(r,o,s);return s},Ue=e=>e?je(e):je;var _t=[{id:"porch",name:"Front Porch",story:"The steps hold your weight again. Someone could knock now.",restored:!1,progress:0,requiredDeliveries:3,coinCost:150},{id:"kitchen",name:"Kitchen",story:"The stove is lit. The house smells like bread instead of damp.",restored:!1,progress:0,requiredDeliveries:5,coinCost:600},{id:"parlour",name:"Parlour",story:"Shutters open. Light reaches the far wall for the first time in years.",restored:!1,progress:0,requiredDeliveries:8,coinCost:1800},{id:"bedroom",name:"Upstairs Bedroom",story:"A room worth staying the night in. The floor no longer complains.",restored:!1,progress:0,requiredDeliveries:12,coinCost:4500},{id:"glasshouse",name:"Glasshouse",story:"Glass back in every pane. Marisol has already claimed the benches.",restored:!1,progress:0,requiredDeliveries:16,coinCost:12e3},{id:"roof",name:"Roof & Chimney",story:"Smoke rises straight from the chimney. Willow House is a home again.",restored:!1,progress:0,requiredDeliveries:22,coinCost:3e4}];function ye(){return _t.map(e=>({...e}))}function W(e){return e.find(t=>!t.restored)??null}function be(){return I.map(e=>({id:e.id,hired:!1,level:0}))}function ve(e,t){if(t<=0)return 0;let n=e.perk.base+e.perk.perLevel*(t-1);return Math.min(e.perk.cap,n)}function Y(e,t){return t>=e.maxLevel?null:Math.round(e.upgradeBaseCost*Math.pow(e.upgradeGrowth,t-1))}function Xe(e,t){return ve(e,t)>=e.perk.cap-1e-9}function k(e){let t=0,n=0,r=0,o=0;for(let a of e){if(!a.hired)continue;let l=F(a.id),s=ve(l,a.level);switch(l.perk.kind){case"energyRegen":t+=s;break;case"luckySpawn":n+=s;break;case"freeTap":r+=s;break;case"taskCoins":o+=s;break}}return{energyRegenMs:Math.round(R*(1-Math.min(.6,t))),luckySpawnChance:Math.min(.5,n),freeTapChance:Math.min(.4,r),taskCoinMultiplier:1+Math.min(1,o)}}function j(e,t){let n=Math.round(ve(e,t)*100);switch(e.perk.kind){case"energyRegen":return`${n}% faster energy`;case"luckySpawn":return`${n}% chance of a better part`;case"freeTap":return`${n}% chance of a free tap`;case"taskCoins":return`+${n}% coins per delivery`}}function Je(e,t=Date.now(),n=R){let r=e.max>0?e.max:q;if(e.current>=r)return{current:r,lastTickAt:t,gained:0,msToNextPoint:0};let o=Math.max(0,t-e.lastTickAt),a=Math.floor(o/n),l=Math.min(a,r-e.current),s=e.current+l,p=l>0?e.lastTickAt+l*n:e.lastTickAt,u=s>=r?0:Math.max(0,n-(t-p));return{current:s,lastTickAt:p,gained:l,msToNextPoint:u}}function _(e,t=Date.now(),n=R){let r=Je(e,t,n);return{current:r.current,max:e.max,lastTickAt:r.lastTickAt}}function Ke(e,t=Date.now(),n=R){let r=Je(e,t,n),o=e.max-r.current;return o<=0?0:r.msToNextPoint+(o-1)*n}function Qe(e){let t=Math.max(0,Math.ceil(e/1e3)),n=Math.floor(t/3600),r=Math.floor(t%3600/60),o=t%60,a=l=>l.toString().padStart(2,"0");return n>0?`${n}:${a(r)}:${a(o)}`:`${r}:${a(o)}`}function Ze(e,t,n=Date.now(),r=R){let o=_(e,n,r);if(o.current<t)return null;let a=o.current>=o.max;return{current:o.current-t,max:o.max,lastTickAt:a?n:o.lastTickAt}}function we(e,t,n=Date.now(),r=R){let o=_(e,n,r);return{current:Math.min(o.max,o.current+t),max:o.max,lastTickAt:o.lastTickAt}}function rt(e=6,t=5,n=4){let r=new Array(e*t);for(let o=0;o<e*t;o+=1)r[o]={index:o,item:null,locked:Math.floor(o/t)>=n};return{rows:e,cols:t,cells:r}}function xe(e,t){let n=e.cells.map(r=>{let o=Math.floor(r.index/e.cols)>=t;return o===r.locked?r:{index:r.index,item:r.item,locked:o}});return{rows:e.rows,cols:e.cols,cells:n}}function et(e,t=5){return{row:Math.floor(e/t),col:e%t}}function oe(e,t){return Number.isInteger(t)&&t>=0&&t<e.cells.length}function X(e,t){return oe(e,t)?e.cells[t]??null:null}function $t(e){return`itm_${e}`}function A(e,t,n,r=!1){return{id:$t(e),itemType:t,level:n,isNew:r}}function E(e,t){if(t.length===0)return e;let n=e.cells.slice();for(let{index:r,item:o}of t){let a=n[r];a!==void 0&&(n[r]={index:a.index,item:o,locked:a.locked})}return{rows:e.rows,cols:e.cols,cells:n}}function Se(e,t){let n=et(t,e.cols),r=-1,o=Number.POSITIVE_INFINITY;for(let a of e.cells){if(a.locked||a.item!==null)continue;let l=et(a.index,e.cols),s=Math.max(Math.abs(l.row-n.row),Math.abs(l.col-n.col));s<o&&(r=a.index,o=s)}return r}function ke(e,t,n){let r=0;for(let o of e.cells)o.item!==null&&o.item.itemType===t&&o.item.level===n&&(r+=1);return r}function nt(e,t,n,r){let o=[];for(let a of e.cells){if(o.length>=r)break;a.item!==null&&a.item.itemType===t&&a.item.level===n&&o.push(a.index)}return o}function ot(e){return e.rows>0&&e.cols>0&&e.cells.length===e.rows*e.cols&&e.cells.length===30}function Dt(e,t){return e===null||t===null||e.id===t.id||e.itemType!==t.itemType||e.level!==t.level?!1:e.level<V(e.itemType)}function Ot(e){return e.level>=V(e.itemType)}function at(e,t,n,r){let o=s=>({grid:e,outcome:{kind:"rejected",reason:s},consumedItemIds:[],mergedInto:null,nextItemSeq:r});if(t===n)return o("same-cell");if(!oe(e,t)||!oe(e,n))return o("out-of-bounds");let a=X(e,t),l=X(e,n);if(a===null||l===null)return o("out-of-bounds");if(a.item===null)return o("empty-source");if(l.locked)return o("locked-cell");if(Dt(a.item,l.item)&&l.item!==null){let s=A(r,a.item.itemType,a.item.level+1,!0);return{grid:E(e,[{index:t,item:null},{index:n,item:s}]),outcome:{kind:"merged",resultItem:s,at:n},consumedItemIds:[a.item.id,l.item.id],mergedInto:s,nextItemSeq:r+1}}return l.item!==null&&l.item.itemType===a.item.itemType&&l.item.level===a.item.level&&Ot(a.item)?o("max-level"):l.item===null?{grid:E(e,[{index:t,item:null},{index:n,item:a.item}]),outcome:{kind:"moved",from:t,to:n},consumedItemIds:[],mergedInto:null,nextItemSeq:r}:{grid:E(e,[{index:t,item:l.item},{index:n,item:a.item}]),outcome:{kind:"swapped",from:t,to:n},consumedItemIds:[],mergedInto:null,nextItemSeq:r}}var lt=[...new Set(Fe.flatMap(e=>(z(e).generator?.tables??[]).flatMap(t=>t.map(n=>n.produces))))].filter(e=>!M(e)),Nt=1.15,Pt=4;function At(e,t){let n=0,r=0;for(let o of e){let a=ze(o.itemType,o.level)*o.count;n+=a,r+=Math.max(1,Math.round(a/2))}return{coins:Math.max(10,Math.round(n*Nt)),gems:t%Pt===0?1+t%2:0,xp:Math.max(5,r)}}function Te(e){let{playerLevel:t,seq:n,restoreTargetId:r=null}=e,o=e.random??Math.random,a=e.availableTypes!==void 0&&e.availableTypes.length>0?e.availableTypes.filter(d=>!M(d)):lt,l=a.length>0?a:lt,s=Math.min(.65,Math.max(0,(t-3)*.09)),p=l.length>1&&o()<s?2:1,u=[];for(let d=0;d<p;d+=1){let c=Ht(o,u,l),g=V(c),h=2+Math.floor((t-1)/3),S=Math.min(g,h+(o()<.28?1:0)),v=Math.max(1,S),m=v<=2?2+(o()<.4?1:0):v<=3?2:1;u.push({itemType:c,level:v,count:m})}return{id:`task_${n}`,title:qt(u),requirements:u,reward:At(u,n),status:"active",restoreTargetId:r}}function Ht(e,t,n){let r=n.filter(l=>!t.some(s=>s.itemType===l)),o=r.length>0?r:n,a=Math.min(o.length-1,Math.floor(e()*o.length));return o[a]??"nail"}function qt(e){return e.map(t=>`${t.count}x ${N(t.itemType,t.level)}`).join(" + ")}function st(e,t){return t.requirements.map(n=>{let r=ke(e,n.itemType,n.level);return{...n,owned:r,satisfied:r>=n.count}})}function H(e,t){return t.requirements.every(n=>ke(e,n.itemType,n.level)>=n.count)}function it(e,t){if(!H(e,t))return e;let n=[];for(let r of t.requirements)for(let o of nt(e,r.itemType,r.level,r.count))n.push({index:o,item:null});return E(e,n)}function Bt(){return{level:1,xp:0,xpToNextLevel:ue,tasksCompleted:0}}function Ft(e){return Math.round(ue*Math.pow(Ae,e-1))}function zt(e){return{grid:E(rt(void 0,void 0,4),[{index:7,item:A(e,"toolbox",1)}]),nextItemSeq:e+1}}function dt(){return O.map(e=>({itemType:e.itemType,purchased:e.itemType==="toolbox"?1:0}))}function Ee(e){let t=new Set;for(let n of e.cells)if(!(n.item===null||!M(n.item.itemType)))for(let r of pe(n.item.itemType,n.item.level))t.add(r.produces);return[...t]}function Vt(e,t,n,r){let o=[],a=t;for(let l=0;l<qe;l+=1)o.push(Te({playerLevel:e,seq:a,availableTypes:n,restoreTargetId:r})),a+=1;return{tasks:o,nextTaskSeq:a}}function ae(){let{grid:e,nextItemSeq:t}=zt(1),n=Bt(),r=ye(),{tasks:o,nextTaskSeq:a}=Vt(n.level,1,Ee(e),W(r)?.id??null);return{grid:e,energy:{current:q,max:q,lastTickAt:Date.now()},wallet:{coins:Ne,gems:Pe},player:n,activeTasks:o,restorations:r,crew:be(),shop:dt(),unlockedRows:4,nextItemSeq:t,nextTaskSeq:a,lastOutcome:null}}function ct(e,t){let{level:n,xp:r,xpToNextLevel:o}=e,a=0;for(r+=t;r>=o;)r-=o,n+=1,a+=1,o=Ft(n);return{player:{level:n,xp:r,xpToNextLevel:o,tasksCompleted:e.tasksCompleted},levelsGained:a}}function Ce(e,t){let n=O.find(o=>o.itemType===t);if(n===void 0)return null;let r=e.find(o=>o.itemType===t)?.purchased??0;return Math.round(n.baseCost*Math.pow(n.costGrowth,r))}var f=Ue()(Ye((e,t)=>({...ae(),hydrated:!1,bonuses:()=>k(t().crew),availableChains:()=>Ee(t().grid),resetGame:()=>{e({...ae(),hydrated:!0})},refreshEnergy:()=>{let n=t(),r=_(n.energy,Date.now(),k(n.crew).energyRegenMs);(r.current!==n.energy.current||r.lastTickAt!==n.energy.lastTickAt)&&e({energy:r})},tapGenerator:n=>{let r=t(),o=X(r.grid,n);if(o===null)return{ok:!1,reason:"out-of-bounds"};if(o.item===null)return{ok:!1,reason:"empty-cell"};let a=z(o.item.itemType).generator;if(a===void 0)return{ok:!1,reason:"not-a-generator"};let l=Se(r.grid,n);if(l<0)return{ok:!1,reason:"board-full"};let s=k(r.crew),p=Math.random()<s.freeTapChance,u=p?_(r.energy,Date.now(),s.energyRegenMs):Ze(r.energy,a.energyCost,Date.now(),s.energyRegenMs);if(u===null)return{ok:!1,reason:"no-energy"};let d=Ve(pe(o.item.itemType,o.item.level));if(d===null)return{ok:!1,reason:"not-a-generator"};let g=Math.random()<s.luckySpawnChance?Math.min(z(d.produces).maxLevel,d.level+1):d.level,h=A(r.nextItemSeq,d.produces,g,!0);return e({grid:E(r.grid,[{index:l,item:h}]),energy:u,nextItemSeq:r.nextItemSeq+1}),{ok:!0,item:h,at:l,wasFree:p}},dropItem:(n,r)=>{let o=t(),a=at(o.grid,n,r,o.nextItemSeq);if(a.outcome.kind==="rejected")return e({lastOutcome:a.outcome}),a.outcome;let l=a.mergedInto!==null?a.mergedInto.level:0,{player:s}=ct(o.player,l);return e({grid:a.grid,nextItemSeq:a.nextItemSeq,player:s,lastOutcome:a.outcome}),a.outcome},clearOutcome:()=>e({lastOutcome:null}),deliverTask:n=>{let r=t(),o=r.activeTasks.find(h=>h.id===n);if(o===void 0||o.status!=="active"||!H(r.grid,o))return!1;let a=k(r.crew),l=it(r.grid,o),{player:s,levelsGained:p}=ct(r.player,o.reward.xp),u=W(r.restorations),d=u===null?r.restorations:r.restorations.map(h=>h.id===u.id?{...h,progress:Math.min(h.requiredDeliveries,h.progress+1)}:h),c=Te({playerLevel:s.level,seq:r.nextTaskSeq,availableTypes:Ee(l),restoreTargetId:W(d)?.id??null}),g=r.activeTasks.map(h=>h.id===n?c:h);return e({grid:l,activeTasks:g,restorations:d,nextTaskSeq:r.nextTaskSeq+1,wallet:{coins:r.wallet.coins+Math.round(o.reward.coins*a.taskCoinMultiplier),gems:r.wallet.gems+o.reward.gems},player:{...s,tasksCompleted:s.tasksCompleted+1},energy:p>0?we(r.energy,p*He,Date.now(),a.energyRegenMs):_(r.energy,Date.now(),a.energyRegenMs)}),!0},refillEnergyWithGems:()=>{let n=t();if(n.wallet.gems<D)return!1;let r=_(n.energy,Date.now(),k(n.crew).energyRegenMs);return r.current>=r.max?!1:(e({wallet:{...n.wallet,gems:n.wallet.gems-D},energy:{current:r.max,max:r.max,lastTickAt:Date.now()}}),!0)},claimRewardedAd:n=>{let r=t();if(n==="energy"){e({energy:we(r.energy,re,Date.now(),k(r.crew).energyRegenMs)});return}e({wallet:{...r.wallet,gems:r.wallet.gems+Oe}})},hireCrew:n=>{let r=t(),o=r.crew.find(l=>l.id===n);if(o===void 0||o.hired)return{ok:!1,reason:"unavailable"};let a=F(n);return r.wallet.coins<a.hireCost?{ok:!1,reason:"unaffordable"}:(e({wallet:{...r.wallet,coins:r.wallet.coins-a.hireCost},crew:r.crew.map(l=>l.id===n?{...l,hired:!0,level:1}:l)}),{ok:!0,spent:a.hireCost})},upgradeCrew:n=>{let r=t(),o=r.crew.find(s=>s.id===n);if(o===void 0||!o.hired)return{ok:!1,reason:"unavailable"};let a=F(n),l=Y(a,o.level);return l===null?{ok:!1,reason:"unavailable"}:r.wallet.coins<l?{ok:!1,reason:"unaffordable"}:(e({wallet:{...r.wallet,coins:r.wallet.coins-l},crew:r.crew.map(s=>s.id===n?{...s,level:s.level+1}:s)}),{ok:!0,spent:l})},buyGenerator:n=>{let r=t(),o=O.find(s=>s.itemType===n);if(o===void 0)return{ok:!1,reason:"unavailable"};if(r.player.level<o.requiresPlayerLevel)return{ok:!1,reason:"unavailable"};let a=Ce(r.shop,n);if(a===null)return{ok:!1,reason:"unavailable"};if(r.wallet.coins<a)return{ok:!1,reason:"unaffordable"};let l=Se(r.grid,0);return l<0?{ok:!1,reason:"no-room"}:(e({wallet:{...r.wallet,coins:r.wallet.coins-a},grid:E(r.grid,[{index:l,item:A(r.nextItemSeq,n,1,!0)}]),nextItemSeq:r.nextItemSeq+1,shop:r.shop.map(s=>s.itemType===n?{...s,purchased:s.purchased+1}:s)}),{ok:!0,spent:a})},unlockRow:n=>{let r=t(),o=ne.find(a=>a.row===n);return o===void 0?{ok:!1,reason:"unavailable"}:n!==r.unlockedRows+1?{ok:!1,reason:"unavailable"}:r.wallet.coins<o.cost?{ok:!1,reason:"unaffordable"}:(e({wallet:{...r.wallet,coins:r.wallet.coins-o.cost},unlockedRows:n,grid:xe(r.grid,n)}),{ok:!0,spent:o.cost})},restoreRoom:n=>{let r=t(),o=r.restorations.find(s=>s.id===n);if(o===void 0||o.restored)return{ok:!1,reason:"unavailable"};if(o.progress<o.requiredDeliveries)return{ok:!1,reason:"unavailable"};if(r.wallet.coins<o.coinCost)return{ok:!1,reason:"unaffordable"};let a=r.restorations.map(s=>s.id===n?{...s,restored:!0}:s),l=W(a)?.id??null;return e({wallet:{...r.wallet,coins:r.wallet.coins-o.coinCost},restorations:a,activeTasks:r.activeTasks.map(s=>({...s,restoreTargetId:l}))}),{ok:!0,spent:o.coinCost}}}),{name:Be,version:me,storage:ge(()=>We),partialize:e=>({grid:e.grid,energy:e.energy,wallet:e.wallet,player:e.player,activeTasks:e.activeTasks,restorations:e.restorations,crew:e.crew,shop:e.shop,unlockedRows:e.unlockedRows,nextItemSeq:e.nextItemSeq,nextTaskSeq:e.nextTaskSeq}),migrate:(e,t)=>{let n=e;if(n!==void 0)return t>=me?n:{...n,crew:be(),shop:dt(),unlockedRows:4,restorations:ye()}},onRehydrateStorage:()=>(e,t)=>{if(t!==void 0||e===void 0){f.setState({...ae(),hydrated:!0});return}if(!ot(e.grid)){f.setState({...ae(),hydrated:!0});return}f.setState({grid:xe(e.grid,e.unlockedRows),energy:_(e.energy,Date.now(),k(e.crew).energyRegenMs),hydrated:!0})}}));var ut=["porch","kitchen","parlour","bedroom","glasshouse","roof"],Wt=`
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#241d2e"/>
+      <stop offset=".55" stop-color="#4a3348"/>
+      <stop offset="1" stop-color="#8a5a48"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd98a"/><stop offset="1" stop-color="#f0a94e"/>
+    </linearGradient>
+    <radialGradient id="lamp" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffce74" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#ffce74" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f3a26"/><stop offset="1" stop-color="#1b2117"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#sky)"/>
+  <circle cx="252" cy="150" r="26" fill="#f2b06a" opacity=".28"/>
+  <path d="M0 148c34-13 60 6 92-2s52-20 86-13 46 16 66 12c30-6 46-14 76-20v75H0z" fill="#3a2b34" opacity=".9"/>
+  <path d="M0 160c40-9 66 8 104 3s60-14 92-8 54 14 84 9v46H0z" fill="#2a2027"/>`,Yt=`
+  <path d="M62 178V96l68-38 68 38v82z" fill="#241c17"/>
+  <path d="M62 96 130 58l68 38-8 5-60-33-60 33z" fill="#3b2d22"/>
+  <path d="M56 100 130 60l74 40-6 6-68-36-68 36z" fill="#4a382a"/>
+  <path d="M104 178v-40h30v40z" fill="#171310"/>
+  <g fill="#2f251c">
+    <rect x="78" y="112" width="26" height="24" rx="1"/>
+    <rect x="150" y="112" width="26" height="24" rx="1"/>
+    <rect x="112" y="76" width="22" height="18" rx="1"/>
+  </g>
+  <g stroke="#5b4634" stroke-width="3" stroke-linecap="round">
+    <path d="M76 118l30 12M76 130l30-12"/>
+    <path d="M148 118l30 12M148 130l30-12"/>
+    <path d="M110 82l26 8"/>
+  </g>
+  <path d="M198 178v-58l40 22v36z" fill="#1e1813"/>
+  <path d="M198 120l40 22-4 5-36-20z" fill="#332821"/>`,jt=`
+  <path d="M0 178h320v22H0z" fill="url(#grass)"/>
+  <g stroke="#3f4d32" stroke-width="2" stroke-linecap="round" opacity=".8">
+    <path d="M14 180v-7M22 181v-9M30 180v-6M292 180v-8M300 181v-6M308 180v-9"/>
+  </g>`,Ut={porch:`
+    <path d="M96 178v-18h48v18z" fill="#4a3728"/>
+    <path d="M96 160h48l-6-6h-36z" fill="#5d4633"/>
+    <g stroke="#6d523a" stroke-width="3" stroke-linecap="round">
+      <path d="M100 160v18M140 160v18M100 168h40"/>
+    </g>
+    <path d="M104 178v-34h22v34z" fill="#2a201a"/>
+    <path d="M104 144h22v4h-22z" fill="#6d523a"/>
+    <circle cx="122" cy="162" r="1.6" fill="#c9973f"/>
+    <circle cx="150" cy="150" r="14" fill="url(#lamp)"/>
+    <path d="M148 142h6v10h-6z" fill="#3a2d1f"/>
+    <path d="M147.4 143h7.2l-1.2-4h-4.8z" fill="#ffce74"/>`,kitchen:`
+    <rect x="78" y="112" width="26" height="24" rx="1" fill="url(#glass)"/>
+    <path d="M78 112h26v24H78z" fill="none" stroke="#6d523a" stroke-width="2"/>
+    <path d="M91 112v24M78 124h26" stroke="#6d523a" stroke-width="1.6"/>
+    <circle cx="91" cy="124" r="22" fill="url(#lamp)" opacity=".55"/>`,parlour:`
+    <rect x="150" y="112" width="26" height="24" rx="1" fill="url(#glass)"/>
+    <path d="M150 112h26v24h-26z" fill="none" stroke="#6d523a" stroke-width="2"/>
+    <path d="M163 112v24M150 124h26" stroke="#6d523a" stroke-width="1.6"/>
+    <path d="M146 110h34v3h-34z" fill="#6d523a"/>
+    <circle cx="163" cy="124" r="22" fill="url(#lamp)" opacity=".55"/>`,bedroom:`
+    <rect x="112" y="76" width="22" height="18" rx="1" fill="url(#glass)"/>
+    <path d="M112 76h22v18h-22z" fill="none" stroke="#6d523a" stroke-width="2"/>
+    <path d="M123 76v18" stroke="#6d523a" stroke-width="1.6"/>
+    <circle cx="123" cy="85" r="18" fill="url(#lamp)" opacity=".5"/>`,glasshouse:`
+    <path d="M198 178v-58l40 22v36z" fill="#26333a"/>
+    <path d="M198 120l40 22v6l-40-22z" fill="#4d6a72"/>
+    <g stroke="#7fa8ad" stroke-width="1.4" opacity=".9">
+      <path d="M206 178v-52M214 178v-47M222 178v-43M230 178v-38"/>
+      <path d="M198 140h40M198 158h40"/>
+    </g>
+    <path d="M200 172h36v6h-36z" fill="#3f5a52"/>
+    <g fill="#d98aa8"><circle cx="208" cy="170" r="2"/><circle cx="220" cy="169" r="2"/><circle cx="230" cy="170" r="2"/></g>`,roof:`
+    <path d="M52 102 130 56l78 46-6 7-72-42-72 42z" fill="#6b4a3a"/>
+    <path d="M58 104 130 62l72 42v6l-72-40-72 40z" fill="#7d5744"/>
+    <g stroke="#513528" stroke-width="1.2" opacity=".8">
+      <path d="M70 100l60-34M86 100l44-25M102 100l28-16M158 100l-28-16M174 100l-44-25M190 100l-60-34"/>
+    </g>
+    <rect x="160" y="62" width="14" height="30" rx="1.5" fill="#6b4a3a"/>
+    <rect x="157" y="58" width="20" height="6" rx="1.5" fill="#7d5744"/>
+    <g fill="#e9dcc9" opacity=".55">
+      <circle cx="167" cy="48" r="5"/><circle cx="173" cy="38" r="6.5"/><circle cx="166" cy="27" r="8"/>
+    </g>`};function mt(e){let t=new Set(e.restored),n=ut.filter(r=>t.has(r)).map(r=>Ut[r]).join("");return`<svg viewBox="0 0 320 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"
+    role="img" aria-label="Willow House, ${t.size} of ${ut.length} rooms restored">
+    ${Wt}${Yt}${n}${jt}
+  </svg>`}var Xt={nail:{body:`
       <rect x="6.6" y="3.4" width="10.8" height="2.6" rx=".8" fill="currentColor"/>
       <path d="M10.4 6h3.2l-.7 9.6L12 20.6l-.9-5z" fill="currentColor" opacity=".78"/>
       <path d="M6.6 5.2h10.8" stroke="rgba(0,0,0,.32)" stroke-width="1" fill="none"/>`},plank:{body:`
@@ -436,6 +580,53 @@
       <rect x="5" y="7.6" width="14" height="12" rx="1.6" fill="currentColor"/>
       <path d="M5 9.6c3.6-2.6 10.4-2.6 14 0" stroke="rgba(0,0,0,.32)" stroke-width="1.2" fill="none"/>
       <path d="M6.4 7.4C7.6 4.6 16.4 4.6 17.6 7.4" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".7"/>
-      <rect x="8.6" y="12.4" width="6.8" height="3.4" rx=".8" fill="rgba(0,0,0,.3)"/>`}};function j(e,r=30){let t=ut[e];return`<svg viewBox="0 0 24 24" width="${r}" height="${r}" aria-hidden="true" focusable="false">${t.body}</svg>`}function g(e){let r=document.getElementById(e);if(r===null)throw new Error(`Missing #${e}`);return r}var i={board:g("board"),tasks:g("tasks"),coins:g("coins"),gems:g("gems"),energyNow:g("energyNow"),energyMax:g("energyMax"),energyNext:g("energyNext"),energyFill:g("energyFill"),progress:g("progress"),taskCount:g("taskCount"),toast:g("toast"),scrim:g("scrim"),rooms:g("rooms"),btnAd:g("btnAd"),btnRefill:g("btnRefill"),btnRooms:g("btnRooms"),btnReset:g("btnReset"),btnCloseRooms:g("btnCloseRooms")},Le=0;function v(e,r="plain"){i.toast.textContent=e,i.toast.classList.remove("is-good","is-bad"),r!=="plain"&&i.toast.classList.add(r==="good"?"is-good":"is-bad"),i.toast.classList.add("is-up"),window.clearTimeout(Le),Le=window.setTimeout(()=>i.toast.classList.remove("is-up"),1900)}var oe={"no-energy":"Out of energy \u2014 watch an ad or wait for it to refill.","board-full":"Board is full \u2014 merge or deliver something first.","not-a-generator":"Only generators make new parts. Try the glowing ones.","empty-cell":"Nothing here yet.","out-of-bounds":"Nothing here yet."},Ge={"max-level":"Already at the top of its chain.","locked-cell":"That space is still locked.","empty-source":"Nothing to drag there.","out-of-bounds":"Drop it on the board.","same-cell":""},E=[],W=[];function Ae(e){return`var(--tile-${Math.min(10,Math.max(1,e))})`}function mt(e,r){let t=document.createElement("div");return t.className="tile",C(e.itemType)&&t.classList.add("is-gen"),r!==null&&t.classList.add(`anim-${r}`),t.style.color=Ae(e.level),t.dataset.level=String(e.level),t.dataset.itemId=e.id,t.innerHTML=j(e.itemType,32),t.setAttribute("aria-label",`${A(e.itemType,e.level)}, level ${e.level}${C(e.itemType)?", generator":""}`),t}function le(e){i.board.textContent="",E.length=0,W.length=0,e.grid.cells.forEach(r=>{let t=document.createElement("button");t.type="button",t.className="cell",t.dataset.index=String(r.index),t.setAttribute("aria-label",`Cell ${r.index+1}`),i.board.appendChild(t),E.push(t),W.push(null)})}var P=new Map;function pt(e){e.grid.cells.forEach((r,t)=>{let n=E[t];if(n===void 0)return;let l=r.item?.id??null,o=P.get(t)??null;l===W[t]&&o===null||(n.textContent="",r.item!==null&&n.appendChild(mt(r.item,o)),W[t]=l)}),P.clear()}function ft(e){i.tasks.textContent="",e.activeTasks.forEach(t=>{let n=_(e.grid,t),l=document.createElement("article");l.className=`task${n?" is-ready":""}`;let o=document.createElement("div"),s=document.createElement("div");s.className="task__lines",we(e.grid,t).forEach(u=>{let p=document.createElement("span");p.className=`req${u.satisfied?" is-met":""}`,p.innerHTML=`${j(u.itemType,16)}<span>${A(u.itemType,u.level)} \xB7 ${Math.min(u.owned,u.count)}/${u.count}</span>`,s.appendChild(p)});let a=document.createElement("div");a.className="task__reward",a.innerHTML=`Pays <b>${t.reward.coins} coins</b>${t.reward.gems>0?` \xB7 <i>${t.reward.gems} gems</i>`:""} \xB7 ${t.reward.xp} xp`,o.append(s,a);let d=document.createElement("button");d.type="button",d.className=`btn${n?" btn--go":""}`,d.textContent="Deliver",d.disabled=!n,d.addEventListener("click",()=>{let u=c.getState().wallet.coins;if(c.getState().deliverTask(t.id)){let p=c.getState().wallet.coins-u;v(`Delivered \u2014 +${p} coins`,"good")}}),l.append(o,d),i.tasks.appendChild(l)});let r=e.activeTasks.filter(t=>_(e.grid,t)).length;i.taskCount.textContent=r>0?`${r} ready`:`${e.activeTasks.length} open`}function De(e){i.coins.textContent=String(e.wallet.coins),i.gems.textContent=String(e.wallet.gems),i.energyNow.textContent=String(e.energy.current),i.energyMax.textContent=String(e.energy.max),i.energyFill.style.width=`${e.energy.current/e.energy.max*100}%`;let r=ge(e.energy);i.energyNext.textContent=r===0?"full":`full in ${ye(r)}`;let t=e.restorations.filter(n=>n.restored).length;i.progress.textContent=`${t} of ${e.restorations.length} restored`,i.btnRefill.disabled=e.wallet.gems<25||e.energy.current>=e.energy.max,i.btnAd.textContent=`Watch ad \xB7 +${30} energy`,i.btnRefill.textContent=`Refill \xB7 ${25} gems`}function Ne(e){i.rooms.textContent="",e.restorations.forEach(r=>{let t=document.createElement("div");t.className=`room${r.restored?" is-done":""}`,t.innerHTML=`<span>${r.name}</span><span class="room__state">${r.restored?"Restored":r.coinCost>0?`${r.coinCost} coins`:"In progress"}</span>`,i.rooms.appendChild(t)})}var X=null;function h(e){e.grid!==X&&(pt(e),ft(e),X=e.grid),De(e),i.scrim.classList.contains("is-open")&&Ne(e)}var y=null,gt=8;function Oe(e,r){let n=document.elementFromPoint(e,r)?.closest(".cell");if(n==null)return null;let l=n.dataset.index;return l===void 0?null:Number.parseInt(l,10)}function yt(e,r,t){let n=document.createElement("div");return n.className="ghost",n.style.color=Ae(e.level),n.style.left=`${r}px`,n.style.top=`${t}px`,n.innerHTML=j(e.itemType,32),document.body.appendChild(n),n}function Pe(){E.forEach(e=>e.classList.remove("is-target"))}i.board.addEventListener("pointerdown",e=>{let t=e.target?.closest(".cell");if(t==null)return;let n=t.dataset.index;if(n===void 0)return;let l=Number.parseInt(n,10);c.getState().grid.cells[l]?.item!=null&&(y={pointerId:e.pointerId,from:l,startX:e.clientX,startY:e.clientY,startedAt:performance.now(),ghost:null,hoverIndex:null},i.board.setPointerCapture(e.pointerId))});i.board.addEventListener("pointermove",e=>{if(y===null||e.pointerId!==y.pointerId)return;let r=Math.hypot(e.clientX-y.startX,e.clientY-y.startY);if(y.ghost===null){if(r<gt)return;let n=c.getState().grid.cells[y.from]?.item;if(n==null)return;y.ghost=yt(n,e.clientX,e.clientY),E[y.from]?.classList.add("is-source")}y.ghost.style.left=`${e.clientX}px`,y.ghost.style.top=`${e.clientY}px`;let t=Oe(e.clientX,e.clientY);t!==y.hoverIndex&&(Pe(),t!==null&&t!==y.from&&E[t]?.classList.add("is-target"),y.hoverIndex=t)});function $e(e){if(y===null||e.pointerId!==y.pointerId)return;let r=y;y=null,r.ghost?.remove(),Pe(),E[r.from]?.classList.remove("is-source");let t=c.getState();if(r.ghost===null){let o=t.tapGenerator(r.from);o.ok?P.set(o.at,"spawn"):oe[o.reason]!==""&&v(oe[o.reason],"bad"),h(c.getState());return}let n=Oe(e.clientX,e.clientY);if(n===null){h(c.getState());return}let l=t.dropItem(r.from,n);l.kind==="merged"?P.set(l.at,"pop"):l.kind==="rejected"&&Ge[l.reason]!==""&&v(Ge[l.reason],"bad"),h(c.getState())}i.board.addEventListener("pointerup",$e);i.board.addEventListener("pointercancel",$e);i.board.addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;let t=e.target?.closest(".cell")?.dataset.index;if(t===void 0)return;e.preventDefault();let n=c.getState().tapGenerator(Number.parseInt(t,10));n.ok?P.set(n.at,"spawn"):v(oe[n.reason],"bad"),h(c.getState())});i.btnAd.addEventListener("click",()=>{c.getState().claimRewardedAd("energy"),v(`+${30} energy`,"good")});i.btnRefill.addEventListener("click",()=>{c.getState().refillEnergyWithGems()?v("Energy topped up","good"):v("Not enough gems.","bad")});i.btnRooms.addEventListener("click",()=>{Ne(c.getState()),i.scrim.classList.add("is-open")});function se(){i.scrim.classList.remove("is-open")}i.btnCloseRooms.addEventListener("click",se);i.scrim.addEventListener("click",e=>{e.target===i.scrim&&se()});document.addEventListener("keydown",e=>{e.key==="Escape"&&se()});i.btnReset.addEventListener("click",()=>{c.getState().resetGame(),X=null,le(c.getState()),h(c.getState()),v("Fresh workshop.","plain")});le(c.getState());h(c.getState());c.subscribe(e=>h(e));window.setInterval(()=>{c.getState().refreshEnergy(),De(c.getState())},1e3);c.persist.onFinishHydration(()=>{X=null,le(c.getState()),h(c.getState())});})();
+      <rect x="8.6" y="12.4" width="6.8" height="3.4" rx=".8" fill="rgba(0,0,0,.3)"/>`},gardenBed:{body:`
+      <path d="M3 14.6h18l-1.6 5.4H4.6z" fill="currentColor"/>
+      <path d="M3 14.6h18l-1 3.2H4z" fill="rgba(0,0,0,.28)"/>
+      <path d="M8 14.4c-.4-3.4 1-5.6 3-6.4M16 14.4c.4-3.2-.8-5.4-2.6-6.2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="10.6" cy="6.6" r="2.2" fill="currentColor"/>
+      <circle cx="14.6" cy="8.4" r="1.8" fill="currentColor" opacity=".75"/>`}},le={nail:"#d3dae1",plank:"#d9a05f",hammer:"#b9c6d2",paint:"#7fc9cf",flower:"#eb9ab8",toolbox:"#e8b45c",lumberPile:"#e8b45c",paintCan:"#e8b45c",gardenBed:"#e8b45c"};function J(e,t=30){let n=Xt[e];return`<svg viewBox="0 0 24 24" width="${t}" height="${t}" aria-hidden="true" focusable="false">${n.body}</svg>`}function Jt(e){return e>=6?3:e>=3?2:1}var Kt={apprentice:{skin:"#e8b892",hair:"#4a2f22",cloth:"#7f8f5e",clothDark:"#5d6a45",accent:"#e5c46a"},carpenter:{skin:"#d9a578",hair:"#8d8378",cloth:"#8a5a3c",clothDark:"#6b432b",accent:"#c9973f"},gardener:{skin:"#c88b62",hair:"#241a17",cloth:"#5c8a72",clothDark:"#446553",accent:"#9fd17f"},curator:{skin:"#eccBa6",hair:"#cfc6bb",cloth:"#5d5a7a",clothDark:"#454162",accent:"#9fd7ff"}};function Qt(e,t){return`
+    <defs>
+      <clipPath id="clip"><circle cx="32" cy="32" r="30"/></clipPath>
+      <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3a2e22"/><stop offset="1" stop-color="#1d1712"/>
+      </linearGradient>
+    </defs>
+    <circle cx="32" cy="32" r="30" fill="url(#bg)"/>
+    <g clip-path="url(#clip)">${e}</g>
+    <circle cx="32" cy="32" r="30" fill="none" stroke="${t}" stroke-width="1.4" opacity=".75"/>`}function se(e,t){return`
+    <path d="M12 64c0-11 9-17 20-17s20 6 20 17z" fill="${e.cloth}"/>
+    <path d="M22 50c3 6 17 6 20 0l3 3c-4 7-22 7-26 0z" fill="${e.clothDark}"/>
+    <path d="M25 38h14v10c0 3-14 3-14 0z" fill="${e.skin}"/>
+    <ellipse cx="32" cy="28" rx="12" ry="13" fill="${e.skin}"/>
+    <circle cx="27.5" cy="27" r="1.5" fill="#2a1c14"/>
+    <circle cx="36.5" cy="27" r="1.5" fill="#2a1c14"/>
+    <path d="M29 33c2 1.6 4 1.6 6 0" stroke="#2a1c14" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    ${t}`}function Zt(e,t){let n=`<path d="M20 26c0-9 6-13 12-13s12 4 12 13c-3-5-7-6-12-6s-9 1-12 6z" fill="${t.hair}"/>`,r=e>=2?`<path d="M18 24c2-9 8-12 14-12s12 3 14 12c-9-4-19-4-28 0z" fill="${t.accent}"/>
+       <rect x="17" y="23" width="30" height="3" rx="1.5" fill="#3a2f1d"/>`:"",o=e>=3?`<rect x="43" y="20" width="2.4" height="9" rx="1" transform="rotate(12 43 20)" fill="#e3d3ae"/>
+       <path d="M44.8 29.4l1.6 2.6-2.6-.6z" fill="#c9973f"/>`:"";return se(t,`${n}${r}${o}`)}function er(e,t){let n=`<path d="M19 27c1-10 7-14 13-14s12 4 13 14c-2-4-5-6-13-6s-11 2-13 6z" fill="${t.hair}"/>
+                <path d="M23 36c0 5 4 8 9 8s9-3 9-8c-3 3-15 3-18 0z" fill="${t.hair}" opacity=".85"/>`,r=e>=2?`<path d="M22 50l6 14M42 50l-6 14" stroke="${t.clothDark}" stroke-width="3" stroke-linecap="round"/>
+       <rect x="26" y="55" width="12" height="7" rx="1.5" fill="#6b4a2e"/>`:"",o=e>=3?`<rect x="43.5" y="26" width="6.5" height="2.2" rx="1" fill="#d9c08a"/>
+       <path d="M43.5 26l-2.2 1.1 2.2 1.1z" fill="#c9973f"/>`:"";return se(t,`${n}${r}${o}`)}function tr(e,t){let n=`<path d="M20 28c0-10 6-14 12-14s12 4 12 14c-1-6-4-8-6-6-3-4-11-4-14 1-2-1-3 1-4 5z" fill="${t.hair}"/>`,r=e>=2?`<ellipse cx="32" cy="20" rx="21" ry="5.5" fill="#c8a86a"/>
+       <path d="M21 20c0-7 5-11 11-11s11 4 11 11z" fill="#dcbb78"/>
+       <path d="M21 19.5h22" stroke="#8f7443" stroke-width="1.6"/>`:"",o=e>=3?`<path d="M46 34c4-2 7-1 8 2-3 2-6 2-8-2z" fill="${t.accent}"/>
+       <path d="M46 34c-1-4 1-7 4-7 1 3 0 6-4 7z" fill="#7fb06a"/>`:"";return se(t,`${n}${r}${o}`)}function rr(e,t){let n=`<path d="M19 29c0-11 6-16 13-16s13 5 13 16c-2-2-3-6-4-8-4 3-14 3-18 0-1 2-2 6-4 8z" fill="${t.hair}"/>
+                <ellipse cx="32" cy="14" rx="9" ry="5" fill="${t.hair}"/>`,r=e>=2?`<circle cx="27.5" cy="27" r="4" fill="none" stroke="${t.accent}" stroke-width="1.3"/>
+       <circle cx="36.5" cy="27" r="4" fill="none" stroke="${t.accent}" stroke-width="1.3"/>
+       <path d="M31.5 27h1" stroke="${t.accent}" stroke-width="1.3"/>`:"",o=e>=3?`<circle cx="32" cy="52" r="3.2" fill="#c9973f"/><circle cx="32" cy="52" r="1.3" fill="#3a2b12"/>
+       <path d="M18 47c8-4 20-4 28 0" stroke="${t.accent}" stroke-width="1.2" fill="none" opacity=".7"/>`:"";return se(t,`${n}${r}${o}`)}var nr={apprentice:Zt,carpenter:er,gardener:tr,curator:rr};function pt(e,t,n=64){let r=Kt[e],o=Jt(t),a=nr[e](t<=0?3:o,r),l=t<=0?"#5a4830":r.accent;return`<svg viewBox="0 0 64 64" width="${n}" height="${n}" aria-hidden="true" focusable="false"
+    style="${t<=0?"filter:saturate(.3) brightness(.62);":""}">${Qt(a,l)}</svg>`}function y(e){let t=document.getElementById(e);if(t===null)throw new Error(`Missing #${e}`);return t}var i={board:y("board"),tasks:y("tasks"),crew:y("crew"),crewCount:y("crewCount"),rooms:y("rooms"),houseCount:y("houseCount"),scene:y("scene"),sceneCaption:y("sceneCaption"),shopOffers:y("shopOffers"),expansions:y("expansions"),coins:y("coins"),gems:y("gems"),playerLevel:y("playerLevel"),xpArc:document.getElementById("xpArc"),energyNow:y("energyNow"),energyMax:y("energyMax"),energyNext:y("energyNext"),energyFill:y("energyFill"),progress:y("progress"),taskCount:y("taskCount"),toast:y("toast"),btnAd:y("btnAd"),btnRefill:y("btnRefill"),btnReset:y("btnReset")},ft=0;function x(e,t="plain"){i.toast.textContent=e,i.toast.classList.remove("is-good","is-bad"),t!=="plain"&&i.toast.classList.add(t==="good"?"is-good":"is-bad"),i.toast.classList.add("is-up"),window.clearTimeout(ft),ft=window.setTimeout(()=>i.toast.classList.remove("is-up"),2100)}var Ie={"no-energy":"Out of energy \u2014 watch an ad or come back later.","board-full":"Board is full \u2014 merge or deliver something first.","not-a-generator":"Only generators make parts. Tap a glowing one.","empty-cell":"Nothing here yet.","out-of-bounds":"Nothing here yet."},ht={"max-level":"Already at the top of its chain.","locked-cell":"That row is locked \u2014 buy it in the shop.","empty-source":"Nothing to drag there.","out-of-bounds":"Drop it on the board.","same-cell":""};function Z(e,t){if(e.ok){x(`${t} \xB7 \u2212${e.spent} coins`,"good");return}x(e.reason==="unaffordable"?"Not enough coins yet.":"Not available yet.","bad")}var L=[],ie=[];function yt(e){return`var(--tile-${Math.min(10,Math.max(1,e))})`}function or(e,t){let n=document.createElement("div");return n.className="tile",M(e.itemType)&&n.classList.add("is-gen"),t!==null&&n.classList.add(`anim-${t}`),n.style.color=yt(e.level),n.style.setProperty("--chain",le[e.itemType]),n.dataset.level=String(e.level),n.dataset.itemId=e.id,n.innerHTML=`<span class="tile__art">${J(e.itemType,32)}</span>`,n.setAttribute("aria-label",`${N(e.itemType,e.level)}, level ${e.level}${M(e.itemType)?", generator":""}`),n}function ar(e){i.board.textContent="",L.length=0,ie.length=0,e.grid.cells.forEach(t=>{let n=document.createElement("button");n.type="button",n.className=`cell${t.locked?" is-locked":""}`,n.dataset.index=String(t.index),n.setAttribute("aria-label",t.locked?"Locked space":`Cell ${t.index+1}`),i.board.appendChild(n),L.push(n),ie.push(null)})}var ee=new Map;function bt(e){e.grid.cells.forEach((t,n)=>{let r=L[n];if(r===void 0)return;r.classList.toggle("is-locked",t.locked);let o=t.item?.id??null,a=ee.get(n)??null;o===ie[n]&&a===null||(r.textContent="",t.item!==null&&r.appendChild(or(t.item,a)),ie[n]=o)}),ee.clear()}function vt(e){i.tasks.textContent="",e.activeTasks.forEach(n=>{let r=H(e.grid,n),o=document.createElement("article");o.className=`task${r?" is-ready":""}`;let a=document.createElement("div"),l=document.createElement("div");l.className="task__lines",st(e.grid,n).forEach(c=>{let g=document.createElement("span");g.className=`req${c.satisfied?" is-met":""}`,g.innerHTML=`<span style="color:${le[c.itemType]}">${J(c.itemType,16)}</span><span>${N(c.itemType,c.level)} \xB7 ${Math.min(c.owned,c.count)}/${c.count}</span>`,l.appendChild(g)});let s=document.createElement("div");s.className="task__reward";let p=k(e.crew).taskCoinMultiplier,u=Math.round(n.reward.coins*p);s.innerHTML=`Pays <b>${u} coins</b>${n.reward.gems>0?` \xB7 <i>${n.reward.gems} gems</i>`:""} \xB7 ${n.reward.xp} xp`,a.append(l,s);let d=document.createElement("button");d.type="button",d.className=`btn${r?" btn--go":""}`,d.textContent="Deliver",d.disabled=!r,d.addEventListener("click",()=>{let c=f.getState().wallet.coins;f.getState().deliverTask(n.id)&&x(`Delivered \u2014 +${f.getState().wallet.coins-c} coins`,"good")}),o.append(a,d),i.tasks.appendChild(o)});let t=e.activeTasks.filter(n=>H(e.grid,n)).length;i.taskCount.textContent=t>0?`${t} ready`:`${e.activeTasks.length} open`,Ge("viewBoard",t>0)}function wt(e){i.crew.textContent="",I.forEach(r=>{let o=e.crew.find(c=>c.id===r.id);if(o===void 0)return;let a=document.createElement("article");a.className=`member${o.hired?"":" is-locked"}`;let l=document.createElement("div");l.innerHTML=pt(r.id,o.level);let s=document.createElement("div");s.className="member__body";let p=document.createElement("div");p.className="member__head",p.innerHTML=`<span class="member__name">${r.name}</span>
+      <span class="member__role">${r.role}${o.hired?` \xB7 Lv ${o.level}`:""}</span>`;let u=document.createElement("p");u.className="member__blurb",u.textContent=r.blurb;let d=document.createElement("div");if(d.className="member__foot",o.hired){let c=Xe(r,o.level),g=document.createElement("span");g.className=`member__perk${c?" is-capped":""}`,g.textContent=c?`${j(r,o.level)} \xB7 maxed`:j(r,o.level);let h=document.createElement("div");h.className="pips";for(let T=1;T<=r.maxLevel;T+=1){let $=document.createElement("span");$.className=`pip${T<=o.level?" is-on":""}`,h.appendChild($)}let S=Y(r,o.level),v=document.createElement("button");v.type="button",v.className="btn btn--buy";let m=document.createElement("span");m.className="member__next",S===null?(v.textContent="Fully trained",v.disabled=!0,m.textContent="Nothing left to teach them."):(v.textContent=`Train \xB7 ${S} coins`,v.disabled=e.wallet.coins<S,m.textContent=`Next: ${j(r,o.level+1)}`,v.addEventListener("click",()=>{Z(f.getState().upgradeCrew(r.id),`${r.name} trained`)})),d.append(h,v),s.append(p,u,g,m,d)}else{let c=document.createElement("span");c.className="member__perk",c.textContent=`Starts at ${j(r,1)}`;let g=document.createElement("button");g.type="button",g.className="btn btn--buy",g.textContent=`Hire \xB7 ${r.hireCost} coins`,g.disabled=e.wallet.coins<r.hireCost,g.addEventListener("click",()=>{Z(f.getState().hireCrew(r.id),`${r.name} joined the crew`)}),d.append(document.createElement("span"),g),s.append(p,u,c,d)}a.append(l,s),i.crew.appendChild(a)});let t=e.crew.filter(r=>r.hired).length;i.crewCount.textContent=`${t} of ${I.length} hired`;let n=I.some(r=>{let o=e.crew.find(l=>l.id===r.id);if(o===void 0)return!1;if(!o.hired)return e.wallet.coins>=r.hireCost;let a=Y(r,o.level);return a!==null&&e.wallet.coins>=a});Ge("viewCrew",n)}function xt(e){let t=e.restorations.filter(l=>l.restored);i.scene.innerHTML=mt({restored:t.map(l=>l.id)})+'<p class="scene__caption" id="sceneCaption"></p>';let n=i.scene.querySelector(".scene__caption"),r=t[t.length-1],o=e.restorations.find(l=>!l.restored);n!==null&&(n.textContent=r!==void 0?r.story:"Willow House has been empty for years. Start with the porch."),i.houseCount.textContent=`${t.length} of ${e.restorations.length}`,i.rooms.textContent="",e.restorations.forEach(l=>{let s=o!==void 0&&l.id===o.id,p=document.createElement("article");p.className=`room${l.restored?" is-done":""}${s?" is-next":""}`;let u=document.createElement("div"),d=l.progress>=l.requiredDeliveries;u.innerHTML=`<div class="room__name">${l.name}</div>
+      <div class="room__meta">${l.restored?"Restored":`${l.progress}/${l.requiredDeliveries} deliveries \xB7 ${l.coinCost} coins`}</div>
+      <div class="bar"><div class="bar__fill" style="width:${l.restored?100:Math.round(l.progress/l.requiredDeliveries*100)}%"></div></div>
+      ${l.restored?`<p class="room__story">${l.story}</p>`:""}`;let c=document.createElement("button");c.type="button",c.className=d&&!l.restored?"btn btn--go":"btn",c.textContent=l.restored?"Done":"Restore",c.disabled=l.restored||!d||e.wallet.coins<l.coinCost,c.addEventListener("click",()=>{Z(f.getState().restoreRoom(l.id),`${l.name} restored`)}),p.append(u,c),i.rooms.appendChild(p)});let a=e.restorations.some(l=>!l.restored&&l.progress>=l.requiredDeliveries&&e.wallet.coins>=l.coinCost);Ge("viewHouse",a)}function St(e){i.shopOffers.textContent="",O.forEach(t=>{let n=e.player.level<t.requiresPlayerLevel,r=Ce(e.shop,t.itemType)??0,o=document.createElement("article");o.className=`offer${n?" is-locked":""}`,o.innerHTML=`<div class="offer__art">${J(t.itemType,22)}</div>
+      <div><div class="offer__name">${t.name}</div>
+      <p class="offer__blurb">${n?`Unlocks at player level ${t.requiresPlayerLevel}.`:t.blurb}</p></div>`;let a=document.createElement("button");a.type="button",a.className="btn btn--buy",a.textContent=n?"Locked":`${r} coins`,a.disabled=n||e.wallet.coins<r,a.addEventListener("click",()=>{Z(f.getState().buyGenerator(t.itemType),`${t.name} delivered`)}),o.appendChild(a),i.shopOffers.appendChild(o)}),i.expansions.textContent="",ne.forEach(t=>{let n=e.unlockedRows>=t.row,r=t.row===e.unlockedRows+1,o=document.createElement("article");o.className=`offer${n||r?"":" is-locked"}`,o.innerHTML=`<div class="offer__art">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="currentColor">
+          <rect x="2" y="4" width="6.5" height="6.5" rx="1.2"/><rect x="9.8" y="4" width="6.5" height="6.5" rx="1.2" opacity=".5"/>
+          <rect x="2" y="12" width="6.5" height="6.5" rx="1.2" opacity=".5"/><rect x="9.8" y="12" width="6.5" height="6.5" rx="1.2"/>
+        </g></svg></div>
+      <div><div class="offer__name">Row ${t.row}</div>
+      <p class="offer__blurb">${n?"Already yours.":r?"Five more spaces to work in.":"Buy the row above first."}</p></div>`;let a=document.createElement("button");a.type="button",a.className="btn btn--buy",a.textContent=n?"Owned":`${t.cost} coins`,a.disabled=n||!r||e.wallet.coins<t.cost,a.addEventListener("click",()=>{Z(f.getState().unlockRow(t.row),`Row ${t.row} opened`)}),o.appendChild(a),i.expansions.appendChild(o)})}var gt=2*Math.PI*16;function _e(e){i.coins.textContent=String(e.wallet.coins),i.gems.textContent=String(e.wallet.gems),i.playerLevel.textContent=String(e.player.level);let t=Math.max(0,Math.min(1,e.player.xp/e.player.xpToNextLevel));i.xpArc.setAttribute("stroke-dasharray",String(gt)),i.xpArc.setAttribute("stroke-dashoffset",String(gt*(1-t))),i.energyNow.textContent=String(e.energy.current),i.energyMax.textContent=String(e.energy.max),i.energyFill.style.width=`${e.energy.current/e.energy.max*100}%`;let n=k(e.crew).energyRegenMs,r=Ke(e.energy,Date.now(),n);i.energyNext.textContent=r===0?"full":`full in ${Qe(r)}`;let o=e.restorations.filter(a=>a.restored).length;i.progress.textContent=`Willow House \xB7 ${o} of ${e.restorations.length}`,i.btnRefill.disabled=e.wallet.gems<D||e.energy.current>=e.energy.max,i.btnRefill.textContent=`${D} gems`}function Ge(e,t){let n=document.querySelector(`.tab[data-view="${e}"]`);if(n===null)return;let r=n.querySelector(".tab__dot");if(t&&r===null){let o=document.createElement("span");o.className="tab__dot",n.appendChild(o)}else!t&&r!==null&&r.remove()}var K=null,ce=-1,Me="",Re="";function Q(e){let t=e.crew.map(o=>`${o.hired?1:0}${o.level}`).join(""),n=e.restorations.map(o=>`${o.restored?1:0}${o.progress}`).join(""),r=e.wallet.coins!==ce;e.grid!==K&&(bt(e),vt(e),K=e.grid),(t!==Me||r)&&(wt(e),Me=t),(n!==Re||r)&&(xt(e),Re=n),(r||e.grid!==K)&&St(e),ce=e.wallet.coins,_e(e)}function Le(e){K=null,ce=-1,Me="",Re="",ar(e),bt(e),vt(e),wt(e),xt(e),St(e),_e(e),K=e.grid,ce=e.wallet.coins}document.querySelectorAll(".tab").forEach(e=>{e.addEventListener("click",()=>{let t=e.dataset.view;t!==void 0&&(document.querySelectorAll(".tab").forEach(n=>n.classList.remove("is-active")),document.querySelectorAll(".view").forEach(n=>n.classList.remove("is-active")),e.classList.add("is-active"),document.getElementById(t)?.classList.add("is-active"),window.scrollTo({top:0,behavior:"auto"}))})});var b=null,lr=8;function kt(e,t){let r=document.elementFromPoint(e,t)?.closest(".cell");if(r==null)return null;let o=r.dataset.index;return o===void 0?null:Number.parseInt(o,10)}function sr(e,t,n){let r=document.createElement("div");return r.className="ghost",r.style.color=yt(e.level),r.style.left=`${t}px`,r.style.top=`${n}px`,r.innerHTML=`<span style="color:${le[e.itemType]}">${J(e.itemType,32)}</span>`,document.body.appendChild(r),r}function Tt(){L.forEach(e=>e.classList.remove("is-target"))}i.board.addEventListener("pointerdown",e=>{let n=e.target?.closest(".cell")?.dataset.index;if(n===void 0)return;let r=Number.parseInt(n,10);f.getState().grid.cells[r]?.item!=null&&(b={pointerId:e.pointerId,from:r,startX:e.clientX,startY:e.clientY,ghost:null,hoverIndex:null},i.board.setPointerCapture(e.pointerId))});i.board.addEventListener("pointermove",e=>{if(b===null||e.pointerId!==b.pointerId)return;let t=Math.hypot(e.clientX-b.startX,e.clientY-b.startY);if(b.ghost===null){if(t<lr)return;let r=f.getState().grid.cells[b.from]?.item;if(r==null)return;b.ghost=sr(r,e.clientX,e.clientY),L[b.from]?.classList.add("is-source")}b.ghost.style.left=`${e.clientX}px`,b.ghost.style.top=`${e.clientY}px`;let n=kt(e.clientX,e.clientY);n!==b.hoverIndex&&(Tt(),n!==null&&n!==b.from&&L[n]?.classList.add("is-target"),b.hoverIndex=n)});function Et(e){if(b===null||e.pointerId!==b.pointerId)return;let t=b;b=null,t.ghost?.remove(),Tt(),L[t.from]?.classList.remove("is-source");let n=f.getState();if(t.ghost===null){let a=n.tapGenerator(t.from);a.ok?(ee.set(a.at,"spawn"),a.wasFree&&x("Free tap \u2014 Nell got one out for nothing.","good")):Ie[a.reason]!==""&&x(Ie[a.reason],"bad"),Q(f.getState());return}let r=kt(e.clientX,e.clientY);if(r===null){Q(f.getState());return}let o=n.dropItem(t.from,r);o.kind==="merged"?(ee.set(o.at,"pop"),M(o.resultItem.itemType)&&x(`${N(o.resultItem.itemType,o.resultItem.level)} \u2014 better output now.`,"good")):o.kind==="rejected"&&ht[o.reason]!==""&&x(ht[o.reason],"bad"),Q(f.getState())}i.board.addEventListener("pointerup",Et);i.board.addEventListener("pointercancel",Et);i.board.addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;let t=e.target?.closest(".cell")?.dataset.index;if(t===void 0)return;e.preventDefault();let n=f.getState().tapGenerator(Number.parseInt(t,10));n.ok?ee.set(n.at,"spawn"):x(Ie[n.reason],"bad"),Q(f.getState())});i.btnAd.addEventListener("click",()=>{f.getState().claimRewardedAd("energy"),x(`+${re} energy`,"good")});i.btnRefill.addEventListener("click",()=>{f.getState().refillEnergyWithGems()?x("Energy topped up","good"):x("Not enough gems.","bad")});i.btnReset.addEventListener("click",()=>{f.getState().resetGame(),Le(f.getState()),x("Fresh workshop.","plain")});Le(f.getState());f.subscribe(e=>Q(e));window.setInterval(()=>{f.getState().refreshEnergy(),_e(f.getState())},1e3);f.persist.onFinishHydration(()=>Le(f.getState()));})();
 
 </script>

@@ -15,7 +15,11 @@ import type { EnergyRegenResult, EnergyState } from '../types/game';
  * the next point every time the player opens the app - a slow, invisible tax
  * that players do notice over a session.
  */
-export function settleEnergy(energy: EnergyState, now: number = Date.now()): EnergyRegenResult {
+export function settleEnergy(
+  energy: EnergyState,
+  now: number = Date.now(),
+  intervalMs: number = ENERGY_REGEN_MS,
+): EnergyRegenResult {
   const max = energy.max > 0 ? energy.max : ENERGY_MAX;
 
   // Already full: nothing accrues, and the clock parks at `now` so the next
@@ -26,29 +30,36 @@ export function settleEnergy(energy: EnergyState, now: number = Date.now()): Ene
 
   // Guard against clock skew / restored backups with a future timestamp.
   const elapsed = Math.max(0, now - energy.lastTickAt);
-  const accrued = Math.floor(elapsed / ENERGY_REGEN_MS);
+  const accrued = Math.floor(elapsed / intervalMs);
   const capped = Math.min(accrued, max - energy.current);
   const current = energy.current + capped;
-  const lastTickAt = capped > 0 ? energy.lastTickAt + capped * ENERGY_REGEN_MS : energy.lastTickAt;
+  const lastTickAt = capped > 0 ? energy.lastTickAt + capped * intervalMs : energy.lastTickAt;
 
-  const msToNextPoint =
-    current >= max ? 0 : Math.max(0, ENERGY_REGEN_MS - (now - lastTickAt));
+  const msToNextPoint = current >= max ? 0 : Math.max(0, intervalMs - (now - lastTickAt));
 
   return { current, lastTickAt, gained: capped, msToNextPoint };
 }
 
 /** Applies `settleEnergy` and returns a ready-to-store `EnergyState`. */
-export function settleEnergyState(energy: EnergyState, now: number = Date.now()): EnergyState {
-  const settled = settleEnergy(energy, now);
+export function settleEnergyState(
+  energy: EnergyState,
+  now: number = Date.now(),
+  intervalMs: number = ENERGY_REGEN_MS,
+): EnergyState {
+  const settled = settleEnergy(energy, now, intervalMs);
   return { current: settled.current, max: energy.max, lastTickAt: settled.lastTickAt };
 }
 
 /** Ms until energy reaches `max`; 0 when already full. */
-export function msUntilFull(energy: EnergyState, now: number = Date.now()): number {
-  const settled = settleEnergy(energy, now);
+export function msUntilFull(
+  energy: EnergyState,
+  now: number = Date.now(),
+  intervalMs: number = ENERGY_REGEN_MS,
+): number {
+  const settled = settleEnergy(energy, now, intervalMs);
   const missing = energy.max - settled.current;
   if (missing <= 0) return 0;
-  return settled.msToNextPoint + (missing - 1) * ENERGY_REGEN_MS;
+  return settled.msToNextPoint + (missing - 1) * intervalMs;
 }
 
 /** `"12:05"` / `"1:02:05"` - for the countdown chip on the energy bar. */
@@ -69,8 +80,9 @@ export function spendEnergy(
   energy: EnergyState,
   amount: number,
   now: number = Date.now(),
+  intervalMs: number = ENERGY_REGEN_MS,
 ): EnergyState | null {
-  const settled = settleEnergyState(energy, now);
+  const settled = settleEnergyState(energy, now, intervalMs);
   if (settled.current < amount) return null;
 
   // Dropping below max starts (or keeps) the regen clock running from `now`
@@ -88,8 +100,9 @@ export function grantEnergy(
   energy: EnergyState,
   amount: number,
   now: number = Date.now(),
+  intervalMs: number = ENERGY_REGEN_MS,
 ): EnergyState {
-  const settled = settleEnergyState(energy, now);
+  const settled = settleEnergyState(energy, now, intervalMs);
   return {
     current: Math.min(settled.max, settled.current + amount),
     max: settled.max,

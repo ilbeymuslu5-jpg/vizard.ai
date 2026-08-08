@@ -67,6 +67,33 @@ const EMBLEMS: Readonly<Record<ItemType, Emblem>> = {
       <path d="M6.4 7.4C7.6 4.6 16.4 4.6 17.6 7.4" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".7"/>
       <rect x="8.6" y="12.4" width="6.8" height="3.4" rx=".8" fill="rgba(0,0,0,.3)"/>`,
   },
+  gardenBed: {
+    body: `
+      <path d="M3 14.6h18l-1.6 5.4H4.6z" fill="currentColor"/>
+      <path d="M3 14.6h18l-1 3.2H4z" fill="rgba(0,0,0,.28)"/>
+      <path d="M8 14.4c-.4-3.4 1-5.6 3-6.4M16 14.4c.4-3.2-.8-5.4-2.6-6.2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <circle cx="10.6" cy="6.6" r="2.2" fill="currentColor"/>
+      <circle cx="14.6" cy="8.4" r="1.8" fill="currentColor" opacity=".75"/>`,
+  },
+};
+
+/**
+ * Chain identity colours.
+ *
+ * The emblem keeps its chain colour at every level while the tile frame carries
+ * the level ramp. Splitting the two means a glance answers both questions at
+ * once - what is it, and how far along - instead of one hue trying to say both.
+ */
+export const CHAIN_COLORS: Readonly<Record<ItemType, string>> = {
+  nail: '#d3dae1',
+  plank: '#d9a05f',
+  hammer: '#b9c6d2',
+  paint: '#7fc9cf',
+  flower: '#eb9ab8',
+  toolbox: '#e8b45c',
+  lumberPile: '#e8b45c',
+  paintCan: '#e8b45c',
+  gardenBed: '#e8b45c',
 };
 
 export function emblemSvg(itemType: ItemType, size = 30): string {

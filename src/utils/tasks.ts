@@ -16,24 +16,20 @@ import type {
 } from '../types/game';
 import { countItems, findItems, withCells } from './grid';
 
-/** Every chain some generator can feed, directly or not. */
-const PRODUCED_TYPES: ReadonlySet<ItemType> = new Set(
-  ITEM_TYPES.map((type) => getItemTree(type).generator?.produces).filter(
-    (produced): produced is ItemType => produced !== undefined,
-  ),
-);
-
 /**
- * Chains a task may ask for.
- *
- * Derived from what the generators actually produce rather than hard-coded: a
- * task for a chain no generator feeds would be unsolvable, and the player would
- * burn a whole board before working that out. Add a generator to `ITEM_TREES`
- * and its chain becomes requestable automatically.
+ * Chains any generator in the game can feed. Used as the fallback pool; the
+ * live pool comes from the generators actually on the player's board, so a task
+ * is never issued for a chain they have no way to make.
  */
-const REQUESTABLE_TYPES: readonly ItemType[] = ITEM_TYPES.filter(
-  (type) => !isGeneratorType(type) && PRODUCED_TYPES.has(type),
-);
+const ALL_PRODUCIBLE_TYPES: readonly ItemType[] = [
+  ...new Set(
+    ITEM_TYPES.flatMap((type) =>
+      (getItemTree(type).generator?.tables ?? []).flatMap((table) =>
+        table.map((output) => output.produces),
+      ),
+    ),
+  ),
+].filter((type) => !isGeneratorType(type));
 
 /**
  * Reward math.
@@ -53,6 +49,8 @@ export interface TaskGenerationOptions {
   readonly playerLevel: number;
   /** Monotonic counter used for the task id and the gem cadence. */
   readonly seq: number;
+  /** Chains the player can currently produce. Defaults to every chain. */
+  readonly availableTypes?: readonly ItemType[];
   /** Injectable RNG so tests are deterministic. */
   readonly random?: () => number;
   readonly restoreTargetId?: string | null;
@@ -84,17 +82,29 @@ export function computeTaskReward(
 export function generateTask(options: TaskGenerationOptions): Task {
   const { playerLevel, seq, restoreTargetId = null } = options;
   const random = options.random ?? Math.random;
+  const pool =
+    options.availableTypes !== undefined && options.availableTypes.length > 0
+      ? options.availableTypes.filter((type) => !isGeneratorType(type))
+      : ALL_PRODUCIBLE_TYPES;
+  const types = pool.length > 0 ? pool : ALL_PRODUCIBLE_TYPES;
 
-  const lineCount = playerLevel >= 5 && random() < 0.4 ? 2 : 1;
+  // Two-line requests start at player level 4 and become the norm by level 10.
+  const twoLineChance = Math.min(0.65, Math.max(0, (playerLevel - 3) * 0.09));
+  const lineCount = types.length > 1 && random() < twoLineChance ? 2 : 1;
   const requirements: TaskRequirement[] = [];
 
   for (let i = 0; i < lineCount; i += 1) {
-    const itemType = pickType(random, requirements);
+    const itemType = pickType(random, requirements, types);
     const cap = getMaxLevel(itemType);
-    // Target level ramps with player level but never exceeds the chain cap.
-    const target = Math.min(cap, 2 + Math.floor(playerLevel / 2) + (random() < 0.3 ? 1 : 0));
+    // Requested level climbs one step every three player levels. Each step
+    // doubles the taps needed, so this is the single strongest difficulty dial
+    // in the game - three is deliberately slower than it looks.
+    const ramp = 2 + Math.floor((playerLevel - 1) / 3);
+    const target = Math.min(cap, ramp + (random() < 0.28 ? 1 : 0));
     const level: ItemLevel = Math.max(1, target);
-    const count = level <= 2 && random() < 0.5 ? 2 : 1;
+    // Low-level lines ask for several; deep lines never do - two level-6 parts
+    // would be a wall, not a request.
+    const count = level <= 2 ? 2 + (random() < 0.4 ? 1 : 0) : level <= 3 ? 2 : 1;
     requirements.push({ itemType, level, count });
   }
 
@@ -108,11 +118,13 @@ export function generateTask(options: TaskGenerationOptions): Task {
   };
 }
 
-function pickType(random: () => number, taken: readonly TaskRequirement[]): ItemType {
-  const pool = REQUESTABLE_TYPES.filter(
-    (type) => !isGeneratorType(type) && !taken.some((req) => req.itemType === type),
-  );
-  const source = pool.length > 0 ? pool : REQUESTABLE_TYPES;
+function pickType(
+  random: () => number,
+  taken: readonly TaskRequirement[],
+  types: readonly ItemType[],
+): ItemType {
+  const fresh = types.filter((type) => !taken.some((req) => req.itemType === type));
+  const source = fresh.length > 0 ? fresh : types;
   const index = Math.min(source.length - 1, Math.floor(random() * source.length));
   return source[index] ?? 'nail';
 }

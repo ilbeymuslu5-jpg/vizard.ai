@@ -3,6 +3,10 @@
  *
  * Keep every balance number here (never inline in the store) so a designer can
  * retune the game without touching logic, and so A/B tests can swap this module.
+ *
+ * Pacing target: a session is 8-12 minutes of energy, and the house takes weeks.
+ * The brake is chain depth, not artificial waiting - a level-6 part costs 32
+ * generator taps, so mid-game requests are naturally multi-session.
  */
 
 // ---------------------------------------------------------------------------
@@ -12,6 +16,15 @@
 export const GRID_COLS = 5;
 export const GRID_ROWS = 6;
 export const GRID_CELL_COUNT = GRID_COLS * GRID_ROWS; // 30
+
+/** Rows playable at the start; the last two are bought with coins. */
+export const STARTING_ROWS = 4;
+
+/** Paid board expansions, cheapest first. */
+export const EXPANSIONS = [
+  { row: 5, cost: 900 },
+  { row: 6, cost: 2600 },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Merge chain
@@ -48,12 +61,14 @@ export const GEMS_PER_REWARDED_AD = 2;
 // Player progression
 // ---------------------------------------------------------------------------
 
-export const STARTING_COINS = 100;
+export const STARTING_COINS = 60;
 export const STARTING_GEMS = 10;
 
-export const BASE_XP_TO_LEVEL = 100;
+export const BASE_XP_TO_LEVEL = 120;
 /** xpToNextLevel(level) = BASE_XP_TO_LEVEL * XP_CURVE^(level-1). */
-export const XP_CURVE = 1.28;
+export const XP_CURVE = 1.34;
+/** Energy refunded per level gained - a real reason to care about levelling. */
+export const ENERGY_PER_LEVEL_UP = 25;
 
 /** How many task cards are shown at once. */
 export const ACTIVE_TASK_SLOTS = 3;
@@ -62,5 +77,6 @@ export const ACTIVE_TASK_SLOTS = 3;
 // Persistence
 // ---------------------------------------------------------------------------
 
-export const SAVE_SCHEMA_VERSION = 1;
+/** v2: crew, shop, board expansions and multi-stage rooms. */
+export const SAVE_SCHEMA_VERSION = 2;
 export const SAVE_STORAGE_KEY = 'merge-restore/save';
