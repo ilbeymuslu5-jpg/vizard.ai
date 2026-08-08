@@ -1,4 +1,11 @@
-import { getItemName, getItemValue, getMaxLevel, isGeneratorType } from '../constants/itemTrees';
+import {
+  getItemTree,
+  getItemName,
+  getItemValue,
+  getMaxLevel,
+  isGeneratorType,
+  ITEM_TYPES,
+} from '../constants/itemTrees';
 import type {
   GridState,
   ItemLevel,
@@ -9,8 +16,24 @@ import type {
 } from '../types/game';
 import { countItems, findItems, withCells } from './grid';
 
-/** Chains a task can ask for: generators are never requested. */
-const REQUESTABLE_TYPES: readonly ItemType[] = ['nail', 'plank', 'hammer', 'paint', 'flower'];
+/** Every chain some generator can feed, directly or not. */
+const PRODUCED_TYPES: ReadonlySet<ItemType> = new Set(
+  ITEM_TYPES.map((type) => getItemTree(type).generator?.produces).filter(
+    (produced): produced is ItemType => produced !== undefined,
+  ),
+);
+
+/**
+ * Chains a task may ask for.
+ *
+ * Derived from what the generators actually produce rather than hard-coded: a
+ * task for a chain no generator feeds would be unsolvable, and the player would
+ * burn a whole board before working that out. Add a generator to `ITEM_TREES`
+ * and its chain becomes requestable automatically.
+ */
+const REQUESTABLE_TYPES: readonly ItemType[] = ITEM_TYPES.filter(
+  (type) => !isGeneratorType(type) && PRODUCED_TYPES.has(type),
+);
 
 /**
  * Reward math.

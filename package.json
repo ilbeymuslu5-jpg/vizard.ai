@@ -4,13 +4,19 @@
   "private": true,
   "description": "Merge & Restore - hybrid-casual merge/story mobile game",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:web": "node scripts/build-web.mjs",
+    "test:e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.0",
+    "react": "^19.2.8",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@types/react": "^19.2.18",
+    "esbuild": "^0.24.2",
+    "playwright": "^1.62.1",
     "typescript": "^5.7.3"
   }
 }
