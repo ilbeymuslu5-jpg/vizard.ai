@@ -319,6 +319,76 @@ baskın kemik) ve üç hata bu sayede bulundu:
 Çarpışma taraması: 8 yön × 120 kare × 290 engel, en kötü nüfuz **0.081 birim**
 (karakter boyunun %3.7'si) — itme çözücüsünün tek karelik artığı.
 
+## RPG genişletmesi: Grafik Tasarım Dokümanı'na göre geliştirme
+
+Kullanıcının paylaştığı `Horde_Survivor_3D_RPG_Grafik_Tasarım_Dokümanı.md`
+dosyası; 4 karakter sınıfı, 3 dallı yetenek ağacı, temalı zırh setleri, 4
+biyom bossu, toon shading + rim/glow/bloom/vinyet/kromatik-sapma ve harici
+PNG/`.glb`/`.wav` varlık listesi (doku üretim aracı, ses stüdyosu vb. bu
+ortamda yok) istiyordu. **Ölçek kararı**: dokümanın *ruhu* — sınıf çeşitliliği,
+derinlemesine ilerleme, biyoma özgü boss kimliği, cel-shaded görünüm —
+oyunun var olan mimarisiyle (prosedürel three.js geometrisi, canvas ikonlar,
+mevcut parçacık/patlama/knockback sistemleri) uygulandı; gerçekleştirilemeyen
+kavramlar en yakın gerçek/test edilebilir mekaniğe eşlendi, her uyarlama kod
+içinde yorum olarak işaretlendi.
+
+### Sınıflar
+`CLASSES` tablosu (Paladin/Ranger/Mage/Berserker): can/hız/hasar çarpanları +
+başlangıç silahı + kıyafet paleti `resetPlayer()`'da `applyMeta()`'dan ÖNCE
+uygulanıyor (kalıcı yükseltmeler çarpımsal değil **toplamsal** hâle getirildi
+— aksi hâlde sınıf bonusunun üstüne yazıyordu, ölçümle bulundu). Zırh/bot
+giyilince kıyafet parçası gizlenen mantık `outfitNodes[i].holder.visible`
+üzerinden korunuyor; sınıf değişince `refreshOutfitVisuals()` geometriyi
+güncel paletle yeniden kurar.
+
+### Yetenek ağacı
+39 düğüm (3 dal × 13), tier 1–4'te 3 seçenekten biri, tier 5 tek ULTIME.
+Çalışma zamanı okumaları `P.sk` nesnesinde önbelleklenir (`applySkillTree()`
+koşu başında bir kez çalışır) — her isabette yeniden hesaplanmaz. Zincirleme
+efektler (İkili Vuruş, Elektrik Zinciri, Kritik Patlama) `hitEnemy()`'ye
+eklenen `noProc` parametresiyle en fazla bir kademe yayılabiliyor; sonsuz
+özyineleme riski böylece yapısal olarak kapatıldı.
+
+### Set bonusları
+4 tema (Orman/Volkan/Harabe/Buzul) × 4 parça, `equippedSetCounts()` ile
+sayılıp `recomputeStats()` içinde 2'li/4'lü eşiklerde `P.setBonus` bayrakları
+üretiliyor. Orman'ın "ormanda hız +%20" bonusu **biyoma göre anlık** olduğu
+için `recomputeStats()` değil `updatePlayer()` içinde her karede
+`biomeAt(P.x,P.z)` ile kontrol ediliyor; Volkan/Harabe/Buzul'un periyodik
+efektleri (yanan iz, don izi, yaprak kalkanı) mevcut `makeFire`/`chillNearby`
+altyapısını yeniden kullanıyor.
+
+### Temalı boss'lar
+Dokümandaki 4 boss (Eski Ağaç/Magma Golem/Unutulmuş Kral/Buzul Ejderha) dünya
+biyomlarıyla eşlendi: `biomeAt()` dört kadran döndürüyor (orman/kayalık/
+harabe/volkanik), doğan boss'un görsel teması **doğduğu kadrana göre**
+seçiliyor; final boss (Sv.20+/`WIN_TIME`) her zaman Buzul Ejderha — dokümanın
+henüz ayrı bir harita bölgesi olmayan "Buzul" biyomu böylece final
+karşılaşmasına bağlandı. Zorluk ölçeği (`BOSS_TIERS`) temadan bağımsız,
+koşu içindeki boss sayısına göre artmaya devam ediyor. Her tema kendi
+silüetine (gövde+taç+kök / bloklu golem / pelerinli kral / kanatlı ejderha)
+ve saldırı setine (`BOSS_ATTACKS`) sahip; hepsi var olan telegraf/doğum
+altyapısını yeniden kullanıyor.
+
+### Grafik: toon shading + ucuz "post-processing"
+- **Toon shading**: `MeshToonMaterial` + 4 basamaklı gradyan doku —
+  düşman/boss/teçhizat materyallerinde `MeshLambertMaterial`'ın yerini aldı.
+  Tek dokulu ek arama olduğu için ekstra çizim geçişi gerektirmiyor.
+- **Glow**: boss'larda hafifçe büyütülmüş (×1.12), additive-blend kopya kabuk
+  — gerçek bloom yerine tek ek mesh.
+- **Bloom/vinyet/kromatik sapma**: gerçek GPU post-processing (EffectComposer
+  + blur geçişleri) bu oyunun ölçülü performans bütçesiyle uyuşmuyor (bkz.
+  gölge haritası notundaki %66 FPS bedeli). Bunun yerine isabet anında
+  ekranın kenarlarını koyulaştıran dairesel gradyan + kısa kırmızı/camgöbeği
+  kenar şeridi (`G.flashRed` üzerinden, tek `drawOverlay()` çizimi) ve
+  parçacıklarda soluk-hale + parlak-çekirdek iki katmanlı çizim eklendi.
+
+Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
+yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,
+doğal `spawnWave()` akışı, materyal tipi kontrolü) — hepsi sıfır konsol
+hatasıyla geçti. Test paneline SINIF/YETENEK AĞACI/SET/TEMALI BOSS bölümleri
+eklendi.
+
 ## Test sürümü
 
 `npm run build:test` — her şeyin açık olduğu, üstüne **test paneli** eklenmiş

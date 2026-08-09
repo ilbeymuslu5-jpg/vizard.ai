@@ -144,6 +144,26 @@ export function initTestPanel() {
     time(sec) { g.G.time += sec; T.frozenAt = g.G.time; },
     freeze() { T.freeze = !T.freeze; T.frozenAt = g.G.time; },
     gold(n) { g.G.gold += n; g.META.bank += n; g.renderShop(); },
+    // Sınıf: seçip koşuyu yeniden başlatır (istatistik/silah/palet hemen yansısın diye)
+    class(id) { g.META.classId = id; g.metaSave(); g.startGame(); },
+    // Yetenek ağacı: hızlı test için puan ekle / ağacı sıfırla
+    skillPts(n) { g.META.skillPts = (g.META.skillPts || 0) + n; g.metaSave(); },
+    skillReset() { g.META.skills = {}; g.metaSave(); if (playing()) g.startGame(); },
+    // Set: 4 parçayı da tak (2'li/4'lü bonusu hemen görmek için)
+    setEquip(key) {
+      const IDS = { forest: ['hoodH', 'rangerC', 'woolK', 'leatherB'],
+                    volcano: ['dragonH', 'phoenixC', 'clawG', 'quakeB'],
+                    ruins: ['crownH', 'kiteS', 'shadowK', 'ironG'],
+                    glacier: ['visorH', 'scaleC', 'ironS', 'starK'] };
+      for (const id of IDS[key]) g.equipItem(g.ITEM_BY_ID[id].slot, id);
+    },
+    // Temalı boss: doğru kadrana ışınlanıp doğal doğum akışıyla çağırır
+    themedBoss(theme) {
+      const spots = { forest: [-200, -200], rocky: [200, -200], ruins: [-200, 200], volcanic: [200, 200] };
+      if (theme === 'glacier') { g.spawnEnemy(null, Math.random() * Math.PI * 2, true, true); return; }
+      const s = spots[theme]; g.P.x = s[0]; g.P.z = s[1];
+      g.spawnEnemy(null, Math.random() * Math.PI * 2, true);
+    },
     // Yeni oyuncu deneyimini denemek için: her şey kilitli, kasa boş
     wipe() {
       try { localStorage.removeItem('hordeSurvivor3D.meta'); } catch (e) {}
@@ -209,6 +229,26 @@ export function initTestPanel() {
         <button class="b half" data-a="level5">+5 Sv kartsız</button>
       </div>
 
+      <h4>SINIF <span style="color:#5a6379">(tıkla: koşu yeniden başlar)</span></h4>
+      <div class="row">
+        ${g.CLASS_ORDER.map(id => `<button class="b half${g.META.classId === id ? ' on' : ''}" data-a="class" data-x="${id}">${esc(g.CLASSES[id].icon)} ${esc(g.CLASSES[id].name)}</button>`).join('')}
+      </div>
+
+      <h4>YETENEK AĞACI</h4>
+      <div class="row">
+        <button class="b half" data-a="skillPts" data-x="5">+5 puan</button>
+        <button class="b half" data-a="skillPts" data-x="20">+20 puan</button>
+        <button class="b wide danger" data-a="skillReset">Ağacı sıfırla</button>
+      </div>
+
+      <h4>SET (2'li/4'lü bonus testi)</h4>
+      <div class="row">
+        <button class="b half" data-a="setEquip" data-x="forest">🌲 Orman</button>
+        <button class="b half" data-a="setEquip" data-x="volcano">🌋 Volkan</button>
+        <button class="b half" data-a="setEquip" data-x="ruins">🏛️ Harabe</button>
+        <button class="b half" data-a="setEquip" data-x="glacier">🧊 Buzul</button>
+      </div>
+
       <h4>DÜŞMAN</h4>
       <div class="row">
         <button class="b half" data-a="spawn" data-x="30">+30 düşman</button>
@@ -217,6 +257,14 @@ export function initTestPanel() {
         <button class="b half" data-a="finalBoss">Final boss</button>
         <button class="b half danger" data-a="killAll">Hepsini öldür</button>
         <button class="b half${T.noSpawn ? ' on' : ''}" data-a="noSpawn">Doğum: ${T.noSpawn ? 'KAPALI' : 'açık'}</button>
+      </div>
+      <h4>TEMALI BOSS <span style="color:#5a6379">(kadrana ışınlanır)</span></h4>
+      <div class="row">
+        <button class="b half" data-a="themedBoss" data-x="forest">🌲 Eski Ağaç</button>
+        <button class="b half" data-a="themedBoss" data-x="volcanic">🌋 Magma Golem</button>
+        <button class="b half" data-a="themedBoss" data-x="ruins">🏛️ Unutulmuş Kral</button>
+        <button class="b half" data-a="themedBoss" data-x="rocky">⛰️ Demir Kolos</button>
+        <button class="b wide" data-a="themedBoss" data-x="glacier">🧊 Buzul Ejderha (final)</button>
       </div>
 
       <h4>ZAMAN <span style="color:#5a6379">(boss her 3 dk)</span></h4>
@@ -243,7 +291,8 @@ export function initTestPanel() {
         const runOnly = ['weapon', 'allMax', 'allEvo', 'weaponsClear', 'passivesMax',
                          'passivesClear', 'god', 'heal', 'levelCard', 'level5',
                          'spawn', 'boss', 'finalBoss', 'killAll', 'time', 'freeze',
-                         'gearNext', 'gearRar', 'gearNone', 'bagFill', 'chestDrop', 'inv'];
+                         'gearNext', 'gearRar', 'gearNone', 'bagFill', 'chestDrop', 'inv',
+                         'setEquip', 'themedBoss'];
         if (runOnly.indexOf(el.dataset.a) >= 0 && !playing()) { g.startGame(); }
         fn(el.dataset.x !== undefined ? (isNaN(+el.dataset.x) ? el.dataset.x : +el.dataset.x) : undefined);
         if (g.recomputeStats) g.recomputeStats();

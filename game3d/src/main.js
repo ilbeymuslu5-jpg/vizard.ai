@@ -428,6 +428,7 @@ const P = {
   // Koşu içi envanter: kuşanılanlar + çanta (ikisi de her koşuda sıfırlanır)
   eq: { helm: null, chest: null, gloves: null, boots: null, cloak: null, shield: null },
   bag: [],
+  classId: 'paladin',
 };
 function recomputeStats() {
   const s = Object.assign({}, P.base);
@@ -443,28 +444,59 @@ function recomputeStats() {
       for (const k in src) if (k !== 'maxHp' && s[k] !== undefined) s[k] += src[k];
     }
   }
+  // Set bonusları: 2/4 parça eşiği (bkz. SET_BONUS). Düz statlar burada
+  // işlenir; "kind" ile işaretli olanlar P.setBonus bayrağı üzerinden
+  // updatePlayer/hitEnemy/updateSkillTimers'da çalışma anında okunur.
+  const setCounts = equippedSetCounts();
+  P.setBonus = {};
+  for (const key in SET_BONUS) {
+    const n = setCounts[key] || 0;
+    const def = SET_BONUS[key];
+    if (n >= 2) { P.setBonus[key + '2'] = true; if (def.p2.apply) def.p2.apply(s); }
+    if (n >= 4) { P.setBonus[key + '4'] = true; if (def.p4.apply) def.p4.apply(s); }
+  }
   P.st = s;
 }
 const BASE0 = { dmg: 1, atkSpeed: 1, area: 1, speedMul: 1, magnet: 1, armor: 0, regen: 0, crit: 0.08 };
 function resetPlayer() {
-  P.x = P.z = 0; P.vx = P.vz = 0; P.maxHp = 100; P.hp = 100;
-  // temel değerleri fabrika ayarına al, sonra kalıcı yükseltmeleri + teçhizatı uygula
+  P.x = P.z = 0; P.vx = P.vz = 0;
+  // temel değerleri fabrika ayarına al, sonra sınıf/kalıcı yükseltme/teçhizatı uygula
   Object.assign(P.base, BASE0);
   for (const slot in P.eq) P.eq[slot] = null;       // koşu sade başlar
   P.bag.length = 0;
+  const cls = CLASSES[META.classId] || CLASSES.paladin;
+  P.classId = cls.id;
+  P.maxHp = 100 * cls.hpMul;
+  P.base.speedMul *= cls.speedMul;
+  P.base.dmg *= cls.dmgMul;
+  if (cls.armor) P.base.armor += cls.armor;
+  if (cls.regen) P.base.regen += cls.regen;
+  if (cls.atkSpeed) P.base.atkSpeed += cls.atkSpeed;
+  if (cls.speedAdd) P.base.speedMul += cls.speedAdd;
+  if (cls.area) P.base.area += cls.area;
+  if (cls.crit) P.base.crit += cls.crit;
   applyMeta();
+  applySkillTree();                                  // yetenek ağacı puanları
   applyStartGear();                                  // kalıcı "miras" varsa
   P.hp = P.maxHp;
   P.iframe = 0; P.yaw = 0; P.walk = 0; P.hitPop = 0; P.dashCd = 0; P.dashT = 0;
   P.weapons = []; P.passives = {};
-  recomputeStats(); addWeapon('bolt');
+  // Yetenek ağacı ULTİME/periyodik düğümleri: koşu başına bir kez sıfırlanan durum
+  P.titanT = 0; P.titanUsed = false; P.usedPhoenix = false; P.usedSecondChance = false;
+  P.skT = { blackhole: 4, meteor: 3, timeSlow: 6, shieldPulse: 10, knockPulse: 5, invis: 3, armageddon: 20,
+            leafShield: 10, burnTrail: 0, frostTrail: 0 };
+  recomputeStats(); addWeapon(cls.weapon);
+  refreshOutfitVisuals();
 }
 function updatePlayer(dt) {
   if (P.dashCd > 0) P.dashCd -= dt;
-  const sp = P.speed * P.st.speedMul;
+  // Orman Seti (2 parça): ormanda hareket hızı +%20 — biyoma göre canlı kontrol
+  const forestBoost = (P.setBonus && P.setBonus.forest2 && biomeAt(P.x, P.z) === 'forest') ? 1.2 : 1;
+  const sp = P.speed * P.st.speedMul * forestBoost;
   if (P.dashT > 0) {
     P.dashT -= dt;
-    P.vx = P.dashX * DASH_SPEED; P.vz = P.dashZ * DASH_SPEED;
+    const dspd = DASH_SPEED * (1 + (P.sk ? P.sk.dashSpdMul : 0));   // Işın (Büyü T1)
+    P.vx = P.dashX * dspd; P.vz = P.dashZ * dspd;
     if (Math.random() < 0.6) particle(P.x, 0.5, P.z, '#cfe8ff', 2.5, 3);
   } else {
     const k = 1 - Math.pow(0.0005, dt);
@@ -489,7 +521,12 @@ function updatePlayer(dt) {
   if (mv > 0.5) P.walk += dt * mv * 1.1;
   if (P.iframe > 0) P.iframe -= dt;
   if (P.hitPop > 0) P.hitPop -= dt * 4;
-  if (P.st.regen > 0 && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + P.st.regen * dt);
+  if (P.st.regen > 0 && P.hp < P.maxHp) {
+    // Yenilenme: can %50 altındayken rejen ×2
+    const regenMul = (P.sk && P.sk.regenDouble && P.hp / P.maxHp < 0.5) ? 2 : 1;
+    P.hp = Math.min(P.maxHp, P.hp + P.st.regen * regenMul * dt);
+  }
+  if (P.titanT > 0) P.titanT -= dt;                       // Titan Gücü süresi
   // Su üstünde yürürken halka + sıçrama
   if (P.inWater) {
     rippleT -= dt;
@@ -504,7 +541,7 @@ function updatePlayer(dt) {
     const idleBob = mv < 0.5 ? Math.sin(G.time * 2.2) * 0.03 : 0;   // dururken nefes alma
     P.model.position.set(P.x, MODEL_Y + idleBob, P.z);
     P.model.rotation.y = P.yaw + MODEL_YAW;
-    const pop = 1 + Math.max(0, P.hitPop) * 0.13;
+    const pop = 1 + Math.max(0, P.hitPop) * 0.13 + (P.titanT > 0 ? 0.3 : 0);   // Titan Gücü: boyut +%30
     P.model.scale.setScalar(MODEL_SCALE * pop);
     P.model.visible = !(P.iframe > 0 && ((P.iframe * 20) | 0) % 2 === 0);
     updateKnightAnim(dt, mv);
@@ -559,7 +596,7 @@ function doDash() {
   if (Math.hypot(dx, dz) < 0.1) { dx = Math.sin(P.yaw); dz = Math.cos(P.yaw); }
   const m = Math.hypot(dx, dz) || 1;
   P.dashX = dx / m; P.dashZ = dz / m;
-  P.dashT = DASH_TIME; P.dashCd = DASH_CD;
+  P.dashT = DASH_TIME; P.dashCd = DASH_CD * (P.sk ? P.sk.dashCdMul : 1);   // Dash Yenileme
   P.iframe = Math.max(P.iframe, DASH_TIME + 0.12);
   SFX.dash(); addShake(0.18);
   for (let i = 0; i < 14; i++) particle(P.x, 0.6, P.z, '#bfe4ff', 3, 8);
@@ -567,10 +604,34 @@ function doDash() {
 
 function hurtPlayer(dmg) {
   if (P.iframe > 0 || G.state !== 'PLAY') return;
+  const sk = P.sk;
+  // Çeviklik / Demir Vücut: gelen hasarı çarpımsal olarak azaltır
+  if (sk) dmg *= (1 - sk.dodge) * (1 - sk.dmgReduce);
   P.hp -= Math.max(1, dmg - P.st.armor);
   P.iframe = 0.62; G.flashRed = 0.35; addShake(0.42, true); hitStop(0.04, true); SFX.hurt();
   for (let i = 0; i < 10; i++) particle(P.x, 0.8, P.z, '#ff5566', 3, 6);
-  if (P.hp <= 0) { P.hp = 0; gameOver(false); }
+  // Titan Gücü: can ilk kez %25 altına düştüğünde tetiklenir (koşuda 1 kez)
+  if (sk && sk.titan && !P.titanUsed && P.hp > 0 && P.hp / P.maxHp <= 0.25) {
+    P.titanUsed = true; P.titanT = 5;
+    banner('TITAN GÜCÜ!', 2.2); addShake(1.0, true); SFX.boss();
+    explode(P.x, P.z, 5.5, dmgOf(24), 0xffb03a);
+  }
+  if (P.hp <= 0) {
+    // Fenix Alevi > İkinci Şans: ikisi de seçiliyse daha iyisi önce tüketilir
+    if (sk && sk.phoenix && !P.usedPhoenix) {
+      P.usedPhoenix = true; P.hp = P.maxHp; P.iframe = Math.max(P.iframe, 3);
+      banner('FENİX ALEVİ!', 2.2); addShake(1.0, true); SFX.win();
+      makeFire(P.x, P.z, { r: 4.5, dps: dmgOf(20), life: 5 });
+      for (let i = 0; i < 40; i++) particle(P.x, 1, P.z, '#ff7a3d', 5, 14);
+      return;
+    }
+    if (sk && sk.secondChance && !P.usedSecondChance) {
+      P.usedSecondChance = true; P.hp = 1; P.iframe = Math.max(P.iframe, 1.2);
+      banner('İKİNCİ ŞANS!', 1.8); addShake(0.6, true);
+      return;
+    }
+    P.hp = 0; gameOver(false);
+  }
 }
 
 /* ============ 6) DÜŞMANLAR (INSTANCED RENDER) ============ */
@@ -581,20 +642,28 @@ const ETYPES = {
   tank:     { hp: 90,  speed: 1.3, dmg: 18, xp: 5, r: 1.15, color: 0x8d9bb8, geo: 'block', h: 1.7 },
   wraith:   { hp: 45,  speed: 3.9, dmg: 12, xp: 5, r: 0.7,  color: 0x9a6bff, geo: 'ghost', h: 1.4 },
 };
-const BOSSES = [
-  { name: 'GRAVE TITAN', color: 0xff6b3d, scale: 1.00 },
-  { name: 'PLAGUE MAW', color: 0x7de06a, scale: 1.10 },
-  { name: 'VOID WARDEN', color: 0x9a6bff, scale: 1.20 },
-  { name: 'IRON COLOSSUS', color: 0x8d9bb8, scale: 1.32 },
-  { name: 'OMEGA HORROR', color: 0xff3b6b, scale: 1.55 },
+/* Zorluk kademeleri: koşu içinde her boss'ta ölçek/güç artar (görsel tema ayrı,
+   biyoma göre seçilir — bkz. BOSS_THEMES). */
+const BOSS_TIERS = [
+  { scale: 1.00 }, { scale: 1.10 }, { scale: 1.20 }, { scale: 1.32 }, { scale: 1.55 },
 ];
+/* Temalı boss'lar (Grafik Tasarım Dokümanı): biyoma göre farklı isim/renk/silüet/saldırı.
+   biomeAt() 'forest'|'rocky'|'ruins'|'volcanic' döner; final boss her zaman Buzul Ejderha
+   (Sv.20+ final boss teması, dokümanın "Buzul" biyomu henüz ayrı bir harita bölgesi değil). */
+const BOSS_THEMES = {
+  forest:   { name: 'ESKİ AĞAÇ',      color: 0x3f7d4a },
+  volcanic: { name: 'MAGMA GOLEM',    color: 0xff5a1f },
+  ruins:    { name: 'UNUTULMUŞ KRAL', color: 0x6a5a9e },
+  rocky:    { name: 'DEMİR KOLOS',    color: 0x8d9bb8 },
+  glacier:  { name: 'BUZUL EJDERHA',  color: 0x9fd8ff },
+};
 const MAX_ENEMIES = LOW_END ? 300 : 420;
 let uid = 1;
 const enemies = new Pool(() => ({
   uid: 0, x: 0, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, type: 'zombie', cfg: null,
   hp: 1, maxHp: 1, r: 1, speed: 1, dmg: 1, xp: 1, flash: 0, dead: false,
   elite: false, boss: false, isFinal: false, scale: 1, atkT: 0, wob: 0,
-  contactCd: 0, cdG: 0, cdZ: 0, bossName: '', bob: 0,
+  contactCd: 0, cdG: 0, cdZ: 0, bossName: '', bob: 0, chillT: 0,
 }), MAX_ENEMIES);
 
 // --- Instanced mesh havuzları (tip başına bir çizim çağrısı) ---
@@ -667,10 +736,27 @@ function makeGeo(kind) {
   }
   return mergeGeometries(parts, false);
 }
+/* Toon (cel) gölgelendirme: gerçek zamanlı ışık açısını basamaklı bir gradyan
+   dokusundan okuyup düz renk bantları üretir. Tek dokulu ek bir arama olduğu
+   için ek çizim geçişi (post-processing) gerektirmez — düşük uçlu cihazlarda
+   bile MeshLambertMaterial ile aynı maliyettedir (bkz. gölge haritası notu). */
+function makeToonGradient(steps) {
+  const c = document.createElement('canvas'); c.width = steps; c.height = 1;
+  const cx = c.getContext('2d');
+  for (let i = 0; i < steps; i++) {
+    const v = Math.round(255 * ((i + 1) / steps));
+    cx.fillStyle = `rgb(${v},${v},${v})`; cx.fillRect(i, 0, 1, 1);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+const toonGradient = makeToonGradient(4);
 const eMeshes = {};
 for (const t in ETYPES) {
   const cfg = ETYPES[t];
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, vertexColors: true });
+  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient, flatShading: true, vertexColors: true });
   const im = new THREE.InstancedMesh(makeGeo(cfg.geo), mat, MAX_ENEMIES);
   im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   im.frustumCulled = false; im.count = 0;
@@ -685,23 +771,86 @@ shadowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 shadowMesh.frustumCulled = false; shadowMesh.count = 0;
 scene.add(shadowMesh);
 
-// Boss ayrı mesh (tekil, büyük)
-const bossMat = new THREE.MeshLambertMaterial({ color: 0xff6b3d, flatShading: true });
+// Boss ayrı mesh (tekil, büyük) — temaya göre farklı silüet, tek grupta tutulup görünürlük değiştirilir
+const BOSS_THEME_MATS = {};
+const bossThemeGroups = {};
 const bossMesh = new THREE.Group();
-{
-  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 0), bossMat);
-  body.position.y = 1.9; bossMesh.add(body);
-  const crown = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.6, 7), bossMat);
-  crown.position.y = 3.3; bossMesh.add(crown);
-  for (let i = 0; i < 6; i++) {
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.1, 4), bossMat);
-    const a = i / 6 * TAU;
-    sp.position.set(Math.cos(a) * 1.5, 1.9, Math.sin(a) * 1.5);
-    sp.rotation.z = -Math.cos(a) * 1.1; sp.rotation.x = Math.sin(a) * 1.1;
-    bossMesh.add(sp);
+function buildBossTheme(id, color) {
+  const mat = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient, flatShading: true });
+  BOSS_THEME_MATS[id] = mat;
+  const g = new THREE.Group();
+  if (id === 'forest') {                 // Eski Ağaç: gövde + geniş taç + saçaklı kökler
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 3.0, 8), mat);
+    trunk.position.y = 1.5; g.add(trunk);
+    const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.9, 0), mat);
+    crown.position.y = 3.7; g.add(crown);
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * TAU;
+      const root = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.6, 4), mat);
+      root.position.set(Math.cos(a) * 1.1, 0.5, Math.sin(a) * 1.1);
+      root.rotation.z = Math.cos(a) * 0.6; root.rotation.x = Math.sin(a) * 0.6;
+      g.add(root);
+    }
+  } else if (id === 'volcanic') {        // Magma Golem: bloklu iri gövde, kollar
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.2, 1.7), mat);
+    torso.position.y = 1.9; g.add(torso);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), mat);
+    head.position.y = 3.5; g.add(head);
+    for (let i = 0; i < 2; i++) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), mat);
+      arm.position.set(i ? 1.6 : -1.6, 1.6, 0); g.add(arm);
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.9, 0.9, 8), mat);
+    base.position.y = 0.45; g.add(base);
+  } else if (id === 'ruins') {           // Unutulmuş Kral: pelerinli, taçlı silüet
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.7, 3.0, 8), mat);
+    robe.position.y = 1.6; g.add(robe);
+    const cape = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.6, 0.25), mat);
+    cape.position.set(0, 1.7, -1.0); g.add(cape);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.1, 6), mat);
+    crown.position.y = 3.6; g.add(crown);
+  } else if (id === 'glacier') {         // Buzul Ejderha: uzun gövde + kanat + kuyruk
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 0), mat);
+    body.scale.set(1, 0.85, 1.9); body.position.y = 2.1; g.add(body);
+    for (let i = 0; i < 2; i++) {
+      const wing = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 3), mat);
+      wing.rotation.z = Math.PI / 2; wing.rotation.y = i ? 0.5 : -0.5;
+      wing.position.set(i ? 1.4 : -1.4, 2.6, -0.2); g.add(wing);
+    }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.6, 5), mat);
+    tail.rotation.x = Math.PI / 2; tail.position.set(0, 1.8, 2.6); g.add(tail);
+    const neck = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 5), mat);
+    neck.rotation.x = -Math.PI / 2.4; neck.position.set(0, 3.0, -1.6); g.add(neck);
+  } else {                                // rocky (Demir Kolos) — eski genel tasarım
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 0), mat);
+    body.position.y = 1.9; g.add(body);
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.6, 7), mat);
+    crown.position.y = 3.3; g.add(crown);
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.1, 4), mat);
+      const a = i / 6 * TAU;
+      sp.position.set(Math.cos(a) * 1.5, 1.9, Math.sin(a) * 1.5);
+      sp.rotation.z = -Math.cos(a) * 1.1; sp.rotation.x = Math.sin(a) * 1.1;
+      g.add(sp);
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.9, 1.0, 8), mat);
+    base.position.y = 0.5; g.add(base);
   }
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.9, 1.0, 8), bossMat);
-  base.position.y = 0.5; bossMesh.add(base);
+  // Işıltı (glow): hafifçe büyütülmüş, additive-blend kopya kabuk — dokümandaki
+  // "glow" efektinin ucuz karşılığı, gerçek bloom post-processing yerine
+  const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false });
+  const glow = g.clone(true);
+  glow.traverse(o => { if (o.isMesh) { o.material = glowMat; o.renderOrder = 2; } });
+  glow.scale.setScalar(1.12);
+  g.add(glow);
+  g.visible = false;
+  bossMesh.add(g);
+  bossThemeGroups[id] = g;
+}
+for (const id in BOSS_THEMES) buildBossTheme(id, BOSS_THEMES[id].color);
+function showBossTheme(id) {
+  for (const k in bossThemeGroups) bossThemeGroups[k].visible = (k === id);
 }
 bossMesh.visible = false; scene.add(bossMesh);
 
@@ -745,9 +894,9 @@ function spawnEnemy(type, ang, boss = false, final = false) {
   const d = diff();
   e.uid = uid++; e.type = boss ? 'boss' : t; e.cfg = cfg; e.boss = boss; e.isFinal = final;
   e.x = x; e.z = z; e.vx = e.vz = e.kx = e.kz = 0; e.flash = 0; e.wob = rnd(TAU);
-  e.contactCd = 0; e.cdG = 0; e.cdZ = 0; e.atkT = 2.5; e.bob = rnd(TAU);
+  e.contactCd = 0; e.cdG = 0; e.cdZ = 0; e.atkT = 2.5; e.bob = rnd(TAU); e.chillT = 0;
   e.elite = !boss && Math.random() < d.eliteChance;
-  e.scale = boss ? BOSSES[Math.min(G.bossIdx, BOSSES.length - 1)].scale : (e.elite ? 1.45 : 1);
+  e.scale = boss ? BOSS_TIERS[Math.min(G.bossIdx, BOSS_TIERS.length - 1)].scale : (e.elite ? 1.45 : 1);
   e.r = (boss ? 2.2 : cfg.r) * e.scale;
   e.maxHp = (boss ? 1800 : cfg.hp) * d.hp * (e.elite ? 5 : 1) * (boss ? 1 + G.bossIdx * 0.85 : 1);
   e.hp = e.maxHp;
@@ -755,8 +904,11 @@ function spawnEnemy(type, ang, boss = false, final = false) {
   e.dmg = (boss ? 26 : cfg.dmg) * d.dmg * (e.elite ? 1.4 : 1);
   e.xp = (boss ? 20 : cfg.xp) * (e.elite ? 20 : 1);
   if (boss) {
-    const B = BOSSES[Math.min(G.bossIdx, BOSSES.length - 1)];
-    e.bossName = B.name; bossMat.color.setHex(B.color);
+    // Görsel tema: final boss her zaman Buzul Ejderha, diğerleri doğduğu biyoma göre
+    const themeId = final ? 'glacier' : biomeAt(x, z);
+    const theme = BOSS_THEMES[themeId] || BOSS_THEMES.rocky;
+    e.bossName = theme.name; e.bossTheme = BOSS_THEMES[themeId] ? themeId : 'rocky';
+    showBossTheme(e.bossTheme);
     bossMesh.visible = true; G.boss = e; G.bossIdx++;
   }
   return e;
@@ -772,7 +924,7 @@ function spawnWave(dt) {
   }
   if (!G.boss) {
     if (G.time >= WIN_TIME && !G.finalSpawned) {
-      G.finalSpawned = true; G.bossIdx = BOSSES.length - 1;
+      G.finalSpawned = true; G.bossIdx = BOSS_TIERS.length - 1;
       const b = spawnEnemy(null, rnd(TAU), true, true);
       if (b) { banner('FİNAL BOSS: ' + b.bossName, 3.2); addShake(0.9, true); SFX.boss(); } else G.finalSpawned = false;
     } else if (G.time >= G.nextBossAt && G.time < WIN_TIME) {
@@ -789,9 +941,11 @@ function updateEnemies(dt) {
     if (e.contactCd > 0) e.contactCd -= dt;
     if (e.cdG > 0) e.cdG -= dt;
     if (e.cdZ > 0) e.cdZ -= dt;
+    if (e.chillT > 0) e.chillT -= dt;             // Mage: "Soğutma" — isabet alan düşman yavaşlar
     const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1;
     let sp = e.speed;
     if (e.type === 'spider') sp *= 1 + Math.sin(G.time * 6 + e.wob) * 0.22;
+    if (e.chillT > 0) sp *= 0.5;
     e.vx = dx / d * sp; e.vz = dz / d * sp;
     e.x += (e.vx + e.kx) * dt; e.z += (e.vz + e.kz) * dt;
     e.kx *= Math.pow(0.0015, dt); e.kz *= Math.pow(0.0015, dt);
@@ -845,7 +999,8 @@ function syncEnemyMeshes() {
       bossMesh.position.set(e.x, Math.sin(G.time * 2 + e.bob) * 0.15, e.z);
       bossMesh.scale.setScalar(e.scale);
       bossMesh.rotation.y += 0.004;
-      bossMat.color.setHex(e.flash > 0 ? 0xffffff : BOSSES[Math.min(G.bossIdx - 1, BOSSES.length - 1)].color);
+      const mat = BOSS_THEME_MATS[e.bossTheme];
+      if (mat) mat.color.setHex(e.flash > 0 ? 0xffffff : BOSS_THEMES[e.bossTheme].color);
       continue;
     }
     const im = eMeshes[e.type]; if (!im) continue;
@@ -886,25 +1041,82 @@ function tgMesh() {
   g.add(outer); g.add(fill); g.userData.fill = fill;
   scene.add(g); return g;
 }
-function bossAttack(b) {
+function spawnTelegraph(x, z, r, dur, dmg) {
+  const t = telegraphs.get(); if (!t) return;
+  if (!t.mesh) t.mesh = tgMesh();
+  t.mesh.visible = true;
+  t.x = x; t.z = z; t.r = r; t.t = 0; t.dur = dur; t.dmg = dmg;
+  t.mesh.position.set(x, 0, z); t.mesh.scale.setScalar(r);
+}
+// Demir Kolos (rocky) — genel saldırı paterni, önceki tek-tip boss davranışı
+function bossAttackDefault(b) {
   const roll = Math.random();
-  const add = (x, z, r, dur, dmg) => {
-    const t = telegraphs.get(); if (!t) return;
-    if (!t.mesh) t.mesh = tgMesh();
-    t.mesh.visible = true;
-    t.x = x; t.z = z; t.r = r; t.t = 0; t.dur = dur; t.dmg = dmg;
-    t.mesh.position.set(x, 0, z); t.mesh.scale.setScalar(r);
-  };
-  if (roll < 0.45) add(P.x + rnd(2, -2), P.z + rnd(2, -2), 5 * b.scale, 1.15, b.dmg * 1.6);
+  if (roll < 0.45) spawnTelegraph(P.x + rnd(2, -2), P.z + rnd(2, -2), 5 * b.scale, 1.15, b.dmg * 1.6);
   else if (roll < 0.78) {
     for (let i = 0; i < 3; i++) {
       const a = rnd(TAU), rr = rnd(7, 2);
-      add(P.x + Math.cos(a) * rr, P.z + Math.sin(a) * rr, 3.8 * b.scale, 1.25 + i * 0.15, b.dmg);
+      spawnTelegraph(P.x + Math.cos(a) * rr, P.z + Math.sin(a) * rr, 3.8 * b.scale, 1.25 + i * 0.15, b.dmg);
     }
   } else {
-    add(b.x, b.z, 11 * b.scale, 1.5, b.dmg * 1.8);
+    spawnTelegraph(b.x, b.z, 11 * b.scale, 1.5, b.dmg * 1.8);
     for (let i = 0; i < 4; i++) spawnEnemy('spider', rnd(TAU));
   }
+}
+// Eski Ağaç (forest) — "Kök Sarması": oyuncuyu kendine çeker, dikenli kök sürüsü çıkarır
+function bossAttackForest(b) {
+  const roll = Math.random();
+  if (roll < 0.4) {
+    const dx = b.x - P.x, dz = b.z - P.z, d = Math.hypot(dx, dz) || 1;
+    P.vx += dx / d * 9; P.vz += dz / d * 9;
+    addShake(0.4, true);
+    spawnTelegraph(b.x, b.z, 6 * b.scale, 0.9, b.dmg * 1.2);
+  } else if (roll < 0.75) {
+    for (let i = 0; i < 3; i++) spawnEnemy('spike', rnd(TAU));   // dikenli kökler
+  } else {
+    for (let i = 0; i < 3; i++) {
+      const a = rnd(TAU), rr = rnd(7, 2);
+      spawnTelegraph(P.x + Math.cos(a) * rr, P.z + Math.sin(a) * rr, 3.6 * b.scale, 1.2 + i * 0.15, b.dmg);
+    }
+  }
+}
+// Magma Golem (volcanic) — geniş kalıcı lav gölü + kızgın kütle takviyesi
+function bossAttackVolcanic(b) {
+  const roll = Math.random();
+  if (roll < 0.55) spawnTelegraph(P.x + rnd(2.5, -2.5), P.z + rnd(2.5, -2.5), 6.5 * b.scale, 1.6, b.dmg * 1.7);
+  else {
+    spawnTelegraph(b.x, b.z, 12 * b.scale, 1.7, b.dmg * 1.9);
+    for (let i = 0; i < 3; i++) spawnEnemy('blob', rnd(TAU));
+  }
+}
+// Unutulmuş Kral (ruins) — ölü ordusunu çağırır, lanet okur
+function bossAttackRuins(b) {
+  const roll = Math.random();
+  if (roll < 0.55) { for (let i = 0; i < 4; i++) spawnEnemy('bone', rnd(TAU)); banner('Ölü Ordusu!', 1.0); }
+  else {
+    for (let i = 0; i < 3; i++) {
+      const a = rnd(TAU), rr = rnd(6, 1.5);
+      spawnTelegraph(P.x + Math.cos(a) * rr, P.z + Math.sin(a) * rr, 3.2 * b.scale, 1.0 + i * 0.12, b.dmg * 1.1);
+    }
+  }
+}
+// Buzul Ejderha (final) — buz nefesi + geniş buz patlaması
+function bossAttackGlacier(b) {
+  const roll = Math.random();
+  if (roll < 0.5) {
+    const a = Math.atan2(P.x - b.x, P.z - b.z);
+    for (let i = -1; i <= 1; i++) {
+      const aa = a + i * 0.35;
+      spawnTelegraph(b.x + Math.sin(aa) * 6, b.z + Math.cos(aa) * 6, 3.4 * b.scale, 1.0, b.dmg * 1.3);
+    }
+  } else {
+    spawnTelegraph(P.x, P.z, 5.5 * b.scale, 1.1, b.dmg * 1.5);
+    spawnTelegraph(b.x, b.z, 13 * b.scale, 1.8, b.dmg * 1.6);
+  }
+}
+const BOSS_ATTACKS = { forest: bossAttackForest, volcanic: bossAttackVolcanic, ruins: bossAttackRuins,
+                        rocky: bossAttackDefault, glacier: bossAttackGlacier };
+function bossAttack(b) {
+  (BOSS_ATTACKS[b.bossTheme] || bossAttackDefault)(b);
 }
 function updateTelegraphs(dt) {
   const A = telegraphs.active;
@@ -1203,7 +1415,20 @@ function findNearestN(x, z, maxD, n, out) {
   out.length = Math.min(out.length, n);
   return out;
 }
-const dmgOf = base => base * P.st.dmg;
+/* Öfke: sınıf (Berserker) VE yetenek ağacı (Öfke Birikimi/Berserker Rage
+   düğümleri) aynı formülü besliyor, üst üste binebilir (kasıtlı: hem sınıf
+   hem düğüm seçilirse daha güçlü — build çeşitliliği). Can bilgisine göre
+   anlık hesaplanıyor, recomputeStats'a gerek yok. */
+const dmgOf = base => {
+  let m = P.st.dmg;
+  if (P.maxHp > 0) {
+    const missing = 1 - P.hp / P.maxHp;
+    if (P.classId === 'berserker') m *= 1 + missing * 0.5;
+    if (P.sk && P.sk.rageMax) m *= 1 + missing * P.sk.rageMax;
+  }
+  if (P.titanT > 0) m *= 2;                             // Titan Gücü (ULTİME)
+  return base * m;
+};
 /* Nişan alırken yelpaze açısı: İLK atış tam nişan yönüne gider, fazlalıklar
    sırayla iki yana açılır (0, +s, -s, +2s, ...).
    Ortalanmış yelpaze kullanılsaydı ÇİFT sayıda atışta hedefin tam ortası boş
@@ -1483,17 +1708,20 @@ const SHAPE = {
 /* Kahramanın HER ZAMAN üstünde olan temel kıyafeti. Model "base form"
    (kıyafetsiz temel gövde) olarak geldiği için tunik ve pantolon oyun
    tarafında ekleniyor; zırhlar bunun üstüne biniyor. */
+/* pal: { body, trim, accent } — sınıfa göre değişir (bkz. CLASSES).
+   Kesin renk değil, palet parametresi: aynı geometri farklı sınıflarda
+   farklı renklerle çiziliyor (Paladin altın-beyaz, Ranger yeşil-kahve…). */
 const OUTFIT = {
-  torso: () => [
-    painted(put(new THREE.CylinderGeometry(0.33, 0.38, 0.56, 12), 0, 0, 0), 0x8d7d5f),   // keten tunik
-    painted(put(new THREE.CylinderGeometry(0.39, 0.39, 0.07, 12), 0, -0.26, 0), 0x5d4a33), // kemer
-    painted(put(new THREE.BoxGeometry(0.11, 0.09, 0.05), 0, -0.26, 0.38), 0xb99149),       // toka
+  torso: pal => [
+    painted(put(new THREE.CylinderGeometry(0.33, 0.38, 0.56, 12), 0, 0, 0), pal.body),     // tunik
+    painted(put(new THREE.CylinderGeometry(0.39, 0.39, 0.07, 12), 0, -0.26, 0), pal.trim),  // kemer
+    painted(put(new THREE.BoxGeometry(0.11, 0.09, 0.05), 0, -0.26, 0.38), pal.accent),      // toka
   ],
-  hips: () => [
-    painted(put(new THREE.CylinderGeometry(0.31, 0.27, 0.34, 10), 0, 0, 0), 0x4f4334),     // pantolon
+  hips: pal => [
+    painted(put(new THREE.CylinderGeometry(0.31, 0.27, 0.34, 10), 0, 0, 0), pal.trim),      // pantolon
   ],
-  foot: () => [
-    painted(put(new THREE.BoxGeometry(0.17, 0.09, 0.28), 0, -0.05, 0.02), 0x4a3a2a),       // basit ayakkabı
+  foot: pal => [
+    painted(put(new THREE.BoxGeometry(0.17, 0.09, 0.28), 0, -0.05, 0.02), pal.accent),      // ayakkabı
   ],
 };
 
@@ -1523,15 +1751,15 @@ const GEAR_SLOTS = Object.keys(GEAR);
 const ITEMS = {
   helm: [
     { id: 'hoodH',   name: 'Deri Başlık',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { armor: 1 } },
+      plus: { armor: 1 }, set: 'forest' },
     { id: 'ironH',   name: 'Demir Miğfer',   rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
       plus: { armor: 3, maxHp: 15 }, minus: { speedMul: -0.03 } },
     { id: 'visorH',  name: 'Kapalı Tolga',   rar: 'rare',   det: 2, col: 0xc0cde0, trim: 0x7d8ba0,
-      plus: { armor: 6, maxHp: 25 }, minus: { magnet: -0.15 } },
+      plus: { armor: 6, maxHp: 25 }, minus: { magnet: -0.15 }, set: 'glacier' },
     { id: 'crownH',  name: 'Savaş Tacı',     rar: 'rare',   det: 3, col: 0xd8c27a, trim: 0xffd479,
-      plus: { dmg: 0.1, crit: 0.04 } },
+      plus: { dmg: 0.1, crit: 0.04 }, set: 'ruins' },
     { id: 'dragonH', name: 'Ejder Kaskı',    rar: 'epic',   det: 4, col: 0xa8452e, trim: 0xffb03a,
-      plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 } },
+      plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 }, set: 'volcano' },
     { id: 'haloH',   name: 'Kutsal Hale',    rar: 'legend', det: 4, col: 0xf3eddc, trim: 0xffd479,
       plus: { armor: 5, maxHp: 40, regen: 0.8 } },
   ],
@@ -1541,13 +1769,13 @@ const ITEMS = {
     { id: 'chainC',  name: 'Zincir Zırh',    rar: 'common', det: 2, col: 0x99a2af, trim: 0x6d7683,
       plus: { armor: 5, maxHp: 30 }, minus: { speedMul: -0.06 } },
     { id: 'scaleC',  name: 'Pullu Zırh',     rar: 'rare',   det: 2, col: 0x6f9a7d, trim: 0x47705a,
-      plus: { armor: 7, maxHp: 45 }, minus: { atkSpeed: -0.06 } },
+      plus: { armor: 7, maxHp: 45 }, minus: { atkSpeed: -0.06 }, set: 'glacier' },
     { id: 'rangerC', name: 'Avcı Yeleği',    rar: 'rare',   det: 1, col: 0x54704a, trim: 0x8a6b3c,
-      plus: { speedMul: 0.1, crit: 0.05, maxHp: 15 } },
+      plus: { speedMul: 0.1, crit: 0.05, maxHp: 15 }, set: 'forest' },
     { id: 'lionC',   name: 'Aslan Göğüslüğü',rar: 'epic',   det: 3, col: 0xc6d2e4, trim: 0xffd479,
       plus: { armor: 11, maxHp: 70 }, minus: { speedMul: -0.1 } },
     { id: 'phoenixC',name: 'Anka Zırhı',     rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffd479,
-      plus: { armor: 9, maxHp: 60, regen: 1 } },
+      plus: { armor: 9, maxHp: 60, regen: 1 }, set: 'volcano' },
   ],
   gloves: [
     { id: 'wrapG',   name: 'Bez Sargı',      rar: 'common', det: 1, col: 0xa89678, trim: 0x8a7a5e,
@@ -1555,11 +1783,11 @@ const ITEMS = {
     { id: 'leatherG',name: 'Deri Kolluk',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
       plus: { dmg: 0.06, armor: 1 } },
     { id: 'ironG',   name: 'Demir Kolluk',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { dmg: 0.12, armor: 3 }, minus: { atkSpeed: -0.05 } },
+      plus: { dmg: 0.12, armor: 3 }, minus: { atkSpeed: -0.05 }, set: 'ruins' },
     { id: 'swiftG',  name: 'Çevik Eldiven',  rar: 'rare',   det: 2, col: 0x4e8f9a, trim: 0x9ef1ff,
       plus: { atkSpeed: 0.15 }, minus: { dmg: -0.05 } },
     { id: 'clawG',   name: 'Cinnet Pençesi', rar: 'epic',   det: 3, col: 0x6d2a3a, trim: 0xff5566,
-      plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 } },
+      plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 }, set: 'volcano' },
     { id: 'titanG',  name: 'Titan Yumruğu',  rar: 'legend', det: 4, col: 0xc9a24a, trim: 0xfff0b8,
       plus: { dmg: 0.22, atkSpeed: 0.12, area: 0.1 } },
   ],
@@ -1567,13 +1795,13 @@ const ITEMS = {
     { id: 'sandalB', name: 'Sandalet',       rar: 'common', det: 1, col: 0x8a6b45, trim: 0x63502f,
       plus: { speedMul: 0.05 } },
     { id: 'leatherB',name: 'Deri Bot',       rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { speedMul: 0.08, armor: 1 } },
+      plus: { speedMul: 0.08, armor: 1 }, set: 'forest' },
     { id: 'ironB',   name: 'Demir Dizlik',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
       plus: { armor: 4, maxHp: 20 }, minus: { speedMul: -0.05 } },
     { id: 'windB',   name: 'Rüzgar Botu',    rar: 'rare',   det: 2, col: 0x7fd8c8, trim: 0xdff7ff,
       plus: { speedMul: 0.16 }, minus: { armor: -2 } },
     { id: 'quakeB',  name: 'Sarsıntı Botu',  rar: 'epic',   det: 3, col: 0x7a5230, trim: 0xff8a3d,
-      plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 } },
+      plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 }, set: 'volcano' },
     { id: 'hermesB', name: 'Hermes Kanadı',  rar: 'legend', det: 4, col: 0xe8e2cf, trim: 0xffd479,
       plus: { speedMul: 0.22, atkSpeed: 0.08 } },
   ],
@@ -1581,23 +1809,23 @@ const ITEMS = {
     { id: 'raggedK', name: 'Yırtık Pelerin', rar: 'common', det: 1, col: 0x6b6152, trim: 0x50483d,
       plus: { magnet: 0.12 } },
     { id: 'woolK',   name: 'Yün Pelerin',    rar: 'common', det: 1, col: 0x6f5f47, trim: 0x8b7a5c,
-      plus: { magnet: 0.2, regen: 0.2 } },
+      plus: { magnet: 0.2, regen: 0.2 }, set: 'forest' },
     { id: 'shadowK', name: 'Gölge Pelerini', rar: 'rare',   det: 2, col: 0x33304a, trim: 0x6e63a8,
-      plus: { speedMul: 0.1, crit: 0.05 }, minus: { armor: -2 } },
+      plus: { speedMul: 0.1, crit: 0.05 }, minus: { armor: -2 }, set: 'ruins' },
     { id: 'royalK',  name: 'Kraliyet Pelerini', rar: 'rare', det: 3, col: 0xa32340, trim: 0xffc94d,
       plus: { maxHp: 30, regen: 0.5 } },
     { id: 'vampK',   name: 'Vampir Pelerini',rar: 'epic',   det: 3, col: 0x4a1526, trim: 0xd12b4a,
       plus: { regen: 1.4, dmg: 0.08 }, minus: { maxHp: -25 } },
     { id: 'starK',   name: 'Yıldız Mantosu', rar: 'legend', det: 4, col: 0x2b3d78, trim: 0x9ec9ff,
-      plus: { magnet: 0.6, area: 0.15, regen: 0.6 } },
+      plus: { magnet: 0.6, area: 0.15, regen: 0.6 }, set: 'glacier' },
   ],
   shield: [
     { id: 'woodS',   name: 'Ahşap Siperlik', rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
       plus: { armor: 2 } },
     { id: 'ironS',   name: 'Demir Siperlik', rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { armor: 4, maxHp: 15 }, minus: { atkSpeed: -0.04 } },
+      plus: { armor: 4, maxHp: 15 }, minus: { atkSpeed: -0.04 }, set: 'glacier' },
     { id: 'kiteS',   name: 'Şövalye Kalkanı',rar: 'rare',   det: 3, col: 0xc0cde0, trim: 0xffd479,
-      plus: { armor: 7, maxHp: 35 }, minus: { speedMul: -0.06 } },
+      plus: { armor: 7, maxHp: 35 }, minus: { speedMul: -0.06 }, set: 'ruins' },
     { id: 'spikeS',  name: 'Dikenli Kalkan', rar: 'rare',   det: 3, col: 0x7a6b5c, trim: 0xb0483a,
       plus: { armor: 5, dmg: 0.1 } },
     { id: 'towerS',  name: 'Kule Kalkanı',   rar: 'epic',   det: 4, col: 0x8fa0bb, trim: 0xffd479,
@@ -1611,6 +1839,166 @@ const ITEM_BY_ID = {};
 for (const slot of GEAR_SLOTS) for (const it of ITEMS[slot]) ITEM_BY_ID[it.id] = { it, slot };
 const itemOf = id => (ITEM_BY_ID[id] || {}).it || null;
 const slotOfItem = id => (ITEM_BY_ID[id] || {}).slot || null;
+
+/* ---------- SET BONUSLARI ----------
+   4 tema, her biri farklı 4 yuvadan 1'er eşyayla (bkz. ITEMS'teki `set`
+   etiketleri). 2 parça / 4 parça eşiklerinde bonus açılır. Bazı bonuslar
+   düz stat (apply), bazıları çalışma anı kancası gerektiren gerçek
+   mekanikler (kind) — biyoma bağlı hız, periyodik ateş/don izi, boss/undead
+   hasarı. "Duvar arkası görme" gibi bu oyunda karşılığı olmayan tek bonus
+   (Harabe 4) en yakın gerçek mekaniğe uyarlandı: boss'a ekstra hasar. */
+const SET_BONUS = {
+  forest:  { name: 'Orman Seti',  icon: '🌲',
+    p2: { txt: 'Ormanda hareket hızı +%20', kind: 'forestSpeed' },
+    p4: { txt: 'Her 10 sn "Yaprak Kalkanı": 0.8 sn dokunulmazlık', kind: 'leafShield' } },
+  volcano: { name: 'Volkan Seti', icon: '🌋',
+    p2: { txt: 'Zırh +3 (Ateş Direnci)', apply: s => { s.armor += 3; } },
+    p4: { txt: 'Hareket ederken yürüdüğün yer 2 sn yanar', kind: 'burnTrail' } },
+  ruins:   { name: 'Harabe Seti', icon: '🏛️',
+    p2: { txt: 'İskelet/Hayalet düşmanlara +%30 hasar', kind: 'ruinsUndead' },
+    p4: { txt: 'Boss\'lara +%15 ek hasar (Hayalet Görüşü)', kind: 'ruinsBoss' } },
+  glacier: { name: 'Buzul Seti',  icon: '🧊',
+    p2: { txt: 'Zırh +3 (Buz Direnci)', apply: s => { s.armor += 3; } },
+    p4: { txt: 'Hareket ederken yürüdüğün yer donar, düşmanları yavaşlatır', kind: 'frostTrail' } },
+};
+function equippedSetCounts() {
+  const counts = {};
+  for (const slot in P.eq) {
+    const it = itemOf(P.eq[slot]);
+    if (it && it.set) counts[it.set] = (counts[it.set] || 0) + 1;
+  }
+  return counts;
+}
+
+/* ---------- SINIFLAR ----------
+   Tasarım dokümanındaki tabloya birebir orantılandı: hpMul = dokümandaki
+   HP / 100 (bizim varsayılan can değerimiz); speedMul ve dmgMul da kendi
+   sütunlarının ortalamasına göre normalize edildi. Görsel ayrım: aynı model,
+   kıyafet paleti sınıfa göre yeniden boyanıyor (ayrı glTF yok, bkz. README). */
+const CLASSES = {
+  paladin: {
+    id: 'paladin', name: 'Paladin', title: 'Aldric, Işığın Muhafızı', icon: '🛡️',
+    weapon: 'guardian', hpMul: 1.2, speedMul: 0.86, dmgMul: 0.8,
+    armor: 4, regen: 0.5,
+    palette: { body: 0xdccdab, trim: 0xffd479, accent: 0x8b6f2a },
+    passiveTxt: 'Zırh +4 · Rejen +0.5 HP/sn · silahı Döner Bıçaklar',
+  },
+  ranger: {
+    id: 'ranger', name: 'Ranger', title: 'Lyra, Ormanın Gölgesi', icon: '🏹',
+    weapon: 'kunai', hpMul: 0.9, speedMul: 1.2, dmgMul: 1.0,
+    atkSpeed: 0.15, speedAdd: 0.05,
+    palette: { body: 0x3f5c33, trim: 0x6b4a2a, accent: 0x8a9a5a },
+    passiveTxt: 'Saldırı hızı +%15 · Hareket hızı +%5 · silahı Kunai Yağmuru',
+  },
+  mage: {
+    id: 'mage', name: 'Mage', title: 'Thorne, Buzul Ustası', icon: '🔮',
+    weapon: 'laser', hpMul: 0.7, speedMul: 1.0, dmgMul: 1.4,
+    area: 0.15, trait: 'chill',
+    palette: { body: 0x2c3f7a, trim: 0x6a5acd, accent: 0x1a2550 },
+    passiveTxt: 'Hasar +%40 · Etki alanı +%15 · isabetler düşmanı yavaşlatır (Soğutma)',
+  },
+  berserker: {
+    id: 'berserker', name: 'Berserker', title: 'Krag, Öfke Titanı', icon: '⚔️',
+    weapon: 'rocket', hpMul: 1.1, speedMul: 0.94, dmgMul: 1.2,
+    crit: 0.12, trait: 'rage',
+    palette: { body: 0x5a1c1c, trim: 0x3a3a3a, accent: 0xff5a1f },
+    passiveTxt: 'Kritik +%12 · silahı Roketatar · can azaldıkça hasar artar (Öfke)',
+  },
+};
+const CLASS_ORDER = ['paladin', 'ranger', 'mage', 'berserker'];
+
+/* ---------- YETENEK AĞACI ----------
+   3 dal × 5 kademe × (kademe 1-4'te 3 seçenek, kademe 5 tek ULTİME).
+   Kademe N'i açmak için kademe N-1'in seçilmiş olması gerekir (req). Puan
+   seviye başına 1 kazanılır (koşu sonunda altınla birlikte bankaya yatar).
+   Çoğu düğüm doğrudan stat bonusu (b = P.base); bazıları çalışma anı
+   kancalarına ihtiyaç duyduğu için P.sk üzerine bayrak/sayı yazıyor —
+   doküman bazı kavramları (zırh delme, zehir immünitesi) bu oyunda karşılığı
+   olmayan sistemlere dayandırıyordu; en yakın gerçek mekaniğe uyarlandı
+   (örn. "Zırh Delici" → elit/boss'a ekstra hasar, "Çeviklik" → gelen hasar
+   azaltma). Kalıcı efektler applySkillTree() ile koşu başında P.base/P.sk'ya
+   işleniyor; birkaç periyodik ULTİME/aktif düğüm updateSkillTimers() içinde
+   çalışıyor (bkz. 2. dosya bölümü — GİRDİ altındaki not). */
+const SKILLS = {
+  combat: { name: 'Savaş', icon: '⚔️', tiers: [
+    { cost: 1, opts: [
+      { id: 'c1a', name: 'Kılıç Ustalığı', desc: 'Hasar +%10', apply: b => { b.dmg += 0.10; } },
+      { id: 'c1b', name: 'Çift Vuruş', desc: '%20 şansla ikinci (yarı hasarlı) vuruş', apply: (b, sk) => { sk.doubleHit += 0.20; } },
+      { id: 'c1c', name: 'Kritik Şans', desc: 'Kritik şansı +%5', apply: b => { b.crit += 0.05; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'c2a', name: 'Zırh Delici', desc: 'Elit ve boss düşmanlara +%15 hasar', apply: (b, sk) => { sk.armorPen += 0.15; } },
+      { id: 'c2b', name: 'Öfke Birikimi', desc: 'Can azaldıkça hasar artar (üst limit +%30)', apply: (b, sk) => { sk.rageMax += 0.30; } },
+      { id: 'c2c', name: 'Kanama', desc: 'İsabetler +%20 ek hasar verir', apply: (b, sk) => { sk.bleed += 0.20; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'c3a', name: 'İkili Vuruş', desc: 'İsabetler yakındaki 2. hedefe de %50 hasar verir', apply: (b, sk) => { sk.splashHit += 0.5; } },
+      { id: 'c3b', name: 'Kritik Patlama', desc: 'Kritik vuruşlar küçük alan hasarı verir', apply: (b, sk) => { sk.critBlast = true; } },
+      { id: 'c3c', name: 'Ölüm Darbesi', desc: 'Canı %10 altındaki düşmanları anında öldürür', apply: (b, sk) => { sk.execute = Math.max(sk.execute, 0.10); } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'c4a', name: 'Berserker Rage', desc: 'Can azaldıkça hasar artar (üst limit +%50)', apply: (b, sk) => { sk.rageMax += 0.50; } },
+      { id: 'c4b', name: 'Silah Ustası', desc: 'Hasar +%25', apply: b => { b.dmg += 0.25; } },
+      { id: 'c4c', name: 'Yıldırım Hızı', desc: 'Saldırı hızı +%30', apply: b => { b.atkSpeed += 0.30; } },
+    ] },
+    { cost: 2, ult: true, opts: [
+      { id: 'c5', name: 'ULTİME: Titan Gücü', desc: 'Can ilk kez %25 altına düştüğünde 5 sn: hasar ×2, boyut +%30, yer dalgası patlatır (koşuda 1 kez)',
+        apply: (b, sk) => { sk.titan = true; } },
+    ] },
+  ] },
+  survival: { name: 'Survival', icon: '❤️', tiers: [
+    { cost: 1, opts: [
+      { id: 's1a', name: 'İyileşme Çemberi', desc: 'Sürekli can yenileme +0.3 HP/sn', apply: b => { b.regen += 0.3; } },
+      { id: 's1b', name: 'Dayanıklık', desc: 'Zırh +10', apply: b => { b.armor += 10; } },
+      { id: 's1c', name: 'Çeviklik', desc: 'Gelen hasar -%5', apply: (b, sk) => { sk.dodge += 0.05; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 's2a', name: 'Can Çalma', desc: 'Vurduğun hasarın %5\'i canına dönüşür', apply: (b, sk) => { sk.lifesteal += 0.05; } },
+      { id: 's2b', name: 'Hızlı Koşu', desc: 'Hareket hızı +%15', apply: b => { b.speedMul += 0.15; } },
+      { id: 's2c', name: 'İkinci Şans', desc: 'Ölümcül darbede 1 HP\'yle hayatta kal (koşuda 1 kez)', apply: (b, sk) => { sk.secondChance = true; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 's3a', name: 'Zehir İmmünitesi', desc: 'Zırh +3 (alan hasarlarına dayanıklılık)', apply: b => { b.armor += 3; } },
+      { id: 's3b', name: 'Açlık Bastırma', desc: 'XP kazancı +%20', apply: (b, sk) => { sk.xpMul += 0.20; } },
+      { id: 's3c', name: 'Demir Vücut', desc: 'Tüm gelen hasar -%10', apply: (b, sk) => { sk.dmgReduce += 0.10; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 's4a', name: 'Yenilenme', desc: 'Can %50 altındayken rejen ×2', apply: (b, sk) => { sk.regenDouble = true; } },
+      { id: 's4b', name: 'Dash Yenileme', desc: 'Atılma bekleme süresi -%40', apply: (b, sk) => { sk.dashCdMul = Math.min(sk.dashCdMul, 0.6); } },
+      { id: 's4c', name: 'Altın Mıknatısı', desc: 'Toplama menzili +%50', apply: b => { b.magnet += 0.5; } },
+    ] },
+    { cost: 2, ult: true, opts: [
+      { id: 's5', name: 'ULTİME: Fenix Alevi', desc: 'Öldüğünde tam can + 3 sn dokunulmazlıkla dirilirsin, ateş alanı bırakır (koşuda 1 kez)',
+        apply: (b, sk) => { sk.phoenix = true; } },
+    ] },
+  ] },
+  magic: { name: 'Büyü', icon: '🔮', tiers: [
+    { cost: 1, opts: [
+      { id: 'm1a', name: 'Ateş Topu', desc: 'İsabetler +%15 ek hasar verir (yanma)', apply: (b, sk) => { sk.ignite += 0.15; } },
+      { id: 'm1b', name: 'Buz Kılıcı', desc: 'Her isabet düşmanı kısa süre yavaşlatır', apply: (b, sk) => { sk.chillOnHit = true; } },
+      { id: 'm1c', name: 'Işın', desc: 'Atılma hızı +%20', apply: (b, sk) => { sk.dashSpdMul += 0.20; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'm2a', name: 'Elektrik Zinciri', desc: 'İsabetler yakındaki 2 hedefe zincirler (%40 hasar)', apply: (b, sk) => { sk.chainHit += 0.40; } },
+      { id: 'm2b', name: 'Kara Delik', desc: 'Periyodik olarak yakındaki düşmanları çeker', apply: (b, sk) => { sk.blackhole = true; } },
+      { id: 'm2c', name: 'Kutsal Işık', desc: 'Elit düşmanlara +%20 ek hasar', apply: (b, sk) => { sk.holyVsElite += 0.20; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'm3a', name: 'Meteor Yağmuru', desc: 'Periyodik olarak rastgele alan hasarı düşürür', apply: (b, sk) => { sk.meteor = true; } },
+      { id: 'm3b', name: 'Zaman Bükme', desc: 'Periyodik olarak çevredeki düşmanları yavaşlatır', apply: (b, sk) => { sk.timeSlow = true; } },
+      { id: 'm3c', name: 'Koruma Kubbesi', desc: 'Periyodik olarak kısa süreli dokunulmazlık kalkanı', apply: (b, sk) => { sk.shieldPulse = true; } },
+    ] },
+    { cost: 1, opts: [
+      { id: 'm4a', name: 'Element Füzyonü', desc: 'Hasar +%10, kritikler ayrıca yavaşlatır', apply: (b, sk) => { b.dmg += 0.10; sk.fusion = true; } },
+      { id: 'm4b', name: 'Mana Şoku', desc: 'Periyodik olarak çevredeki düşmanları iter', apply: (b, sk) => { sk.knockPulse = true; } },
+      { id: 'm4c', name: 'Görünmezlik', desc: 'Sürülünce kısa süreli dokunulmazlıkla sıyrılırsın', apply: (b, sk) => { sk.invis = true; } },
+    ] },
+    { cost: 2, ult: true, opts: [
+      { id: 'm5', name: 'ULTİME: Armageddon', desc: 'Periyodik olarak tüm ekrandaki düşmanlara element fırtınası yağdırır',
+        apply: (b, sk) => { sk.armageddon = true; } },
+    ] },
+  ] },
+};
 
 /* İstatistik adları (envanterde okunur metin için) */
 // Türkçe yazımda işaret yüzdenin ÖNÜNE gelir: "-%15" (yanlış: "%-15")
@@ -1666,7 +2054,7 @@ function rollItem(lv) {
 
 
 /* --- Teçhizatın 3B tarafı --- */
-const gearMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+const gearMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient, flatShading: true });
 const gearOutlineMat = new THREE.MeshBasicMaterial({ color: 0x241c2e, side: THREE.BackSide });
 const gearNodes = {};                 // slot -> kemiğe bağlı kapsayıcı dizisi
 const gearBones = {};
@@ -1725,10 +2113,20 @@ function initGearNodes(root) {
   for (const [make, bone, pos, rot] of outfit) {
     const h = attachNode(root, bone, pos, rot);
     if (!h) continue;
-    const geo = mergeGeometries(make(), false);
-    if (!geo) continue;
-    addPiece(h, geo);
-    outfitNodes.push(h);
+    outfitNodes.push({ holder: h, make });
+  }
+  refreshOutfitVisuals();
+}
+// Kıyafeti güncel sınıfın paletiyle yeniden boya (sınıf değişince / koşu başında)
+function refreshOutfitVisuals() {
+  const cls = CLASSES[P.classId] || CLASSES[META.classId] || CLASSES.paladin;
+  for (const { holder, make } of outfitNodes) {
+    while (holder.children.length) {
+      const c = holder.children.pop();
+      if (c.geometry) c.geometry.dispose();
+    }
+    const geo = mergeGeometries(make(cls.palette), false);
+    if (geo) addPiece(holder, geo);
   }
 }
 // Parça + ters kabuk dış çizgi (karakterin çizgisiyle aynı dil)
@@ -1755,9 +2153,9 @@ function refreshGearVisuals() {
     }
   }
   // Göğüslük/bot giyilince temel kıyafet altında kalır; z-kavgası olmasın diye gizle
-  if (outfitNodes[0]) outfitNodes[0].visible = !P.eq.chest;
-  if (outfitNodes[2]) outfitNodes[2].visible = !P.eq.boots;
-  if (outfitNodes[3]) outfitNodes[3].visible = !P.eq.boots;
+  if (outfitNodes[0]) outfitNodes[0].holder.visible = !P.eq.chest;
+  if (outfitNodes[2]) outfitNodes[2].holder.visible = !P.eq.boots;
+  if (outfitNodes[3]) outfitNodes[3].holder.visible = !P.eq.boots;
 }
 
 /* ---------- ENVANTER ----------
@@ -1969,10 +2367,12 @@ function collect(p) {
   particle(p.x, 0.6, p.z, '#bfe9ff', 2, 4);
 }
 function gainXp(v) {
+  if (P.sk && P.sk.xpMul) v *= (1 + P.sk.xpMul);    // Açlık Bastırma
   G.xp += v;
   while (G.xp >= G.xpNext) {
     G.xp -= G.xpNext; G.level++; G.pendingLevels++; G.xpNext = xpForLevel(G.level);
     dropChest(P.x, P.z, 1);          // her seviyede bir kasa
+    G.skillPtsEarned++;              // yetenek puanı: seviye başına 1, koşu sonunda bankaya yatar
   }
   if (G.pendingLevels > 0 && G.state === 'PLAY') openLevelUp();
 }
@@ -2076,11 +2476,32 @@ function chooseCard(c) {
 }
 
 /* ============ 10) HASAR & ÖLÜM ============ */
-function hitEnemy(e, dmg, sx, sz, knock, big) {
+/* noProc: BİRİNCİL olmayan (zincir/sıçrama/patlama kaynaklı) isabetlerde true
+   geçilir — sonsuz zincire girmeden yalnızca bir kademe yayılım olur. */
+function hitEnemy(e, dmg, sx, sz, knock, big, noProc) {
   const crit = Math.random() < P.st.crit;
-  const d = crit ? dmg * 2 : dmg;
+  let d = crit ? dmg * 2 : dmg;
+  const sk = P.sk;
+  /* Doküman bazı kavramları (zırh delme, kutsal ışık) bu oyunda karşılığı
+     olmayan sistemlere dayandırıyordu; en yakın gerçek mekaniğe uyarlandı:
+     "Zırh Delici" → elit/boss'a ekstra hasar, "Kutsal Işık" → elite ekstra. */
+  if (sk) {
+    if (sk.armorPen && (e.elite || e.boss)) d *= 1 + sk.armorPen;
+    if (sk.holyVsElite && e.elite) d *= 1 + sk.holyVsElite;
+    if (sk.bleed) d *= 1 + sk.bleed;
+    if (sk.ignite) d *= 1 + sk.ignite;
+  }
+  // Harabe Seti: 2 parça iskelet/hayalete, 4 parça ayrıca boss'lara ekstra hasar
+  if (P.setBonus) {
+    if (P.setBonus.ruins2 && (e.type === 'skeleton' || e.type === 'wraith')) d *= 1.3;
+    if (P.setBonus.ruins4 && e.boss) d *= 1.15;
+  }
   e.hp -= d; G.dmgDealt += d;
   e.flash = 0.09;
+  if (P.classId === 'mage' && !e.boss) e.chillT = 0.7;          // Soğutma (sınıf)
+  if (sk && sk.chillOnHit && !e.boss) e.chillT = Math.max(e.chillT, 0.5);   // Buz Kılıcı
+  if (sk && sk.fusion && crit && !e.boss) e.chillT = Math.max(e.chillT, 0.6); // Element Füzyonu
+  if (sk && sk.lifesteal) P.hp = Math.min(P.maxHp, P.hp + d * sk.lifesteal);  // Can Çalma
   addText(e.x, (e.cfg ? e.cfg.h : 2) * e.scale + 0.4, e.z, d, crit);
   if (knock && !e.boss) {
     const dx = e.x - sx, dz = e.z - sz, dd = Math.hypot(dx, dz) || 1;
@@ -2089,14 +2510,34 @@ function hitEnemy(e, dmg, sx, sz, knock, big) {
   if (big || crit) { addShake(crit ? 0.22 : 0.16); if (big) hitStop(0.05); }
   SFX.hit();
   for (let i = 0; i < (big ? 5 : 2); i++) particle(e.x, 0.7, e.z, crit ? '#fff2a0' : '#ffd0d0', 2.5, 7);
+  // Ölüm Darbesi: canı eşiğin altındaki (boss hariç) düşmanı infaz eder
+  if (sk && sk.execute && !e.boss && e.hp > 0 && e.hp / e.maxHp < sk.execute) e.hp = 0;
   if (e.hp <= 0) killEnemy(e);
+  if (!noProc && sk) {
+    if (sk.doubleHit && Math.random() < sk.doubleHit)             // Çift Vuruş
+      hitEnemy(e, dmg * 0.5, sx, sz, 0, false, true);
+    if ((sk.splashHit || sk.chainHit) && !e.boss) {                // İkili Vuruş / Elektrik Zinciri
+      const frac = Math.max(sk.splashHit, sk.chainHit);
+      const targets = sk.chainHit ? 2 : 1;
+      const list = hash.query(e.x, e.z, 3.2, qbuf);
+      let hitN = 0;
+      for (let i = 0; i < list.length && hitN < targets; i++) {
+        const o = list[i];
+        if (o === e || o.dead || o.boss) continue;
+        hitEnemy(o, dmg * frac, e.x, e.z, knock * 0.4, false, true);
+        hitN++;
+      }
+    }
+    if (sk.critBlast && crit) explode(e.x, e.z, 2.2, d * 0.4, 0xfff2a0);  // Kritik Patlama
+  }
 }
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true; G.kills++;
   SFX.kill();
   dropLoot(e);
-  const col = e.boss ? '#ff8a5a' : '#' + (e.cfg.color).toString(16).padStart(6, '0');
+  const col = e.boss ? '#' + (BOSS_THEMES[e.bossTheme] || BOSS_THEMES.rocky).color.toString(16).padStart(6, '0')
+                     : '#' + (e.cfg.color).toString(16).padStart(6, '0');
   const n = e.boss ? 60 : e.elite ? 20 : 8;
   for (let i = 0; i < n; i++) particle(e.x, 0.7, e.z, i % 3 ? col : '#ffffff', e.boss ? 6 : 3, e.boss ? 20 : 9);
   if (e.boss) {
@@ -2104,6 +2545,110 @@ function killEnemy(e) {
     banner(e.bossName + ' YOK EDİLDİ!', 2.4);
     if (e.isFinal) gameOver(true);
   } else if (e.elite) addShake(0.28);
+}
+
+/* ---------- Yetenek ağacı: periyodik/ULTİME düğümler ----------
+   Çoğu düğüm koşu başında bir kez P.base/P.sk'ya işleniyor (applySkillTree);
+   bunlar ise zamanla tetiklenen aktif efektler, tek bir zamanlayıcı
+   fonksiyonunda toplanıyor. Var olan sistemleri (hash sorgusu, kx/kz itme,
+   chillT, explode/hitEnemy) yeniden kullanıyor — yeni bir alt sistem yok. */
+function pullNearby(range, force) {
+  const list = hash.query(P.x, P.z, range, qbuf);
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i]; if (e.dead || e.boss) continue;
+    const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1;
+    e.kx += dx / d * force; e.kz += dz / d * force;
+  }
+  for (let i = 0; i < 12; i++) particle(P.x, 0.5, P.z, '#b07bff', 3, 6);
+  addShake(0.12);
+}
+function pushNearby(range, force) {
+  const list = hash.query(P.x, P.z, range, qbuf);
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i]; if (e.dead || e.boss) continue;
+    const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz) || 1;
+    e.kx += dx / d * force; e.kz += dz / d * force;
+  }
+  for (let i = 0; i < 14; i++) particle(P.x, 0.5, P.z, '#ffd479', 3, 7);
+  addShake(0.18);
+}
+function chillNearby(range, t) {
+  const list = hash.query(P.x, P.z, range, qbuf);
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i]; if (e.dead || e.boss) continue;
+    e.chillT = Math.max(e.chillT, t);
+  }
+  addShake(0.15);
+  for (let i = 0; i < 14; i++) particle(P.x, 0.6, P.z, '#9ef1ff', 4, 7);
+}
+function updateSkillTimers(dt) {
+  const sk = P.sk; if (!sk) return;
+  const T = P.skT;
+  if (sk.blackhole) { T.blackhole -= dt; if (T.blackhole <= 0) { T.blackhole = 4; pullNearby(7, 9); } }
+  if (sk.meteor) {
+    T.meteor -= dt;
+    if (T.meteor <= 0) {
+      T.meteor = 2.6;
+      const a = rnd(TAU), r = rnd(6, 1.5);
+      explode(P.x + Math.cos(a) * r, P.z + Math.sin(a) * r, 2.6, dmgOf(18), 0xff8a3d);
+    }
+  }
+  if (sk.timeSlow) { T.timeSlow -= dt; if (T.timeSlow <= 0) { T.timeSlow = 5; chillNearby(9, 1.4); } }
+  if (sk.shieldPulse) {
+    T.shieldPulse -= dt;
+    if (T.shieldPulse <= 0) {
+      T.shieldPulse = 20; P.iframe = Math.max(P.iframe, 1.5);
+      banner('KORUMA KUBBESİ', 1.2);
+      for (let i = 0; i < 16; i++) particle(P.x, 1, P.z, '#9ef1ff', 4, 9);
+    }
+  }
+  if (sk.knockPulse) { T.knockPulse -= dt; if (T.knockPulse <= 0) { T.knockPulse = 6; pushNearby(7, 16); } }
+  if (sk.invis) {
+    T.invis -= dt;
+    if (T.invis <= 0) {
+      const list = hash.query(P.x, P.z, 5, qbuf);
+      let near = 0;
+      for (let i = 0; i < list.length; i++) if (!list[i].dead) near++;
+      if (near >= 6) {
+        T.invis = 12; P.iframe = Math.max(P.iframe, 1.5);
+        banner('GÖRÜNMEZLİK', 1.2);
+      } else T.invis = 0.5;    // koşul sağlanmadı, kısa süre sonra tekrar dene
+    }
+  }
+  if (sk.armageddon) {
+    T.armageddon -= dt;
+    if (T.armageddon <= 0) { T.armageddon = 45; G.armagT = 2.2; banner('ARMAGEDDON!', 1.6); }
+  }
+  // Set bonusları: periyodik/hareket bağlı düğümler
+  const sb = P.setBonus;
+  if (sb) {
+    if (sb.forest4) {
+      T.leafShield -= dt;
+      if (T.leafShield <= 0) {
+        T.leafShield = 10; P.iframe = Math.max(P.iframe, 0.8);
+        for (let i = 0; i < 12; i++) particle(P.x, 0.8, P.z, '#7fe066', 3, 6);
+      }
+    }
+    const moving = Math.hypot(P.vx, P.vz) > 1.5;
+    if (sb.volcano4 && moving) {
+      T.burnTrail -= dt;
+      if (T.burnTrail <= 0) { T.burnTrail = 1.2; makeFire(P.x, P.z, { r: 1.8, dps: dmgOf(6), life: 2 }); }
+    }
+    if (sb.glacier4 && moving) {
+      T.frostTrail -= dt;
+      if (T.frostTrail <= 0) { T.frostTrail = 1.0; chillNearby(2.4, 0.4); }
+    }
+  }
+  if (G.armagT > 0) {
+    G.armagTick -= dt;
+    if (G.armagTick <= 0) {
+      G.armagTick = 0.35;
+      const A = enemies.active;
+      for (let i = 0; i < A.length; i++) if (!A[i].dead) hitEnemy(A[i], dmgOf(14), P.x, P.z, 4, true, true);
+      addShake(0.12);
+    }
+    G.armagT -= dt;
+  }
 }
 
 /* ============ 11) 2B KATMAN: HUD, HASAR SAYILARI, JOYSTİCK ============ */
@@ -2118,8 +2663,13 @@ function drawOverlay() {
     const sx = PX, sy = PY;
     if (sx < -20 || sx > VW + 20 || sy < -20 || sy > VH + 20) continue;
     const k = p.life / p.maxLife;
-    ctx.globalAlpha = k; ctx.fillStyle = p.color;
     const r = p.r * k;
+    ctx.fillStyle = p.color;
+    // Ucuz "glow": soluk geniş hale + parlak çekirdek — gerçek bloom yerine iki katmanlı dikdörtgen
+    ctx.globalAlpha = k * 0.3;
+    const rg = r * 2.2;
+    ctx.fillRect(sx - rg, sy - rg, rg * 2, rg * 2);
+    ctx.globalAlpha = k;
     ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
   }
   ctx.globalAlpha = 1;
@@ -2168,7 +2718,22 @@ function drawOverlay() {
     ctx.fillRect(sx - w / 2, sy, w * clamp(e.hp / e.maxHp, 0, 1), h);
   }
 
-  if (G.flashRed > 0) { ctx.fillStyle = `rgba(255,20,40,${(G.flashRed * 0.5).toFixed(3)})`; ctx.fillRect(0, 0, VW, VH); }
+  if (G.flashRed > 0) {
+    // Bloom/vinyet/kromatik sapma yerine ucuz 2B karşılığı: kenarları koyulaştıran
+    // dairesel gradyan + kısa süreli renk-ayrışması şeridi (gerçek GPU
+    // post-processing düşük uçlu cihaz bütçesiyle uyuşmuyor — bkz. gölge haritası notu)
+    const k = G.flashRed, cx = VW / 2, cy = VH / 2, R = Math.hypot(cx, cy);
+    const grd = ctx.createRadialGradient(cx, cy, R * 0.35, cx, cy, R);
+    grd.addColorStop(0, 'rgba(255,20,40,0)');
+    grd.addColorStop(1, `rgba(255,20,40,${(k * 0.85).toFixed(3)})`);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, VW, VH);
+    if (k > 0.15) {
+      ctx.globalAlpha = clamp((k - 0.15) * 1.4, 0, 0.4);
+      ctx.fillStyle = '#ff3050'; ctx.fillRect(0, 0, 4, VH); ctx.fillRect(VW - 4, 0, 4, VH);
+      ctx.fillStyle = '#30e0ff'; ctx.fillRect(2, 0, 4, VH); ctx.fillRect(VW - 6, 0, 4, VH);
+      ctx.globalAlpha = 1;
+    }
+  }
   if (G.state !== 'MENU' && G.state !== 'LOADING') { drawHUD(); updateDashBtn(); updateBagBtn(); }
   if (G.toast && G.toast.t > 0) drawToast();
   drawJoystick();
@@ -2377,6 +2942,8 @@ const META = {
   up: { hp: 0, dmg: 0, spd: 0, magnet: 0, armor: 0 },
   seen: {},
   heir: 0,
+  classId: 'paladin',
+  skillPts: 0, skills: {},          // yetenek ağacı: kazanılan puan + alınan düğümler
 };
 const HEIR_MAX = 6, heirCost = l => 150 + l * 220;
 /* Miras: koşuya bedava deri parçalarla başla. Yuvalar sabit sırayla dolar ki
@@ -2402,6 +2969,9 @@ function metaLoad() {
     // Koleksiyon: artık var olmayan eşyalar sessizce elenir
     if (d.seen) for (const id in d.seen) if (ITEM_BY_ID[id]) META.seen[id] = 1;
     if (typeof d.heir === 'number') META.heir = clamp(d.heir | 0, 0, HEIR_MAX);
+    if (typeof d.classId === 'string' && CLASSES[d.classId]) META.classId = d.classId;
+    if (typeof d.skillPts === 'number') META.skillPts = Math.max(0, d.skillPts | 0);
+    if (d.skills && typeof d.skills === 'object') META.skills = d.skills;
   } catch (e) { /* erişilemiyor: bellekte devam */ }
 }
 function metaSave() {
@@ -2409,11 +2979,56 @@ function metaSave() {
 }
 // Kalıcı yükseltmeleri oyuncuya uygula (koşu başında)
 function applyMeta() {
+  /* Katkılar TOPLANIYOR (önceden mutlak atamaydı): sınıf bonusları applyMeta'dan
+     ÖNCE P.base'e işleniyor, mutlak atama onları silerdi. */
   P.maxHp += META.up.hp * 15;
-  P.base.dmg = 1 + META.up.dmg * 0.06;
-  P.base.speedMul = 1 + META.up.spd * 0.04;
-  P.base.magnet = 1 + META.up.magnet * 0.15;
-  P.base.armor = META.up.armor;
+  P.base.dmg += META.up.dmg * 0.06;
+  P.base.speedMul += META.up.spd * 0.04;
+  P.base.magnet += META.up.magnet * 0.15;
+  P.base.armor += META.up.armor;
+}
+/* Yetenek ağacı: META.skills[branch] = kademe başına seçilen SEÇENEK İNDEKSİ
+   dizisi (örn. [0,2,null,1] → kademe1'de 1. seçenek, kademe2'de 3. seçenek…).
+   Koşu başında bir kez P.base/P.sk'ya işlenir; P.sk'daki bayraklar çalışma
+   anı kancalarında (hitEnemy/hurtPlayer/updateSkillTimers) okunur. */
+function applySkillTree() {
+  P.sk = {
+    doubleHit: 0, armorPen: 0, rageMax: 0, bleed: 0, ignite: 0, splashHit: 0, chainHit: 0,
+    critBlast: false, execute: 0, holyVsElite: 0, lifesteal: 0, dodge: 0, dmgReduce: 0,
+    xpMul: 0, regenDouble: false, dashCdMul: 1, dashSpdMul: 0, chillOnHit: false, fusion: false,
+    blackhole: false, meteor: false, timeSlow: false, shieldPulse: false, knockPulse: false,
+    invis: false, armageddon: false, titan: false, secondChance: false, phoenix: false,
+  };
+  for (const branch in SKILLS) {
+    const picks = META.skills[branch] || [];
+    SKILLS[branch].tiers.forEach((tier, ti) => {
+      const idx = picks[ti];
+      if (idx === undefined || idx === null || idx < 0) return;
+      const opt = tier.opts[idx]; if (!opt) return;
+      opt.apply(P.base, P.sk);
+    });
+  }
+}
+/* Bir kademeyi açmaya çalış: önceki kademe seçilmiş olmalı, yeterli puan
+   gerekir. Başarılıysa puan düşer, seçim kaydedilir ve koşu-dışı önizleme
+   için P.sk hemen yeniden hesaplanır (menüde metin güncellensin diye). */
+function pickSkill(branch, tierIdx, optIdx) {
+  const br = SKILLS[branch]; if (!br) return false;
+  const tier = br.tiers[tierIdx]; if (!tier || !tier.opts[optIdx]) return false;
+  if (tierIdx > 0) {
+    const prev = (META.skills[branch] || [])[tierIdx - 1];
+    if (prev === undefined || prev === null || prev < 0) return false;   // önceki kademe açık değil
+  }
+  const cur = (META.skills[branch] || [])[tierIdx];
+  if (cur === optIdx) return true;                    // zaten seçili
+  const already = cur !== undefined && cur !== null && cur >= 0;
+  if (!already && META.skillPts < tier.cost) return false;
+  if (!META.skills[branch]) META.skills[branch] = [];
+  if (!already) META.skillPts -= tier.cost;
+  META.skills[branch][tierIdx] = optIdx;
+  metaSave();
+  applySkillTree();
+  return true;
 }
 const elShop = document.getElementById('shop');
 const elBank = document.getElementById('bank');
@@ -2424,6 +3039,33 @@ for (const t of document.querySelectorAll('.tab')) t.onclick = () => {
     document.getElementById(o.dataset.pane).hidden = o !== t;
   }
 };
+/* ---------- SINIF SEÇİMİ ---------- */
+const elClassRow = document.getElementById('classRow');
+const elClassInfo = document.getElementById('classInfo');
+function selectClass(id) {
+  if (!CLASSES[id] || META.classId === id) return;
+  META.classId = id; metaSave();
+  renderClassSelect();
+  if (P.model) { P.classId = id; refreshOutfitVisuals(); }   // menüde canlı önizleme
+}
+function renderClassSelect() {
+  if (!elClassRow) return;
+  elClassRow.innerHTML = '';
+  for (const id of CLASS_ORDER) {
+    const c = CLASSES[id];
+    const b = document.createElement('button');
+    b.className = 'classCard' + (META.classId === id ? ' on' : '');
+    b.style.setProperty('--cc', '#' + c.palette.trim.toString(16).padStart(6, '0'));
+    b.innerHTML = `<span class="ci">${c.icon}</span><span class="cn">${c.name}</span>`;
+    b.onclick = () => selectClass(id);
+    elClassRow.appendChild(b);
+  }
+  const c = CLASSES[META.classId];
+  if (elClassInfo) elClassInfo.innerHTML =
+    `<b>${c.icon} ${c.name}</b> — <i>${c.title}</i><br>${c.passiveTxt}<br>` +
+    `Can ×${c.hpMul} · Hız ×${c.speedMul.toFixed(2)} · Hasar ×${c.dmgMul}`;
+}
+
 function renderShop() {
   elBank.textContent = '💰 ' + META.bank;
   elShop.innerHTML = '';
@@ -2450,6 +3092,42 @@ function renderShop() {
     elShop.appendChild(row);
   }
   renderGear();
+  renderClassSelect();
+  renderSkills();
+}
+/* Yetenek ağacı paneli: 3 dal × 5 kademe. Bir kademeye dokunmak açar (puan
+   yeterliyse ve önceki kademe açıksa); zaten açık olana dokunmak seçimi
+   DEĞİŞTİRİR (aynı puanla farklı seçenek denenebilir — kilitlemiyoruz). */
+const elSkills = document.getElementById('skills');
+const elSkillPtsTxt = document.getElementById('skillPtsTxt');
+function renderSkills() {
+  if (!elSkills) return;
+  if (elSkillPtsTxt) elSkillPtsTxt.textContent = META.skillPts;
+  elSkills.innerHTML = '';
+  for (const branchId in SKILLS) {
+    const br = SKILLS[branchId];
+    const picks = META.skills[branchId] || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'skillBranch';
+    wrap.innerHTML = `<div class="skillBranchHead">${br.icon} ${br.name}</div>`;
+    br.tiers.forEach((tier, ti) => {
+      const prevOk = ti === 0 || (picks[ti - 1] !== undefined && picks[ti - 1] !== null && picks[ti - 1] >= 0);
+      const row = document.createElement('div');
+      row.className = 'skillTier';
+      tier.opts.forEach((opt, oi) => {
+        const chosen = picks[ti] === oi;
+        const b = document.createElement('button');
+        b.className = 'skillOpt' + (chosen ? ' on' : '') + (tier.ult ? ' ult' : '') + (!prevOk ? ' locked' : '');
+        b.innerHTML = `<span class="sn">${opt.name}</span><span class="sd">${opt.desc}</span>` +
+          `<span class="sc">${chosen ? 'SEÇİLDİ' : '🔹 ' + tier.cost}</span>`;
+        if (!prevOk) b.disabled = true;
+        else b.onclick = () => { if (pickSkill(branchId, ti, oi)) { renderSkills(); SFX.levelup(); } };
+        row.appendChild(b);
+      });
+      wrap.appendChild(row);
+    });
+    elSkills.appendChild(wrap);
+  }
 }
 /* Teçhizat paneli artık bir DÜKKAN değil, KOLEKSİYON + MİRAS:
    parçalar koşu sırasında düşmanlardan düşüyor, menüde yalnızca ne bulduğun
@@ -2516,6 +3194,7 @@ const elInv = document.getElementById('inv');
 const elInvSlots = document.getElementById('invSlots');
 const elInvBag = document.getElementById('invBag');
 const elInvOdds = document.getElementById('invOdds');
+const elInvSets = document.getElementById('invSets');
 /* İkonlar 2B canvas'a çiziliyor: harici dosya yok, data: URL yok (katı CSP
    altında da çalışır) ve renkler modeldekiyle birebir aynı kaynaktan geliyor. */
 function drawItemIcon(cv, slot, it) {
@@ -2638,6 +3317,12 @@ function itemCell(slot, it, equipped) {
   nm.textContent = it ? it.name : 'Boş';
   if (it) nm.style.color = RAR[it.rar].col;
   el.appendChild(nm);
+  if (it && it.set) {
+    const sb = document.createElement('div');
+    sb.className = 'iset';
+    sb.textContent = SET_BONUS[it.set].icon + ' ' + SET_BONUS[it.set].name;
+    el.appendChild(sb);
+  }
   if (it) {
     const st = document.createElement('div');
     st.className = 'ist';
@@ -2650,6 +3335,19 @@ function itemCell(slot, it, equipped) {
 function renderInventory() {
   if (!elInv) return;
   elInvSlots.innerHTML = ''; elInvBag.innerHTML = '';
+  // Aktif set bonusları: kaç parça giyildiği + hangi bonusun açık olduğu
+  if (elInvSets) {
+    const counts = equippedSetCounts();
+    const rows = Object.keys(SET_BONUS).filter(k => counts[k]).map(k => {
+      const def = SET_BONUS[k], n = counts[k];
+      const p2on = n >= 2, p4on = n >= 4;
+      return `<div class="setRow"><b>${def.icon} ${def.name} (${n}/4)</b>` +
+        `<span class="${p2on ? 'on' : ''}">2: ${def.p2.txt}</span>` +
+        `<span class="${p4on ? 'on' : ''}">4: ${def.p4.txt}</span></div>`;
+    });
+    elInvSets.innerHTML = rows.join('') ||
+      '<div class="iempty" style="padding:4px 0">Aynı setten 2+ parça giyersen bonus açılır (bkz. simge renkleri).</div>';
+  }
   for (const slot of GEAR_SLOTS) {
     const it = itemOf(P.eq[slot]);
     const wrap = document.createElement('div');
@@ -2705,6 +3403,8 @@ function resetAll() {
   G.pendingLevels = 0; G.shake = 0; G.hitStop = 0; G.flashRed = 0; G.dmgDealt = 0;
   G.spawnTimer = 0; G.bossIdx = 0; G.nextBossAt = BOSS_EVERY; G.boss = null;
   G.finalSpawned = false; G.banner = ''; G.bannerT = 0; G.win = false; G.toast = null;
+  G.armagT = 0; G.armagTick = 0;                        // Armageddon (yetenek ağacı ULTİME) fırtına durumu
+  G.skillPtsEarned = 0;
   resetPlayer();
   camTarget.set(0, 0, 0);
   releaseSticks();
@@ -2733,7 +3433,7 @@ function showPauseInfo() {
 function gameOver(win) {
   G.state = 'OVER'; G.win = win;
   if (elInv) elInv.classList.remove('show');
-  META.bank += G.gold; metaSave(); renderShop();      // toplanan altın kalıcı
+  META.bank += G.gold; META.skillPts += G.skillPtsEarned; metaSave(); renderShop();  // toplanan altın + yetenek puanı kalıcı
   win ? SFX.win() : SFX.over();
   elPauseBtn.classList.remove('show');
   elDashBtn.classList.remove('show');
@@ -2747,7 +3447,7 @@ function gameOver(win) {
     ['Toplanan Altın', G.gold], ['Ulaşılan Seviye', G.level],
     ['Toplam Hasar', Math.round(G.dmgDealt).toLocaleString('tr-TR')],
     ['Silah Sayısı', P.weapons.length + (P.weapons.some(w => w.evolved) ? ' (EVO!)' : '')],
-    ['Kasadaki Altın', META.bank],
+    ['Kasadaki Altın', META.bank], ['Kazanılan Yetenek Puanı', G.skillPtsEarned],
   ];
   document.getElementById('overStats').innerHTML = rows.map(r => `<div class="stat"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');
   elOver.classList.add('show');
@@ -2925,6 +3625,7 @@ function frame(now) {
     updatePickups(dt);
     updateFx(dt);
     updateRipples(dt);
+    updateSkillTimers(dt);
     enemies.sweep();
     if (G.bannerT > 0) G.bannerT -= dt;
     if (G.flashRed > 0) G.flashRed -= dt;
@@ -2982,5 +3683,9 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   refreshGearVisuals, renderGear, renderShop, renderInventory,
                   equipItem, addItem, itemOf, slotOfItem, rollItem, rollRarity, rarityOdds,
                   openInventory, closeInventory, dropChest, metaSave, spawnPickup,
+                  CLASSES, CLASS_ORDER, selectClass, renderClassSelect, refreshOutfitVisuals,
+                  SKILLS, pickSkill, renderSkills, applySkillTree, dmgOf, updateSkillTimers,
+                  resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
+                  BOSS_THEMES, bossAttack,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
