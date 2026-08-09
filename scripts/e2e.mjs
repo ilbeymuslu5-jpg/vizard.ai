@@ -290,6 +290,56 @@ check('offline regen: 20 min away -> +10 energy',
   (await page.locator('#energyNow').textContent()) === '20',
   await page.locator('#energyNow').textContent());
 
+console.log('--- music ---');
+const audio = () => page.evaluate(() => {
+  const el = document.getElementById('bgm');
+  return {
+    src: el.getAttribute('src').slice(0, 30),
+    loop: el.loop,
+    paused: el.paused,
+    volume: Number(el.volume.toFixed(3)),
+    duration: Number.isFinite(el.duration) ? Math.round(el.duration) : null,
+  };
+});
+
+// The page was reloaded by the previous section, so no gesture has happened yet.
+check('the track is embedded, not fetched', (await audio()).src.startsWith('data:audio/mpeg;base64,'));
+check('the track loops', (await audio()).loop === true);
+check('the track decodes', (await audio()).duration > 100, (await audio()).duration);
+check('silence until the player interacts', (await audio()).paused === true, await audio());
+
+await page.mouse.click(210, 320);
+await page.waitForTimeout(1400);
+check('music starts on the first interaction', (await audio()).paused === false, await audio());
+check('music sits under the UI, not over it',
+  (await audio()).volume > 0 && (await audio()).volume <= 0.4, (await audio()).volume);
+
+await page.locator('#btnMusic').click();
+await page.waitForTimeout(1400);
+check('the toggle mutes', (await audio()).paused === true, await audio());
+check('the toggle reports its state',
+  (await page.locator('#btnMusic').getAttribute('aria-pressed')) === 'false');
+
+await page.reload();
+await page.waitForTimeout(500);
+await page.mouse.click(210, 320);
+await page.waitForTimeout(900);
+check('a muted player stays muted after a reload', (await audio()).paused === true, await audio());
+check('the toggle remembers across reloads',
+  (await page.locator('#btnMusic').getAttribute('aria-pressed')) === 'false');
+
+await page.locator('#btnMusic').click();
+await page.waitForTimeout(900);
+check('turning it back on resumes playback', (await audio()).paused === false, await audio());
+
+// Politeness: a hidden tab must not keep singing.
+await page.evaluate(() => {
+  Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+await page.waitForTimeout(300);
+check('a hidden tab pauses the music', (await audio()).paused === true, await audio());
+
 check('still no page errors', errors.length === 0, errors);
 
 if (shotPrefix !== undefined) {

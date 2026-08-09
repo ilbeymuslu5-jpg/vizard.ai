@@ -24,6 +24,7 @@ import { canDeliverTask, getTaskProgress } from '../src/utils/tasks';
 import { houseSceneSvg } from './houseScene';
 import { CHAIN_COLORS, emblemSvg } from './icons';
 import { portraitSvg } from './portraits';
+import { Music, speakerIcon } from './audio';
 import { Board3D } from './three/board3d';
 import { House3D } from './three/house3d';
 
@@ -64,6 +65,8 @@ const dom = {
   btnAd: el<HTMLButtonElement>('btnAd'),
   btnRefill: el<HTMLButtonElement>('btnRefill'),
   btnReset: el<HTMLButtonElement>('btnReset'),
+  btnMusic: el<HTMLButtonElement>('btnMusic'),
+  bgm: el<HTMLAudioElement>('bgm'),
 };
 
 // ---------------------------------------------------------------------------
@@ -785,6 +788,20 @@ dom.btnReset.addEventListener('click', () => {
   gameStore.getState().resetGame();
   renderAll(gameStore.getState());
   toast('Fresh workshop.', 'plain');
+});
+
+// ---------------------------------------------------------------------------
+// Music
+// ---------------------------------------------------------------------------
+
+const music = new Music(dom.bgm);
+music.onChange((enabled) => {
+  dom.btnMusic.innerHTML = speakerIcon(enabled);
+  dom.btnMusic.setAttribute('aria-pressed', String(enabled));
+  dom.btnMusic.setAttribute('aria-label', enabled ? 'Mute music' : 'Play music');
+});
+dom.btnMusic.addEventListener('click', () => {
+  toast(music.toggle() ? 'Music on' : 'Music off', 'plain');
 });
 
 // ---------------------------------------------------------------------------

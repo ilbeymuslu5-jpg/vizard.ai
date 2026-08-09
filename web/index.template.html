@@ -85,6 +85,13 @@
     font-family: var(--data); font-size: 12px; font-variant-numeric: tabular-nums;
   }
   .chip b { font-weight: 600; }
+  .chip--btn {
+    cursor: pointer; color: var(--paper-dim); padding: 6px 8px;
+    transition: color .15s ease, border-color .15s ease;
+  }
+  .chip--btn:hover { color: var(--paper); border-color: var(--brass-dim); }
+  .chip--btn[aria-pressed="true"] { color: var(--brass); }
+  .chip--btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
   .chip--coin b { color: var(--brass); }
   .chip--gem b { color: var(--blueprint); }
 
@@ -395,6 +402,7 @@
       </div>
     </div>
     <div class="wallet">
+      <button class="chip chip--btn" id="btnMusic" type="button" aria-pressed="true" title="Music"></button>
       <span class="chip chip--coin" title="Coins">
         <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="#d0a04a"/><circle cx="12" cy="12" r="5.4" fill="rgba(0,0,0,.3)"/></svg>
         <b id="coins">0</b>
@@ -487,3 +495,7 @@
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- The track is inlined as a data URI at build time: the published page has
+     to be self-contained, so it cannot fetch audio from anywhere. -->
+<audio id="bgm" loop preload="auto" src="__AUDIO_DATA_URI__"></audio>
