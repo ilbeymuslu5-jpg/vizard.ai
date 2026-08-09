@@ -169,7 +169,27 @@
   .task__reward b { color: var(--brass); font-weight: 600; }
   .task__reward i { font-style: normal; color: var(--blueprint); }
 
-  /* -- board ----------------------------------------------------------- */
+  /* -- 3D stage -------------------------------------------------------- */
+  .stage {
+    position: relative;
+    aspect-ratio: 5 / 6.6;
+    border-radius: var(--r);
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 50% 0%, #3d2e1f 0%, #171008 80%);
+    border: 1px solid var(--lip);
+    box-shadow: inset 0 1px 0 rgba(240,231,214,.06), 0 20px 40px -26px #000;
+    touch-action: none;
+  }
+  /* Lamp falloff painted over the canvas: cheaper than a post-process pass
+     and it ties the WebGL scene to the page's own vignette. */
+  .stage::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(86% 70% at 50% 38%, rgba(0,0,0,0) 46%, rgba(10,7,5,.4) 100%);
+  }
+  .stage[hidden] { display: none; }
+
+  /* -- board (flat fallback) ------------------------------------------- */
   .boardwrap {
     padding: 9px;
     background: linear-gradient(180deg, rgba(111,179,184,.05), rgba(0,0,0,0) 45%), #1b150f;
@@ -291,10 +311,11 @@
   /* -- house ----------------------------------------------------------- */
   .scene {
     position: relative; aspect-ratio: 16 / 11; overflow: hidden;
+    background: linear-gradient(180deg, #241d2e 0%, #4a3348 55%, #6d4a44 100%);
     border: 1px solid var(--lip); border-radius: var(--r);
     box-shadow: inset 0 0 40px -12px #000;
   }
-  .scene svg { display: block; width: 100%; height: 100%; }
+  .scene svg, .scene canvas { display: block; width: 100%; height: 100%; }
   .scene__caption {
     position: absolute; left: 0; right: 0; bottom: 0; margin: 0;
     padding: 26px 12px 8px;
@@ -397,7 +418,9 @@
   <section class="view is-active" id="viewBoard">
     <div class="section-label"><span>Requests</span><span id="taskCount">3 open</span></div>
     <div class="tasks" id="tasks"></div>
-    <div class="boardwrap"><div class="board" id="board" aria-label="Merge board"></div></div>
+    <!-- The WebGL board. The flat grid below is the no-WebGL fallback. -->
+    <div class="stage" id="stage" hidden></div>
+    <div class="boardwrap" id="boardwrap"><div class="board" id="board" aria-label="Merge board"></div></div>
     <p class="hint">Tap the <b>glowing toolbox</b> to make parts. Drag two matching parts together to merge.</p>
     <div class="section-label"><span>Out of energy?</span></div>
     <div class="offers">

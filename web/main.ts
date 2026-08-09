@@ -24,6 +24,8 @@ import { canDeliverTask, getTaskProgress } from '../src/utils/tasks';
 import { houseSceneSvg } from './houseScene';
 import { CHAIN_COLORS, emblemSvg } from './icons';
 import { portraitSvg } from './portraits';
+import { Board3D } from './three/board3d';
+import { House3D } from './three/house3d';
 
 // ---------------------------------------------------------------------------
 // DOM handles
@@ -37,6 +39,8 @@ function el<T extends HTMLElement>(id: string): T {
 
 const dom = {
   board: el<HTMLDivElement>('board'),
+  stage: el<HTMLDivElement>('stage'),
+  boardwrap: el<HTMLDivElement>('boardwrap'),
   tasks: el<HTMLDivElement>('tasks'),
   crew: el<HTMLDivElement>('crew'),
   crewCount: el('crewCount'),
@@ -101,6 +105,27 @@ function reportPurchase(result: PurchaseResult, success: string): void {
     return;
   }
   toast(result.reason === 'unaffordable' ? 'Not enough coins yet.' : 'Not available yet.', 'bad');
+}
+
+// ---------------------------------------------------------------------------
+// 3D scenes
+//
+// The board and the house are WebGL scenes; everything else stays DOM, because
+// text, prices and buttons belong in the browser's own layout and text
+// rendering. If WebGL is unavailable the game falls back to the flat DOM board
+// below - the store and the rules are identical either way.
+// ---------------------------------------------------------------------------
+
+let board3d: Board3D | null = null;
+let house3d: House3D | null = null;
+
+function supportsWebGL(): boolean {
+  try {
+    const probe = document.createElement('canvas');
+    return probe.getContext('webgl2') !== null || probe.getContext('webgl') !== null;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,9 +376,15 @@ function renderCrew(state: GameState): void {
 
 function renderHouse(state: GameState): void {
   const restored = state.restorations.filter((room) => room.restored);
-  dom.scene.innerHTML =
-    houseSceneSvg({ restored: restored.map((room) => room.id) }) +
-    '<p class="scene__caption" id="sceneCaption"></p>';
+
+  if (house3d !== null) {
+    house3d.sync(restored.map((room) => room.id));
+  } else {
+    // Flat fallback for browsers without WebGL.
+    dom.scene.innerHTML =
+      houseSceneSvg({ restored: restored.map((room) => room.id) }) +
+      '<p class="scene__caption"></p>';
+  }
 
   const caption = dom.scene.querySelector<HTMLParagraphElement>('.scene__caption');
   const last = restored[restored.length - 1];
@@ -533,7 +564,8 @@ function render(state: GameState): void {
   const walletChanged = state.wallet.coins !== lastWallet;
 
   if (state.grid !== lastGrid) {
-    renderBoard(state);
+    if (board3d !== null) board3d.sync(state.grid);
+    else renderBoard(state);
     renderTasks(state);
     lastGrid = state.grid;
   }
@@ -557,8 +589,12 @@ function renderAll(state: GameState): void {
   lastWallet = -1;
   lastCrewSignature = '';
   lastHouseSignature = '';
-  buildBoard(state);
-  renderBoard(state);
+  if (board3d !== null) {
+    board3d.sync(state.grid);
+  } else {
+    buildBoard(state);
+    renderBoard(state);
+  }
   renderTasks(state);
   renderCrew(state);
   renderHouse(state);
@@ -661,6 +697,39 @@ dom.board.addEventListener('pointermove', (event: PointerEvent) => {
   }
 });
 
+/**
+ * A tap on a generator. Shared by the 3D board and the DOM fallback so the two
+ * renderers can never disagree about what a tap does.
+ */
+function handleTap(index: CellIndex): void {
+  const result = gameStore.getState().tapGenerator(index);
+  if (result.ok) {
+    pendingAnimation.set(result.at, 'spawn');
+    if (result.wasFree) toast('Free tap — Nell got one out for nothing.', 'good');
+  } else if (TAP_MESSAGES[result.reason] !== '') {
+    toast(TAP_MESSAGES[result.reason], 'bad');
+  }
+  render(gameStore.getState());
+}
+
+/** A chip dropped onto another cell. */
+function handleDrop(from: CellIndex, to: CellIndex): void {
+  const outcome = gameStore.getState().dropItem(from, to);
+  if (outcome.kind === 'merged') {
+    pendingAnimation.set(outcome.at, 'pop');
+    board3d?.punch(outcome.at);
+    if (isGeneratorType(outcome.resultItem.itemType)) {
+      toast(
+        `${getItemName(outcome.resultItem.itemType, outcome.resultItem.level)} — better output now.`,
+        'good',
+      );
+    }
+  } else if (outcome.kind === 'rejected' && DROP_MESSAGES[outcome.reason] !== '') {
+    toast(DROP_MESSAGES[outcome.reason], 'bad');
+  }
+  render(gameStore.getState());
+}
+
 function endDrag(event: PointerEvent): void {
   if (drag === null || event.pointerId !== drag.pointerId) return;
   const session = drag;
@@ -670,18 +739,9 @@ function endDrag(event: PointerEvent): void {
   clearHover();
   cellNodes[session.from]?.classList.remove('is-source');
 
-  const store = gameStore.getState();
-
   // No ghost means the pointer never travelled: treat it as a tap.
   if (session.ghost === null) {
-    const result = store.tapGenerator(session.from);
-    if (result.ok) {
-      pendingAnimation.set(result.at, 'spawn');
-      if (result.wasFree) toast('Free tap — Nell got one out for nothing.', 'good');
-    } else if (TAP_MESSAGES[result.reason] !== '') {
-      toast(TAP_MESSAGES[result.reason], 'bad');
-    }
-    render(gameStore.getState());
+    handleTap(session.from);
     return;
   }
 
@@ -690,17 +750,7 @@ function endDrag(event: PointerEvent): void {
     render(gameStore.getState());
     return;
   }
-
-  const outcome = store.dropItem(session.from, to);
-  if (outcome.kind === 'merged') {
-    pendingAnimation.set(outcome.at, 'pop');
-    if (isGeneratorType(outcome.resultItem.itemType)) {
-      toast(`${getItemName(outcome.resultItem.itemType, outcome.resultItem.level)} — better output now.`, 'good');
-    }
-  } else if (outcome.kind === 'rejected' && DROP_MESSAGES[outcome.reason] !== '') {
-    toast(DROP_MESSAGES[outcome.reason], 'bad');
-  }
-  render(gameStore.getState());
+  handleDrop(session.from, to);
 }
 
 dom.board.addEventListener('pointerup', endDrag);
@@ -713,10 +763,7 @@ dom.board.addEventListener('keydown', (event: KeyboardEvent) => {
   if (raw === undefined) return;
   event.preventDefault();
 
-  const result = gameStore.getState().tapGenerator(Number.parseInt(raw, 10));
-  if (result.ok) pendingAnimation.set(result.at, 'spawn');
-  else toast(TAP_MESSAGES[result.reason], 'bad');
-  render(gameStore.getState());
+  handleTap(Number.parseInt(raw, 10));
 });
 
 // ---------------------------------------------------------------------------
@@ -743,6 +790,40 @@ dom.btnReset.addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+
+if (supportsWebGL()) {
+  dom.boardwrap.hidden = true;
+  dom.stage.hidden = false;
+  board3d = new Board3D(dom.stage, { onTap: handleTap, onDrop: handleDrop });
+  house3d = new House3D(dom.scene);
+
+  // One loop for both scenes; only the visible one is drawn, so the hidden tab
+  // costs nothing.
+  let last = performance.now();
+  const frame = (now: number): void => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (document.getElementById('viewBoard')?.classList.contains('is-active') === true) {
+      board3d?.render(dt);
+    }
+    if (document.getElementById('viewHouse')?.classList.contains('is-active') === true) {
+      house3d?.render(dt);
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
+  // Test hook: lets the automated tests aim real pointer events at a cell.
+  (window as unknown as { __board?: unknown }).__board = {
+    screenPosition: (index: number) => board3d?.screenPosition(index) ?? null,
+    cells: () => gameStore.getState().grid.cells.map((cell) => ({
+      index: cell.index,
+      locked: cell.locked,
+      level: cell.item?.level ?? null,
+      itemType: cell.item?.itemType ?? null,
+    })),
+  };
+}
 
 renderAll(gameStore.getState());
 gameStore.subscribe((state) => render(state));

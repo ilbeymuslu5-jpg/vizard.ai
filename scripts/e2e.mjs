@@ -37,28 +37,42 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(String(error)));
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 
-const board = () => page.evaluate(() => Array.from(document.querySelectorAll('.cell')).map((cell, i) => {
-  const tile = cell.querySelector('.tile');
-  if (tile === null) return { i, empty: true, locked: cell.classList.contains('is-locked') };
-  return {
-    i,
-    empty: false,
-    locked: cell.classList.contains('is-locked'),
-    level: Number(tile.dataset.level),
-    gen: tile.classList.contains('is-gen'),
-    name: tile.getAttribute('aria-label').split(',')[0],
-  };
-}));
+const GENERATORS = new Set(['toolbox', 'lumberPile', 'paintCan', 'gardenBed']);
+
+/**
+ * Board state straight from the store, via the hook the 3D board exposes.
+ * The WebGL board has no DOM per cell, so this is how the test sees the grid.
+ */
+const board = () => page.evaluate(() =>
+  window.__board.cells().map((cell) => ({
+    i: cell.index,
+    empty: cell.level === null,
+    locked: cell.locked,
+    level: cell.level,
+    type: cell.itemType,
+  })),
+);
+
+/** Screen point of a cell centre, projected by the scene camera. */
+const point = (index) => page.evaluate((i) => window.__board.screenPosition(i), index);
+
+const tapCell = async (index) => {
+  const p = await point(index);
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(70);
+};
 
 const drag = async (from, to) => {
-  const a = await page.locator(`.cell[data-index="${from}"]`).boundingBox();
-  const b = await page.locator(`.cell[data-index="${to}"]`).boundingBox();
-  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  const a = await point(from);
+  const b = await point(to);
+  await page.mouse.move(a.x, a.y);
   await page.mouse.down();
-  await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2 + 5, { steps: 3 });
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 });
+  await page.mouse.move(a.x + 14, a.y + 8, { steps: 3 });
+  await page.mouse.move(b.x, b.y, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(90);
 };
 
 const tab = async (name) => {
@@ -83,27 +97,29 @@ await page.goto(url);
 await page.waitForTimeout(400);
 
 check('no page errors', errors.length === 0, errors);
-check('30 cells', (await page.locator('.cell').count()) === 30);
-check('bottom two rows locked', (await page.locator('.cell.is-locked').count()) === 10);
-check('exactly one generator to start', (await page.locator('.tile.is-gen').count()) === 1);
+check('WebGL board mounted', (await page.locator('#stage canvas').count()) === 1);
+check('flat fallback hidden while 3D is up', await page.locator('#boardwrap').isHidden());
+check('30 cells', (await board()).length === 30);
+check('bottom two rows locked', (await board()).filter((c) => c.locked).length === 10);
+check('exactly one generator to start',
+  (await board()).filter((c) => !c.empty && GENERATORS.has(c.type)).length === 1);
 check('energy starts full', (await page.locator('#energyNow').textContent()) === '100');
 check('3 request cards', (await page.locator('.task').count()) === 3);
 check('player starts at level 1', (await page.locator('#playerLevel').textContent()) === '1');
 check('no horizontal scroll', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
 
 console.log('--- generate & merge ---');
-const generator = page.locator('.tile.is-gen').first();
-await generator.click();
-await page.waitForTimeout(140);
-check('tap spawns a part', (await page.locator('.tile').count()) === 2);
+const generatorIndex = (await board()).find((cell) => !cell.empty && GENERATORS.has(cell.type)).i;
+await tapCell(generatorIndex);
+check('tap spawns a part', (await board()).filter((c) => !c.empty).length === 2);
 check('tap costs 1 energy', (await page.locator('#energyNow').textContent()) === '99');
 check('a level-1 toolbox only makes nails',
-  (await board()).filter((c) => !c.empty && !c.gen).every((c) => c.name.includes('Nail')),
-  (await board()).filter((c) => !c.empty && !c.gen));
+  (await board()).filter((c) => !c.empty && !GENERATORS.has(c.type)).every((c) => c.type === 'nail'),
+  (await board()).filter((c) => !c.empty));
 
-for (let i = 0; i < 3; i += 1) { await generator.click(); await page.waitForTimeout(60); }
+for (let i = 0; i < 3; i += 1) await tapCell(generatorIndex);
 let cells = await board();
-const pair = cells.filter((cell) => !cell.empty && !cell.gen && cell.level === 1);
+const pair = cells.filter((cell) => !cell.empty && !GENERATORS.has(cell.type) && cell.level === 1);
 check('made at least two level-1 parts', pair.length >= 2);
 
 await drag(pair[0].i, pair[1].i);
@@ -125,7 +141,7 @@ check('hiring is unaffordable at the start',
   await page.locator('.member .btn').first().isDisabled());
 
 await tab('House');
-check('house scene renders', (await page.locator('.scene svg').count()) === 1);
+check('house renders in 3D', (await page.locator('.scene canvas').count()) === 1);
 check('six rooms listed', (await page.locator('.room').count()) === 6);
 check('house starts unrestored', (await page.locator('#houseCount').textContent()) === '0 of 6');
 
@@ -147,16 +163,15 @@ while ((await readyCount()) === 0 && actions < 260) {
   const state = await board();
   const groups = new Map();
   for (const cell of state) {
-    if (cell.empty || cell.gen) continue;
-    const key = `${cell.name}|${cell.level}`;
+    if (cell.empty || GENERATORS.has(cell.type)) continue;
+    const key = `${cell.type}|${cell.level}`;
     groups.set(key, [...(groups.get(key) ?? []), cell.i]);
   }
   const mergeable = [...groups.values()].find((group) => group.length >= 2);
   if (mergeable !== undefined) { await drag(mergeable[0], mergeable[1]); continue; }
 
-  const generators = state.filter((cell) => !cell.empty && cell.gen);
-  await page.locator(`.cell[data-index="${generators[actions % generators.length].i}"]`).click();
-  await page.waitForTimeout(45);
+  const generators = state.filter((cell) => !cell.empty && GENERATORS.has(cell.type));
+  await tapCell(generators[actions % generators.length].i);
   if ((await page.locator('#energyNow').textContent()) === '0') {
     await page.locator('#btnAd').click();
     await page.waitForTimeout(60);
@@ -185,7 +200,8 @@ await tab('Shop');
 const toolboxPrice = Number((await page.locator('#shopOffers .btn').first().textContent()).replace(/\D/g, ''));
 await page.locator('#shopOffers .btn').first().click();
 await page.waitForTimeout(200);
-check('buying a generator puts it on the board', (await page.locator('.tile.is-gen').count()) === 2);
+check('buying a generator puts it on the board',
+  (await board()).filter((c) => !c.empty && GENERATORS.has(c.type)).length === 2);
 check('buying charges the shown price',
   Number(await page.locator('#coins').textContent()) === 60000 - toolboxPrice,
   [await page.locator('#coins').textContent(), toolboxPrice]);
@@ -194,7 +210,7 @@ check('the next copy is dearer',
 
 await page.locator('#expansions .btn').first().click();
 await page.waitForTimeout(200);
-check('unlocking a row frees 5 cells', (await page.locator('.cell.is-locked').count()) === 5);
+check('unlocking a row frees 5 cells', (await board()).filter((c) => c.locked).length === 5);
 check('the second row is now purchasable',
   !(await page.locator('#expansions .btn').nth(1).isDisabled()));
 
@@ -213,17 +229,18 @@ check('training cost is non-trivial', trainCost >= 180, trainCost);
 
 await tab('Board');
 console.log('--- merging generators opens a new chain ---');
-const gens = (await board()).filter((cell) => !cell.empty && cell.gen);
+const gens = (await board()).filter((cell) => !cell.empty && GENERATORS.has(cell.type));
 await drag(gens[0].i, gens[1].i);
 await page.waitForTimeout(200);
-const upgraded = (await board()).find((cell) => !cell.empty && cell.gen && cell.level === 2);
+const upgraded = (await board()).find(
+  (cell) => !cell.empty && GENERATORS.has(cell.type) && cell.level === 2,
+);
 check('two toolboxes merge into a level-2 toolbox', upgraded !== undefined, await board());
 
 let sawHammer = false;
 for (let i = 0; i < 60 && !sawHammer; i += 1) {
-  await page.locator(`.cell[data-index="${upgraded.i}"]`).click();
-  await page.waitForTimeout(35);
-  sawHammer = (await board()).some((cell) => !cell.empty && cell.name.toLowerCase().includes('head'));
+  await tapCell(upgraded.i);
+  sawHammer = (await board()).some((cell) => !cell.empty && cell.type === 'hammer');
   if ((await page.locator('#energyNow').textContent()) === '0') {
     await page.locator('#btnAd').click();
     await page.waitForTimeout(50);
@@ -232,8 +249,8 @@ for (let i = 0; i < 60 && !sawHammer; i += 1) {
   const state = await board();
   const groups = new Map();
   for (const cell of state) {
-    if (cell.empty || cell.gen) continue;
-    const key = `${cell.name}|${cell.level}`;
+    if (cell.empty || GENERATORS.has(cell.type)) continue;
+    const key = `${cell.type}|${cell.level}`;
     groups.set(key, [...(groups.get(key) ?? []), cell.i]);
   }
   const mergeable = [...groups.values()].find((group) => group.length >= 2);
@@ -255,17 +272,17 @@ check('a fully-delivered room offers Restore',
 await page.locator('.room .btn').first().click();
 await page.waitForTimeout(250);
 check('restoring marks the room done', (await page.locator('#houseCount').textContent()) === '1 of 6');
-check('the scene gains the porch layer',
-  (await page.locator('.scene svg').innerHTML()).includes('lamp'));
+check('the 3D house keeps rendering after a restore',
+  (await page.locator('.scene canvas').count()) === 1);
 check('the story line appears', (await page.locator('.room__story').count()) >= 1);
 
 console.log('--- persistence ---');
 const coins = await page.locator('#coins').textContent();
-const tiles = await page.locator('.tile').count();
+const tiles = (await board()).filter((c) => !c.empty).length;
 await page.reload();
-await page.waitForTimeout(500);
+await page.waitForTimeout(600);
 check('save restores coins', (await page.locator('#coins').textContent()) === coins);
-check('save restores the board', (await page.locator('.tile').count()) === tiles);
+check('save restores the board', (await board()).filter((c) => !c.empty).length === tiles);
 check('save restores the house', (await page.locator('#progress').textContent()).includes('1 of 6'));
 
 await patchSave({ energy: { current: 10, max: 100, lastTickAt: Date.now() - 20 * 60 * 1000 } });
