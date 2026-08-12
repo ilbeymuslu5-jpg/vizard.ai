@@ -12,6 +12,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildWorld, ARENA, biomeAt, isWater, COLLIDERS } from './world.js';
 import { createWeaponModel } from './weaponModels.js';
+import { createArmorPiece } from './armorModels.js';
 
 /* ============ 0) YARDIMCILAR ============ */
 const TAU = Math.PI * 2;
@@ -2159,13 +2160,20 @@ function refreshOutfitVisuals() {
   }
   refreshHeldWeapon();
 }
-// Parça + ters kabuk dış çizgi (karakterin çizgisiyle aynı dil)
-function addPiece(holder, geo) {
+// Parça + ters kabuk dış çizgi (karakterin çizgisiyle aynı dil).
+// rar verilirse (armorModels.js): Destansı+ eşyalarda ince bir ışıltı halesi eklenir
+// — oyunun kendi item-bazlı detaylı geometrisinin (SHAPE) yerini almaz, üstüne biner.
+const ARMOR_RARITY_ALIAS = { common: 'common', rare: 'rare', epic: 'epic', legend: 'legendary' };
+function addPiece(holder, geo, rar) {
   const m = new THREE.Mesh(geo, gearMat);
   m.frustumCulled = false;
   const ol = new THREE.Mesh(geo, gearOutlineMat);
   ol.scale.setScalar(1.07); ol.renderOrder = -1; ol.frustumCulled = false;
   holder.add(m); holder.add(ol);
+  if (rar && ARMOR_RARITY_ALIAS[rar]) {
+    const aura = createArmorPiece('_aura', ARMOR_RARITY_ALIAS[rar]);
+    for (const child of aura.children) holder.add(child);
+  }
 }
 // Kuşanılanları sahneye yansıt (kademe değiştikçe çağrılır)
 function refreshGearVisuals() {
@@ -2179,7 +2187,7 @@ function refreshGearVisuals() {
       }
       if (!it) continue;
       const geo = mergeGeometries(SHAPE[slot](it.det, it), false);
-      if (geo) addPiece(holder, geo);
+      if (geo) addPiece(holder, geo, it.rar);
     }
   }
   // Göğüslük/bot giyilince temel kıyafet altında kalır; z-kavgası olmasın diye gizle
@@ -3718,6 +3726,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   SKILLS, pickSkill, renderSkills, applySkillTree, dmgOf, updateSkillTimers,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
-                  updateWeapons,
+                  updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

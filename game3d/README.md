@@ -10,6 +10,8 @@ Tek dosyalık `../horde-survivor-3d.html` bu klasörden üretilir.
 - `src/world.js` — 4 biyomlu arena; zemin dokusu çalışma anında üretilir
 - `src/weaponModels.js` — sınıfa göre elde taşınan silah görseli (kılıç/yay/asa/balta,
   nadirlik rengi + seviye 3/5 ek detay); `refreshHeldWeapon()` ile `main.js`'e bağlı
+- `src/armorModels.js` — Destansı+ zırhlarda ince ışıltı halesi; `addPiece()` üzerinden
+  mevcut eşya-bazlı detaylı geometrinin (`SHAPE`) üstüne bindirilir, yerini almaz
 - `shell.html`   — stil + menü/kart/sonuç işaretlemesi
 - `knight.glb`   — oyuncu modeli (aşağıya bakınız)
 
@@ -398,6 +400,20 @@ atlayınca (`updateWeapons()` içinde ucuz anahtar karşılaştırmasıyla, her
 karede yeniden kurmadan) güncelleniyor. Yay'ın eğrisi yerel düzlemde düz
 olduğu için izometrik kameradan kenardan görünmesin diye ek bir yaw
 döndürmesiyle tutuluyor.
+
+### Destansı+ zırh halesi
+`src/armorModels.js` — 6 kademeli bir nadirlik tablosu (common…mythic) taşıyan,
+slot başına küçük bir örnek gövde + Destansı ve üstünde yarı saydam bir hale
+küresi üreten bağımsız bir üreteç. Oyunun kendi eşya sistemi zaten 36 isimli,
+her biri kendi `SHAPE[slot](det, it)` geometrisine sahip eşya barındırıyor
+(bkz. "Teçhizat" bölümü) — bu üretecin 4 slotluk genel gövdeleriyle
+değiştirmek gerileme olurdu. Bunun yerine yalnızca **hale** kısmı yeniden
+kullanıldı: `addPiece()` artık üçüncü bir `rar` parametresi alıyor, Destansı/
+Efsanevi eşyalarda `createArmorPiece('_aura', ...)` çağrılıp yalnızca hale
+child'ı mevcut detaylı geometrinin üstüne ekleniyor (temel gövde dalları hiç
+eşleşmediği için boş kalıyor). Oyunun 4 kademeli nadirlik kimliği
+(`common/rare/epic/legend`) üretecin 6 kademeli tablosuna `ARMOR_RARITY_ALIAS`
+ile eşlendi (`legend` → `legendary`).
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,
