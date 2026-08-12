@@ -11,6 +11,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildWorld, ARENA, biomeAt, isWater, COLLIDERS } from './world.js';
+import { createWeaponModel } from './weaponModels.js';
 
 /* ============ 0) YARDIMCILAR ============ */
 const TAU = Math.PI * 2;
@@ -2087,6 +2088,30 @@ function attachNode(root, boneName, pos, rot) {
   bone.add(holder);
   return holder;
 }
+// Sınıfa göre elde taşınan silah görseli (weaponModels.js): oyunun kendi
+// silah kimlikleri (bolt/guardian/rocket/laser/kunai) sword/bow/staff/axe
+// kategorisine birebir denk düşmüyor — sınıf ikonuna göre eşleniyor.
+const CLASS_WEAPON_TYPE = { paladin: 'sword', ranger: 'bow', mage: 'staff', berserker: 'axe' };
+let weaponHolder = null, heldWeaponKey = '';
+function refreshHeldWeapon() {
+  if (!weaponHolder) return;
+  const cls = CLASSES[P.classId] || CLASSES[META.classId] || CLASSES.paladin;
+  const w = getWeapon(cls.weapon);
+  const lvl = w ? (w.evolved ? 5 : w.lv) : 1;
+  const key = cls.id + ':' + lvl;
+  if (key === heldWeaponKey) return;
+  heldWeaponKey = key;
+  while (weaponHolder.children.length) {
+    const c = weaponHolder.children.pop();
+    c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+  const type = CLASS_WEAPON_TYPE[cls.id] || 'sword';
+  const model = createWeaponModel(type, lvl);
+  // Yay'ın eğrisi yerel XY düzleminde düz; izometrik kameraya kenardan
+  // görünmesin diye ek bir yaw döndürmesiyle gövdeye göre çapraz tutuluyor
+  if (type === 'bow') model.rotation.y = 1.0;
+  weaponHolder.add(model);
+}
 let outfitNodes = [];
 function initGearNodes(root) {
   root.updateMatrixWorld(true);
@@ -2115,6 +2140,10 @@ function initGearNodes(root) {
     if (!h) continue;
     outfitNodes.push({ holder: h, make });
   }
+  // Elde taşınan silah: sağ ele bağlı, sınıfın silah tipine göre kurulur
+  weaponHolder = attachNode(root, 'RightHand', [0.03, 0.06, -0.14], [0, 0.2, 0]);
+  heldWeaponKey = '';
+  refreshHeldWeapon();
   refreshOutfitVisuals();
 }
 // Kıyafeti güncel sınıfın paletiyle yeniden boya (sınıf değişince / koşu başında)
@@ -2128,6 +2157,7 @@ function refreshOutfitVisuals() {
     const geo = mergeGeometries(make(cls.palette), false);
     if (geo) addPiece(holder, geo);
   }
+  refreshHeldWeapon();
 }
 // Parça + ters kabuk dış çizgi (karakterin çizgisiyle aynı dil)
 function addPiece(holder, geo) {
@@ -2212,6 +2242,7 @@ function addWeapon(id) { const w = { id, lv: 1, timer: 0, evolved: false, ang: 0
 const getWeapon = id => P.weapons.find(w => w.id === id);
 
 function updateWeapons(dt) {
+  refreshHeldWeapon();   // silah seviye atladıkça/evrimleştikçe eldeki görsel güncellensin
   let bi = 0;
   for (let i = 0; i < P.weapons.length; i++) {
     const w = P.weapons[i], def = WEAPONS[w.id];
@@ -3686,6 +3717,7 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   CLASSES, CLASS_ORDER, selectClass, renderClassSelect, refreshOutfitVisuals,
                   SKILLS, pickSkill, renderSkills, applySkillTree, dmgOf, updateSkillTimers,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
-                  BOSS_THEMES, bossAttack,
+                  BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
+                  updateWeapons,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

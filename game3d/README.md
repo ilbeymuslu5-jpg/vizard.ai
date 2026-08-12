@@ -8,6 +8,8 @@ Tek dosyalık `../horde-survivor-3d.html` bu klasörden üretilir.
 ## Dosyalar
 - `src/main.js`  — oyun (kamera, sürü, silahlar, XP/kart, HUD)
 - `src/world.js` — 4 biyomlu arena; zemin dokusu çalışma anında üretilir
+- `src/weaponModels.js` — sınıfa göre elde taşınan silah görseli (kılıç/yay/asa/balta,
+  nadirlik rengi + seviye 3/5 ek detay); `refreshHeldWeapon()` ile `main.js`'e bağlı
 - `shell.html`   — stil + menü/kart/sonuç işaretlemesi
 - `knight.glb`   — oyuncu modeli (aşağıya bakınız)
 
@@ -382,6 +384,20 @@ altyapısını yeniden kullanıyor.
   ekranın kenarlarını koyulaştıran dairesel gradyan + kısa kırmızı/camgöbeği
   kenar şeridi (`G.flashRed` üzerinden, tek `drawOverlay()` çizimi) ve
   parçacıklarda soluk-hale + parlak-çekirdek iki katmanlı çizim eklendi.
+
+### Elde taşınan sınıf silahı
+`src/weaponModels.js` — sınıf başına elde taşınan silah görseli (kılıç/yay/asa/
+balta), nadirlik rengine göre boyanmış, seviye 3'te ek detay ve seviye 5'te
+halo/rüzgar halkası/şok dalgası gibi görsel yükseltmeler. Oyunun kendi silah
+kimlikleri (bolt/guardian/rocket/laser/kunai) tür olarak bu 4 kategoriye
+birebir denk düşmediği için `CLASS_WEAPON_TYPE` eşlemesiyle sınıf ikonuna
+bağlandı (Paladin→kılıç, Ranger→yay, Mage→asa, Berserker→balta); mevcut
+'guardian' dönen bıçak efekti ayrıca korunuyor. `RightHand` kemiğine
+`attachNode()` ile bağlanıyor; görsel sınıf değişince veya silah seviye
+atlayınca (`updateWeapons()` içinde ucuz anahtar karşılaştırmasıyla, her
+karede yeniden kurmadan) güncelleniyor. Yay'ın eğrisi yerel düzlemde düz
+olduğu için izometrik kameradan kenardan görünmesin diye ek bir yaw
+döndürmesiyle tutuluyor.
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,
