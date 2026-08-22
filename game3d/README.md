@@ -476,6 +476,37 @@ doğal `spawnWave()` akışı, materyal tipi kontrolü) — hepsi sıfır konsol
 hatasıyla geçti. Test paneline SINIF/YETENEK AĞACI/SET/TEMALI BOSS bölümleri
 eklendi.
 
+## Envanter: canlı 3B karakter önizlemesi
+Kullanıcının paylaştığı referans görsele göre (`HERO`/karakter önizlemeli RPG
+envanteri) `#inv` ekranı iki sütuna bölündü: sol tarafta **gerçek oyun
+sahnesi** — ayrı bir render hattı değil, aynı `#gl`/`#fx` canvas'ları — sağda
+istatistik/eşya bilgi paneli.
+
+- **Kamera**: `frame()` içinde `G.state==='INV'` olduğunda ortografik kamera
+  karaktere yakınlaşıp (`INV_ZOOM`) ekranda sola kayıyor (`INV_SHIFT`),
+  hepsi `camZoom`/`camShift` ile yumuşak geçiyor. **Önemli tuzak**: yakınlaşma
+  önce `camera.zoom` ile denendi ama three.js zoom'u frustum'u kendi
+  `(left+right)/2` merkezine göre ölçekliyor — bizim hedefimiz (görüş
+  uzayında x=0) o merkezde olmadığından zoom arttıkça karakter kadraj dışına
+  kayıyordu. Çözüm: zoom'u ayrı bırakmak yerine görünür dünya genişliğini
+  (`VIEW_H/camZoom`) küçültüp `camera.zoom`'u hep `1`'de sabit tutmak — bu
+  durumda hedefin ekrandaki oranı ölçekten bağımsız sabit kalıyor.
+- **Yön**: karakter oyunda donduğu son yöne değil, `Math.PI/4 + MODEL_YAW`
+  açısıyla kameraya dönük duruyor (yaw kuralı `(sin yaw, cos yaw)`,
+  kamera `CAM_DIR=(1,y,1)` yönünden baktığı için köşegen).
+- **HUD/vinyet**: `drawOverlay()` INV'de erken çıkıp sadece karakterin
+  etrafında yumuşak bir vinyet çiziyor — aksi halde donmuş HP barları/hasar
+  sayıları sol sütunun (şeffaf) arkasından sızıyordu.
+- **Sol ray**: 6 yuvanın (`GEAR_SLOTS`) küçük ikon düğmeleri — `drawItemIcon()`
+  aynı canvas çizimini kullanıyor, seçili yuva sarı kenarlıkla vurgulanıyor.
+- **Sağ panel**: "Character Stats" 3 sütunlu ızgara (`HERO_STAT_ROWS`), seçili
+  yuvanın adı/istatistikleri/tasviri (`ITEM_LORE` — 36 eşyaya birer cümle) ve
+  bir "Çıkar" düğmesi; altında set bonusları ve ÇANTA (çantadaki eşyaya
+  dokunmak hâlâ direkt kuşanıyor).
+- **Not**: bir önceki envanter tasarımı (stat paneli + tasvir kutusu, ama 3B
+  önizleme olmadan) kullanıcı tarafından reddedilip geri alınmıştı
+  ("önceki versiyon iyiydi bu olmamış") — eksik olan tam olarak buydu.
+
 ## Test sürümü
 
 `npm run build:test` — her şeyin açık olduğu, üstüne **test paneli** eklenmiş

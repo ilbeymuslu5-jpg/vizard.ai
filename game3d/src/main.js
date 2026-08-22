@@ -1915,6 +1915,45 @@ const ITEM_BY_ID = {};
 for (const slot of GEAR_SLOTS) for (const it of ITEMS[slot]) ITEM_BY_ID[it.id] = { it, slot };
 const itemOf = id => (ITEM_BY_ID[id] || {}).it || null;
 const slotOfItem = id => (ITEM_BY_ID[id] || {}).slot || null;
+// Tasvir metinleri ayrı bir tabloda: ITEMS objesinin biçimini bozmadan eklenebilsin diye
+const ITEM_LORE = {
+  hoodH: 'Ormanda dolaşan izcilerin tercih ettiği, hafif ve sessiz bir başlık.',
+  ironH: 'Sıradan bir demirci ustasının elinden çıkma, güvenilir ama gösterişsiz bir miğfer.',
+  visorH: 'Buzul rüzgarlarına karşı sıkı kapatılmış, görüşü daraltan ama yüzü koruyan bir tolga.',
+  crownH: 'Batık harabelerde bulunan, unutulmuş bir kralın savaş tacı.',
+  dragonH: 'Bir ejderin kafatasından biçimlendirilmiş, volkanik ateşe dayanıklı bir kask.',
+  haloH: 'Işığın kendisinden örülmüş, ölümlülerin nadiren taşımaya layık görüldüğü bir hale.',
+  padC: 'Acemi maceracıların ilk zırhı; ucuz, hafif ve az koruyucu.',
+  chainC: 'Binlerce halkanın iç içe geçmesiyle örülmüş, dayanıklı ama ağır bir zırh.',
+  scaleC: 'Buz ejderi pullarından dövülmüş, soğuğa direnen bir zırh.',
+  rangerC: 'Ormanda sessizce hareket etmeyi kolaylaştıran, hafif deri bir yelek.',
+  lionC: 'Göğsünde bir aslan amblemi taşıyan, şövalyelik onurunun simgesi.',
+  phoenixC: 'Küllerinden yeniden doğan Anka kuşunun tüylerinden dokunmuş, sıcaklığı asla kaybolmayan bir zırh.',
+  wrapG: 'Bileği desteklemek için sarılmış basit bir bez, saldırıları hafifçe hızlandırır.',
+  leatherG: 'Deriden dövülmüş, ele güç katan sade bir kolluk.',
+  ironG: 'Harabelerde bulunan ağır bir demir kolluk, vuruşlara ağırlık katar.',
+  swiftG: 'İnce ve esnek dokusuyla eli olağanüstü hızlandıran bir eldiven.',
+  clawG: 'Öfkeyle dövülmüş, taşıyanın vahşetini bileyen keskin bir pençe.',
+  titanG: 'Bir titanın avucundan kalma, tek bir yumrukla toprağı çatlatan dev bir kolluk.',
+  sandalB: 'Uzun yolculuklar için dikilmiş sade bir sandalet.',
+  leatherB: 'Orman patikalarında sessizce iz bırakan, dayanıklı bir deri bot.',
+  ironB: 'Ayak bileğini demirle güçlendiren, yavaş ama sağlam bir dizlik.',
+  windB: 'Tabanlarına rüzgar ruhları hapsedilmiş, adımları hafifleten bir bot.',
+  quakeB: 'Her adımda yeri titreten, volkanik enerjiyle yüklü bir bot.',
+  hermesB: 'Habercilerin tanrısının kanatlarından ilham alan, rüzgardan hızlı bir bot.',
+  raggedK: 'Yıpranmış ama hâlâ işe yarar, hazine kokusunu uzaktan sezdiren bir pelerin.',
+  woolK: 'Kalın yünden dokunmuş, soğuk gecelerde sıcak tutan bir pelerin.',
+  shadowK: 'Taşıyanı gölgelerle bütünleştiren, harabelerin sessiz bir pelerini.',
+  royalK: 'Bir zamanlar bir tahtın arkasında dalgalanan kadife bir pelerin.',
+  vampK: 'Taşıyanın can gücünü besleyen, karanlık bir ritüelle lanetlenmiş pelerin.',
+  starK: 'Gece göğünün yıldız tozundan dokunmuş, buzul rüzgarlarında parıldayan bir manto.',
+  woodS: 'Acemi bir maceracının ilk savunma aracı, basit ama işlevsel.',
+  ironS: 'Buzul rüzgarlarına karşı sertleştirilmiş sade bir demir siper.',
+  kiteS: 'Harabelerde bulunan, bir şövalye armasıyla süslü klasik bir kalkan.',
+  spikeS: 'Sadece savunmayan, dokunanı da cezalandıran dikenli bir kalkan.',
+  towerS: 'Neredeyse bir insan boyunda, arkasına saklanan herkesi koruyan devasa bir kalkan.',
+  aegisS: 'Efsanelerde adı geçen, taşıyanını hemen hemen her darbeye karşı koruyan kutsal kalkan.',
+};
 
 /* ---------- SET BONUSLARI ----------
    4 tema, her biri farklı 4 yuvadan 1'er eşyayla (bkz. ITEMS'teki `set`
@@ -2767,6 +2806,17 @@ function updateSkillTimers(dt) {
 /* ============ 11) 2B KATMAN: HUD, HASAR SAYILARI, JOYSTİCK ============ */
 function drawOverlay() {
   ctx.clearRect(0, 0, VW, VH);
+  if (G.state === 'INV') {
+    // HUD/hasar sayıları/can barları envanterde çizilmiyor (sol sütun 3B
+    // önizlemenin arkasından şeffaf görünüyor); yerine karakteri arka plan
+    // karmaşasından ayıran yumuşak bir vinyet çiziliyor.
+    const cx = VW * INV_SHIFT, cy = VH * 0.5;
+    const r0 = Math.min(VW, VH) * 0.24, r1 = Math.max(VW, VH) * 0.62;
+    const g = ctx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+    g.addColorStop(0, 'rgba(6,7,14,0)'); g.addColorStop(1, 'rgba(6,7,14,.6)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+    return;
+  }
 
   // parçacıklar (dünya → ekran)
   let A = parts.active;
@@ -3314,7 +3364,6 @@ function renderGear() {
    Koşu içi çanta + kuşanılanlar. Açıkken oyun duraklar; çantadaki eşyaya
    dokunmak kuşanır, kuşanılana dokunmak çıkarır (çantaya geri düşer). */
 const elInv = document.getElementById('inv');
-const elInvSlots = document.getElementById('invSlots');
 const elInvBag = document.getElementById('invBag');
 const elInvOdds = document.getElementById('invOdds');
 const elInvSets = document.getElementById('invSets');
@@ -3455,9 +3504,73 @@ function itemCell(slot, it, equipped) {
   }
   return el;
 }
+const elInvRail = document.getElementById('invRail');
+const elInvSlotName = document.getElementById('invSlotName');
+const elHeroStats = document.getElementById('heroStats');
+const elHeroDetail = document.getElementById('heroDetail');
+const HERO_STAT_ROWS = [
+  ['❤️', 'Maks. Can', () => Math.round(P.maxHp)],
+  ['🗡️', 'Hasar', () => 'x' + P.st.dmg.toFixed(2)],
+  ['🛡️', 'Zırh', () => Math.round(P.st.armor)],
+  ['👟', 'Hız', () => 'x' + P.st.speedMul.toFixed(2)],
+  ['⏱️', 'Atk. Hızı', () => 'x' + P.st.atkSpeed.toFixed(2)],
+  ['🎯', 'Kritik', () => Math.round(P.st.crit * 100) + '%'],
+  ['🧲', 'Mıknatıs', () => 'x' + P.st.magnet.toFixed(2)],
+  ['✚', 'Rejen', () => P.st.regen.toFixed(1) + '/sn'],
+];
+function renderHeroStats() {
+  if (!elHeroStats) return;
+  elHeroStats.innerHTML = HERO_STAT_ROWS.map(([ico, label, val]) =>
+    `<div class="hsCell"><span class="hsIco">${ico}</span><b>${val()}</b><small>${label}</small></div>`).join('');
+}
+// Envanterde şu an vurgulanan/incelenen yuva — sol raydaki dokunuşla değişir
+let selSlot = GEAR_SLOTS[0];
+function renderInvRail() {
+  if (!elInvRail) return;
+  elInvRail.innerHTML = '';
+  for (const slot of GEAR_SLOTS) {
+    const it = itemOf(P.eq[slot]);
+    const b = document.createElement('button');
+    b.className = 'railSlot' + (slot === selSlot ? ' on' : '');
+    b.setAttribute('aria-label', GEAR[slot].name);
+    if (it) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+      b.appendChild(cv); drawItemIcon(cv, slot, it);
+      const dot = document.createElement('span'); dot.className = 'rdot'; dot.style.background = RAR[it.rar].col;
+      b.appendChild(dot);
+    } else {
+      const ph = document.createElement('span'); ph.className = 'ph'; ph.textContent = GEAR[slot].icon;
+      b.appendChild(ph);
+    }
+    b.onclick = () => { selSlot = slot; renderInvRail(); renderInvDetail(); };
+    elInvRail.appendChild(b);
+  }
+}
+function renderInvDetail() {
+  const it = itemOf(P.eq[selSlot]), g = GEAR[selSlot];
+  if (elInvSlotName) {
+    elInvSlotName.innerHTML = it
+      ? `<span style="color:${RAR[it.rar].col}">${it.name}</span> <small>${g.icon} ${g.name}</small>`
+      : `${g.icon} ${g.name} <small>— boş yuva</small>`;
+  }
+  if (!elHeroDetail) return;
+  if (!it) {
+    elHeroDetail.innerHTML = `<div class="heroDetailEmpty">Bu yuva boş. Çantadan bir parçaya dokunarak kuşan.</div>`;
+    return;
+  }
+  const stats = statLines(it.plus).map(t => `<span class="p">${t}</span>`).join('') +
+                statLines(it.minus).map(t => `<span class="m">${t}</span>`).join('');
+  const lore = ITEM_LORE[it.id] || '';
+  elHeroDetail.innerHTML =
+    `<div class="hdStats">${stats}</div>` +
+    (lore ? `<div class="hdLore">${lore}</div>` : '') +
+    `<button class="hdUnequip" id="hdUnequipBtn">Çıkar</button>`;
+  const ub = document.getElementById('hdUnequipBtn');
+  if (ub) ub.onclick = () => { equipItem(selSlot, null); renderInventory(); SFX.pickup(); };
+}
 function renderInventory() {
   if (!elInv) return;
-  elInvSlots.innerHTML = ''; elInvBag.innerHTML = '';
+  elInvBag.innerHTML = '';
   // Aktif set bonusları: kaç parça giyildiği + hangi bonusun açık olduğu
   if (elInvSets) {
     const counts = equippedSetCounts();
@@ -3471,23 +3584,16 @@ function renderInventory() {
     elInvSets.innerHTML = rows.join('') ||
       '<div class="iempty" style="padding:4px 0">Aynı setten 2+ parça giyersen bonus açılır (bkz. simge renkleri).</div>';
   }
-  for (const slot of GEAR_SLOTS) {
-    const it = itemOf(P.eq[slot]);
-    const wrap = document.createElement('div');
-    wrap.className = 'islot';
-    wrap.innerHTML = `<div class="ilbl">${GEAR[slot].icon} ${GEAR[slot].name}</div>`;
-    const cell = itemCell(slot, it, !!it);
-    cell.onclick = () => { if (it) { equipItem(slot, null); renderInventory(); SFX.pickup(); } };
-    wrap.appendChild(cell);
-    elInvSlots.appendChild(wrap);
-  }
+  renderHeroStats();
+  renderInvRail();
+  renderInvDetail();
   if (!P.bag.length) {
     elInvBag.innerHTML = '<div class="iempty">Çanta boş — seviye atladıkça kasa düşer, kasadan eşya çıkar.</div>';
   } else {
     for (const id of P.bag.slice()) {
       const it = itemOf(id), slot = slotOfItem(id);
       const cell = itemCell(slot, it, false);
-      cell.onclick = () => { equipItem(slot, id); renderInventory(); SFX.levelup(); };
+      cell.onclick = () => { selSlot = slot; equipItem(slot, id); renderInventory(); SFX.levelup(); };
       elInvBag.appendChild(cell);
     }
   }
@@ -3500,11 +3606,15 @@ function openInventory() {
   if (G.state !== 'PLAY' && G.state !== 'PAUSED') return;
   G.prevState = G.state; G.state = 'INV';
   releaseSticks(); renderInventory();
+  elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show');
+  if (elBagBtn) elBagBtn.classList.remove('show');
   elInv.classList.add('show');
 }
 function closeInventory() {
   elInv.classList.remove('show');
   G.state = G.prevState === 'PAUSED' ? 'PAUSED' : 'PLAY';
+  elPauseBtn.classList.add('show'); elDashBtn.classList.add('show');
+  if (elBagBtn) elBagBtn.classList.add('show');
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -3726,6 +3836,11 @@ function loadKnight() {
 
 const _camOff = new THREE.Vector3();
 let last = performance.now();
+/* Envanter açıkken kamera karakterin üstüne yakınlaşıp sola kayıyor (sol
+   sütun karakter önizlemesi, sağ sütun bilgi paneli) — gerçek 3B sahne
+   üzerinden, ayrı bir render hattı gerektirmeden. */
+let camZoom = 1, camShift = 0.5;
+const INV_ZOOM = 6.2, INV_SHIFT = 0.16, INV_LOOK_Y = 1.05;
 function frame(now) {
   requestAnimationFrame(frame);
   let rdt = (now - last) / 1000; last = now;
@@ -3760,7 +3875,33 @@ function frame(now) {
       camTarget.set(Math.sin(now / 6000) * 18, 0, Math.cos(now / 6000) * 10);
     }
   }
-  if (G.state !== 'MENU' && G.state !== 'LOADING') camTarget.lerp(_v3.set(P.x, 0, P.z), 1 - Math.pow(0.0008, rdt));
+  const camY = G.state === 'INV' ? INV_LOOK_Y : 0;
+  if (G.state !== 'MENU' && G.state !== 'LOADING') camTarget.lerp(_v3.set(P.x, camY, P.z), 1 - Math.pow(0.0008, rdt));
+
+  // Envanter yakınlaşma/kayma: asimetrik ortografik frustum, hedef ekranda
+  // sola kayıyor (INV_SHIFT). camera.zoom KULLANILMIYOR — three.js zoom'u
+  // frustum'u kendi (left+right)/2 merkezine göre ölçekliyor, bizim hedefimiz
+  // (görüş uzayında x=0) o merkezde OLMADIĞI için zoom arttıkça karakter
+  // kadraj dışına kayıyordu. Bunun yerine "yakınlaşma" doğrudan görünür
+  // dünya genişliğini (effVIEW_H) küçülterek uygulanıyor — bu durumda hedefin
+  // ekrandaki oranı (f) ölçekten bağımsız sabit kalıyor.
+  camZoom += ((G.state === 'INV' ? INV_ZOOM : 1) - camZoom) * (1 - Math.pow(0.0006, rdt));
+  camShift += ((G.state === 'INV' ? INV_SHIFT : 0.5) - camShift) * (1 - Math.pow(0.0006, rdt));
+  {
+    const aspect = VW / VH, effH = VIEW_H / camZoom, w = effH * aspect;
+    camera.left = -camShift * w; camera.right = (1 - camShift) * w;
+    camera.top = effH / 2; camera.bottom = -effH / 2;
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+  }
+  // Envanterdeyken karakter kameraya dönsün (oyunda donduğu son yön yerine) —
+  // yaw kuralı: yön vektörü (sin yaw, cos yaw); kamera CAM_DIR=(1,y,1)
+  // yönünden bakıyor, o yüzden karaktere bakan yön π/4.
+  if (G.state === 'INV' && P.model) {
+    const face = Math.PI / 4 + MODEL_YAW;
+    const d = ((face - P.model.rotation.y + Math.PI * 3) % TAU) - Math.PI;
+    P.model.rotation.y += d * Math.min(1, rdt * 6);
+  }
 
   // kamera + ekran sallantısı
   _camOff.copy(CAM_DIR).multiplyScalar(70);

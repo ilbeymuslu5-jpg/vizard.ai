@@ -224,12 +224,52 @@
   #bagBtn.alert{ animation:bagPulse .8s infinite alternate; }
   @keyframes bagPulse{ from{ box-shadow:0 0 0 rgba(255,212,121,0);}
                         to{ box-shadow:0 0 16px rgba(255,212,121,.75);} }
-  .invWrap{ width:100%; max-width:660px; }
+  /* Envanter ekranı diğer overlay'lerden farklı: tam ekran koyu zemin yerine
+     SOLDAN SAĞA geçişli bir zemin kullanıyor. Sol taraf neredeyse şeffaf
+     kalıyor ki #gl/#fx'teki gerçek 3B karakter (main.js bu ekranda kamerayı
+     karaktere yakınlaştırıp sola kaydırıyor) arkadan görünsün; sağ taraf
+     bilgi panelinin okunabilmesi için opak. */
+  #inv.invOv{
+    background:linear-gradient(90deg, rgba(6,7,14,.08) 0%, rgba(7,7,15,.42) 34%, rgba(8,7,16,.94) 46%, rgba(6,7,14,.97) 100%);
+    align-items:stretch; justify-content:flex-start; gap:10px;
+  }
+  .invHead{ text-align:center; flex:none; }
+  .invBody{ flex:1 1 auto; width:100%; max-width:900px; margin:0 auto;
+    display:grid; grid-template-columns:minmax(64px,30%) 1fr; gap:0; min-height:0; }
+  .invPreview{ position:relative; display:flex; align-items:center; pointer-events:none; }
+  .invRail{ display:flex; flex-direction:column; gap:8px; pointer-events:auto; }
+  .railSlot{ width:52px; height:52px; border-radius:12px; padding:0;
+    background:rgba(10,10,20,.5); border:2px solid rgba(255,255,255,.16);
+    display:flex; align-items:center; justify-content:center; position:relative;
+    cursor:var(--ui-cursor-hand, pointer); font-family:inherit; }
+  .railSlot canvas{ width:38px; height:38px; }
+  .railSlot .ph{ font-size:19px; opacity:.35; }
+  .railSlot.on{ border-color:#ffd479; background:rgba(70,52,10,.55); box-shadow:0 0 12px rgba(255,212,121,.5); }
+  .railSlot:active{ transform:scale(.94); }
+  .railSlot .rdot{ position:absolute; right:-3px; top:-3px; width:9px; height:9px; border-radius:50%;
+    box-shadow:0 0 4px rgba(0,0,0,.6); }
+  .invPanel{ text-align:left; padding:2px 4px 4px 16px; overflow-y:auto; -webkit-overflow-scrolling:touch; min-height:0; }
+  .invSlotName{ font-size:15px; font-weight:800; color:#e9edf5; margin-bottom:8px; }
+  .invSlotName small{ font-weight:600; color:#8f99b4; font-size:11px; }
+  /* "Character Stats": ikon + değer + etiket, 3 sütunlu ızgara (referans
+     görseldeki gibi) — HERO_STAT_ROWS (main.js) buraya basıyor. */
+  .statsGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px; }
+  .hsCell{ background:rgba(255,255,255,.05); border-radius:8px; padding:6px 4px;
+    display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .hsIco{ font-size:14px; }
+  .hsCell b{ font-size:12px; color:#ffd479; font-variant-numeric:tabular-nums; }
+  .hsCell small{ font-size:8px; color:#7f8aa6; letter-spacing:.3px; text-align:center; line-height:1.1; }
+  .heroDetail{ background:rgba(0,0,0,.24); border-radius:10px; padding:9px 11px; margin-bottom:8px; }
+  .heroDetailEmpty{ font-size:11.5px; color:#7f8aa6; }
+  .hdStats{ display:flex; flex-wrap:wrap; gap:4px 10px; font-size:11px; font-weight:700; margin-bottom:6px; }
+  .hdStats .p{ color:#7fe6bd; } .hdStats .m{ color:#ff8a9a; }
+  .hdLore{ font-size:11px; color:#9aa4bd; line-height:1.5; font-style:italic; margin-bottom:8px; }
+  .hdUnequip{ font-family:inherit; font-size:10.5px; font-weight:800; letter-spacing:.5px;
+    background:rgba(255,90,100,.16); color:#ff8a9a; border:1px solid rgba(255,90,100,.35);
+    border-radius:7px; padding:5px 10px; cursor:var(--ui-cursor-hand, pointer); }
   .isec{ font-size:10px; font-weight:800; letter-spacing:2px; color:#7f8aa6;
     text-align:left; margin:10px 0 6px; }
-  #invSlots,#invBag{ display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:7px; }
-  .islot .ilbl{ font-size:10px; font-weight:800; color:#8f99b4; letter-spacing:1px;
-    text-align:left; margin-bottom:3px; }
+  #invBag{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:7px; }
   /* Referans sayfadaki gibi çerçeveli yuva: içe gömük zemin + nadirlik kenarı */
   .icell{ width:100%; font-family:inherit; cursor:var(--ui-cursor-hand, pointer); text-align:center;
     background:linear-gradient(180deg,rgba(46,52,74,.9),rgba(22,26,40,.9));
@@ -354,15 +394,23 @@
   <button class="btn ghost" id="quitBtn">BAŞA DÖN</button>
 </div>
 
-<div id="inv" class="overlay">
-  <div class="lvHead" style="font-size:clamp(18px,5vw,28px)">ENVANTER</div>
-  <div class="lvSub" id="invOdds"></div>
-  <div class="invWrap">
-    <div id="invSets"></div>
-    <div class="isec">KUŞANILANLAR</div>
-    <div id="invSlots"></div>
-    <div class="isec">ÇANTA</div>
-    <div id="invBag"></div>
+<div id="inv" class="overlay invOv">
+  <div class="invHead">
+    <div class="lvHead" style="font-size:clamp(18px,5vw,28px)">KAHRAMAN</div>
+    <div class="lvSub" id="invOdds"></div>
+  </div>
+  <div class="invBody">
+    <!-- Sol: canlı 3B karakter önizlemesi (gerçek sahne — kamera bu ekranda
+         karaktere yakınlaşıp sola kayıyor) + kuşanılan 6 yuvanın rayı -->
+    <div class="invPreview"><div class="invRail" id="invRail"></div></div>
+    <div class="invPanel">
+      <div class="invSlotName" id="invSlotName"></div>
+      <div class="statsGrid" id="heroStats"></div>
+      <div class="heroDetail" id="heroDetail"></div>
+      <div id="invSets"></div>
+      <div class="isec">ÇANTA</div>
+      <div id="invBag"></div>
+    </div>
   </div>
   <button class="btn" id="invClose">KAPAT</button>
 </div>
