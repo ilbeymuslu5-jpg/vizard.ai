@@ -1819,123 +1819,87 @@ const GEAR_SLOTS = Object.keys(GEAR);
 const ITEMS = {
   helm: [
     { id: 'hoodH',   name: 'Deri Başlık',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { armor: 1 }, set: 'forest',
-      lore: 'Ormanda dolaşan izcilerin tercih ettiği, hafif ve sessiz bir başlık.' },
+      plus: { armor: 1 }, set: 'forest' },
     { id: 'ironH',   name: 'Demir Miğfer',   rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { armor: 3, maxHp: 15 }, minus: { speedMul: -0.03 },
-      lore: 'Sıradan bir nöbetçinin miğferi; ağır ama güvenilir.' },
+      plus: { armor: 3, maxHp: 15 }, minus: { speedMul: -0.03 } },
     { id: 'visorH',  name: 'Kapalı Tolga',   rar: 'rare',   det: 2, col: 0xc0cde0, trim: 0x7d8ba0,
-      plus: { armor: 6, maxHp: 25 }, minus: { magnet: -0.15 }, set: 'glacier',
-      lore: 'Buzul rüzgarlarına karşı yüzü tamamen kapatan çelik tolga.' },
+      plus: { armor: 6, maxHp: 25 }, minus: { magnet: -0.15 }, set: 'glacier' },
     { id: 'crownH',  name: 'Savaş Tacı',     rar: 'rare',   det: 3, col: 0xd8c27a, trim: 0xffd479,
-      plus: { dmg: 0.1, crit: 0.04 }, set: 'ruins',
-      lore: 'Harabelerde bulunan, unutulmuş bir kralın savaş tacı.' },
+      plus: { dmg: 0.1, crit: 0.04 }, set: 'ruins' },
     { id: 'dragonH', name: 'Ejder Kaskı',    rar: 'epic',   det: 4, col: 0xa8452e, trim: 0xffb03a,
-      plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 }, set: 'volcano',
-      lore: 'Volkanik bir ejderin pullarından dövülmüş, alevlere dayanıklı kask.' },
+      plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 }, set: 'volcano' },
     { id: 'haloH',   name: 'Kutsal Hale',    rar: 'legend', det: 4, col: 0xf3eddc, trim: 0xffd479,
-      plus: { armor: 5, maxHp: 40, regen: 0.8 },
-      lore: 'Işığın kendisinden süzülmüş gibi görünen, kutsanmış bir hale.' },
+      plus: { armor: 5, maxHp: 40, regen: 0.8 } },
   ],
   chest: [
     { id: 'padC',    name: 'Pamuklu Zırh',   rar: 'common', det: 1, col: 0x8a7550, trim: 0x63523a,
-      plus: { armor: 2, maxHp: 18 },
-      lore: 'Acemi maceracıların ilk zırhı; ucuz ama işe yarar.' },
+      plus: { armor: 2, maxHp: 18 } },
     { id: 'chainC',  name: 'Zincir Zırh',    rar: 'common', det: 2, col: 0x99a2af, trim: 0x6d7683,
-      plus: { armor: 5, maxHp: 30 }, minus: { speedMul: -0.06 },
-      lore: 'Binlerce halkadan örülmüş, dayanıklı bir zincir gömlek.' },
+      plus: { armor: 5, maxHp: 30 }, minus: { speedMul: -0.06 } },
     { id: 'scaleC',  name: 'Pullu Zırh',     rar: 'rare',   det: 2, col: 0x6f9a7d, trim: 0x47705a,
-      plus: { armor: 7, maxHp: 45 }, minus: { atkSpeed: -0.06 }, set: 'glacier',
-      lore: 'Buzul canavarlarının pullarından yapılmış, soğuğa dayanıklı zırh.' },
+      plus: { armor: 7, maxHp: 45 }, minus: { atkSpeed: -0.06 }, set: 'glacier' },
     { id: 'rangerC', name: 'Avcı Yeleği',    rar: 'rare',   det: 1, col: 0x54704a, trim: 0x8a6b3c,
-      plus: { speedMul: 0.1, crit: 0.05, maxHp: 15 }, set: 'forest',
-      lore: 'Ormanın gölgeleriyle bütünleşen, hafif bir avcı yeleği.' },
+      plus: { speedMul: 0.1, crit: 0.05, maxHp: 15 }, set: 'forest' },
     { id: 'lionC',   name: 'Aslan Göğüslüğü',rar: 'epic',   det: 3, col: 0xc6d2e4, trim: 0xffd479,
-      plus: { armor: 11, maxHp: 70 }, minus: { speedMul: -0.1 },
-      lore: 'Göğsünde kabartma bir aslan başı taşıyan, ağır muhafız zırhı.' },
+      plus: { armor: 11, maxHp: 70 }, minus: { speedMul: -0.1 } },
     { id: 'phoenixC',name: 'Anka Zırhı',     rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffd479,
-      plus: { armor: 9, maxHp: 60, regen: 1 }, set: 'volcano',
-      lore: 'Küllerinden yeniden doğan anka kuşunun alevleriyle örülü zırh.' },
+      plus: { armor: 9, maxHp: 60, regen: 1 }, set: 'volcano' },
   ],
   gloves: [
     { id: 'wrapG',   name: 'Bez Sargı',      rar: 'common', det: 1, col: 0xa89678, trim: 0x8a7a5e,
-      plus: { atkSpeed: 0.05 },
-      lore: 'Ellerini korumak için sarılmış basit bezler.' },
+      plus: { atkSpeed: 0.05 } },
     { id: 'leatherG',name: 'Deri Kolluk',    rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { dmg: 0.06, armor: 1 },
-      lore: 'Sertleştirilmiş deriden, darbeleri hafifleten kolluk.' },
+      plus: { dmg: 0.06, armor: 1 } },
     { id: 'ironG',   name: 'Demir Kolluk',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { dmg: 0.12, armor: 3 }, minus: { atkSpeed: -0.05 }, set: 'ruins',
-      lore: 'Harabelerin derinliklerinde bulunmuş, ağır demir kolluk.' },
+      plus: { dmg: 0.12, armor: 3 }, minus: { atkSpeed: -0.05 }, set: 'ruins' },
     { id: 'swiftG',  name: 'Çevik Eldiven',  rar: 'rare',   det: 2, col: 0x4e8f9a, trim: 0x9ef1ff,
-      plus: { atkSpeed: 0.15 }, minus: { dmg: -0.05 },
-      lore: 'Parmak uçlarına kadar ince işlenmiş, hızlı vuruşlar için tasarlanmış eldiven.' },
+      plus: { atkSpeed: 0.15 }, minus: { dmg: -0.05 } },
     { id: 'clawG',   name: 'Cinnet Pençesi', rar: 'epic',   det: 3, col: 0x6d2a3a, trim: 0xff5566,
-      plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 }, set: 'volcano',
-      lore: 'Bir canavarın pençesinden şekillendirilmiş, öfkeyle titreyen silah.' },
+      plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 }, set: 'volcano' },
     { id: 'titanG',  name: 'Titan Yumruğu',  rar: 'legend', det: 4, col: 0xc9a24a, trim: 0xfff0b8,
-      plus: { dmg: 0.22, atkSpeed: 0.12, area: 0.1 },
-      lore: 'Bir titanın gücünü taşıyan, dev boyutlu savaş yumruğu.' },
+      plus: { dmg: 0.22, atkSpeed: 0.12, area: 0.1 } },
   ],
   boots: [
     { id: 'sandalB', name: 'Sandalet',       rar: 'common', det: 1, col: 0x8a6b45, trim: 0x63502f,
-      plus: { speedMul: 0.05 },
-      lore: 'Uzun yolculuklar için dikilmiş, basit deri sandaletler.' },
+      plus: { speedMul: 0.05 } },
     { id: 'leatherB',name: 'Deri Bot',       rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { speedMul: 0.08, armor: 1 }, set: 'forest',
-      lore: 'Ormanın nemli topraklarında sessizce yürümeyi sağlayan bot.' },
+      plus: { speedMul: 0.08, armor: 1 }, set: 'forest' },
     { id: 'ironB',   name: 'Demir Dizlik',   rar: 'rare',   det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { armor: 4, maxHp: 20 }, minus: { speedMul: -0.05 },
-      lore: 'Ağır ama sağlam, dizleri darbelerden koruyan zırh parçası.' },
+      plus: { armor: 4, maxHp: 20 }, minus: { speedMul: -0.05 } },
     { id: 'windB',   name: 'Rüzgar Botu',    rar: 'rare',   det: 2, col: 0x7fd8c8, trim: 0xdff7ff,
-      plus: { speedMul: 0.16 }, minus: { armor: -2 },
-      lore: 'Tabanına rüzgar büyüsü işlenmiş, adeta uçarcasına koşturan botlar.' },
+      plus: { speedMul: 0.16 }, minus: { armor: -2 } },
     { id: 'quakeB',  name: 'Sarsıntı Botu',  rar: 'epic',   det: 3, col: 0x7a5230, trim: 0xff8a3d,
-      plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 }, set: 'volcano',
-      lore: 'Her adımda yeri hafifçe sarsan, volkanik kayadan yapılmış botlar.' },
+      plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 }, set: 'volcano' },
     { id: 'hermesB', name: 'Hermes Kanadı',  rar: 'legend', det: 4, col: 0xe8e2cf, trim: 0xffd479,
-      plus: { speedMul: 0.22, atkSpeed: 0.08 },
-      lore: 'Habercilerin tanrısından ilham alan, topuklarında küçük kanatlar taşıyan botlar.' },
+      plus: { speedMul: 0.22, atkSpeed: 0.08 } },
   ],
   cloak: [
     { id: 'raggedK', name: 'Yırtık Pelerin', rar: 'common', det: 1, col: 0x6b6152, trim: 0x50483d,
-      plus: { magnet: 0.12 },
-      lore: 'Yıllarca yol görmüş, delik deşik olmuş eski bir pelerin.' },
+      plus: { magnet: 0.12 } },
     { id: 'woolK',   name: 'Yün Pelerin',    rar: 'common', det: 1, col: 0x6f5f47, trim: 0x8b7a5c,
-      plus: { magnet: 0.2, regen: 0.2 }, set: 'forest',
-      lore: 'Ormanın soğuk gecelerinde sıcak tutan kalın yün pelerin.' },
+      plus: { magnet: 0.2, regen: 0.2 }, set: 'forest' },
     { id: 'shadowK', name: 'Gölge Pelerini', rar: 'rare',   det: 2, col: 0x33304a, trim: 0x6e63a8,
-      plus: { speedMul: 0.1, crit: 0.05 }, minus: { armor: -2 }, set: 'ruins',
-      lore: 'Sahibini gölgelerle bütünleştiren, harabelerden kalma bir pelerin.' },
+      plus: { speedMul: 0.1, crit: 0.05 }, minus: { armor: -2 }, set: 'ruins' },
     { id: 'royalK',  name: 'Kraliyet Pelerini', rar: 'rare', det: 3, col: 0xa32340, trim: 0xffc94d,
-      plus: { maxHp: 30, regen: 0.5 },
-      lore: 'Bir zamanlar bir soylunun omuzlarını süsleyen kadife pelerin.' },
+      plus: { maxHp: 30, regen: 0.5 } },
     { id: 'vampK',   name: 'Vampir Pelerini',rar: 'epic',   det: 3, col: 0x4a1526, trim: 0xd12b4a,
-      plus: { regen: 1.4, dmg: 0.08 }, minus: { maxHp: -25 },
-      lore: 'Sahibinin can gücünü besleyen, karanlık bir lanetle dokunmuş pelerin.' },
+      plus: { regen: 1.4, dmg: 0.08 }, minus: { maxHp: -25 } },
     { id: 'starK',   name: 'Yıldız Mantosu', rar: 'legend', det: 4, col: 0x2b3d78, trim: 0x9ec9ff,
-      plus: { magnet: 0.6, area: 0.15, regen: 0.6 }, set: 'glacier',
-      lore: 'Gece gökyüzünün yıldızlarını üzerinde taşıyan, buzul kadar soğuk bir manto.' },
+      plus: { magnet: 0.6, area: 0.15, regen: 0.6 }, set: 'glacier' },
   ],
   shield: [
     { id: 'woodS',   name: 'Ahşap Siperlik', rar: 'common', det: 1, col: 0x7d5a3a, trim: 0x5a3f28,
-      plus: { armor: 2 },
-      lore: 'Köylü bir demircinin elinden çıkma, basit ahşap siperlik.' },
+      plus: { armor: 2 } },
     { id: 'ironS',   name: 'Demir Siperlik', rar: 'common', det: 2, col: 0x9aa3b0, trim: 0x6d7683,
-      plus: { armor: 4, maxHp: 15 }, minus: { atkSpeed: -0.04 }, set: 'glacier',
-      lore: 'Buzul cephesinde savaşan askerlerin standart siperliği.' },
+      plus: { armor: 4, maxHp: 15 }, minus: { atkSpeed: -0.04 }, set: 'glacier' },
     { id: 'kiteS',   name: 'Şövalye Kalkanı',rar: 'rare',   det: 3, col: 0xc0cde0, trim: 0xffd479,
-      plus: { armor: 7, maxHp: 35 }, minus: { speedMul: -0.06 }, set: 'ruins',
-      lore: 'Harabelerdeki bir şövalye mezarından çıkarılmış klasik kalkan.' },
+      plus: { armor: 7, maxHp: 35 }, minus: { speedMul: -0.06 }, set: 'ruins' },
     { id: 'spikeS',  name: 'Dikenli Kalkan', rar: 'rare',   det: 3, col: 0x7a6b5c, trim: 0xb0483a,
-      plus: { armor: 5, dmg: 0.1 },
-      lore: 'Kenarları sivri dikenlerle donatılmış, saldırgan bir savunma kalkanı.' },
+      plus: { armor: 5, dmg: 0.1 } },
     { id: 'towerS',  name: 'Kule Kalkanı',   rar: 'epic',   det: 4, col: 0x8fa0bb, trim: 0xffd479,
-      plus: { armor: 12, maxHp: 55 }, minus: { speedMul: -0.12, atkSpeed: -0.06 },
-      lore: 'Neredeyse bir kule kadar büyük, tüm vücudu koruyan devasa kalkan.' },
+      plus: { armor: 12, maxHp: 55 }, minus: { speedMul: -0.12, atkSpeed: -0.06 } },
     { id: 'aegisS',  name: 'Aegis',          rar: 'legend', det: 4, col: 0xf0e6c8, trim: 0xffd479,
-      plus: { armor: 10, maxHp: 50, regen: 0.6 },
-      lore: 'Efsanelerde adı geçen, tanrısal bir korumayla kutsanmış kalkan.' },
+      plus: { armor: 10, maxHp: 50, regen: 0.6 } },
   ],
 };
 // id -> {item, slot} arama tablosu
@@ -3329,23 +3293,8 @@ function renderGear() {
       b.className = 'gitem' + (seen ? ' on' : ' locked');
       if (seen) b.style.borderColor = RAR[it.rar].col;
       b.title = seen ? it.name + ' — ' + statLines(it.plus).concat(statLines(it.minus)).join(' · ') : 'Henüz bulunmadı';
-      // Bulunan eşyalar kendi (drawItemIcon ile üretilen) benzersiz ikonuyla gösterilir;
-      // bulunmayanlar genel yuva ikonuyla kilitli görünür — "kütüphane" hissi
-      if (seen) {
-        const cv = document.createElement('canvas');
-        cv.width = cv.height = 68; cv.className = 'gi';
-        b.appendChild(cv);
-        drawItemIcon(cv, slot, it);
-      } else {
-        const ico = document.createElement('span');
-        ico.className = 'gi'; ico.textContent = '🔒';
-        b.appendChild(ico);
-      }
-      const nm = document.createElement('span');
-      nm.className = 'gn';
-      if (seen) nm.style.color = RAR[it.rar].col;
-      nm.textContent = seen ? it.name : '???';
-      b.appendChild(nm);
+      b.innerHTML = `<span class="gi">${seen ? def.icon : '🔒'}</span>` +
+        `<span class="gn"${seen ? ` style="color:${RAR[it.rar].col}"` : ''}>${seen ? it.name : '???'}</span>`;
       list.appendChild(b);
     }
     row.appendChild(list);
@@ -3361,8 +3310,6 @@ const elInvSlots = document.getElementById('invSlots');
 const elInvBag = document.getElementById('invBag');
 const elInvOdds = document.getElementById('invOdds');
 const elInvSets = document.getElementById('invSets');
-const elHeroStats = document.getElementById('heroStats');
-const elHeroDetail = document.getElementById('heroDetail');
 /* İkonlar 2B canvas'a çiziliyor: harici dosya yok, data: URL yok (katı CSP
    altında da çalışır) ve renkler modeldekiyle birebir aynı kaynaktan geliyor. */
 function drawItemIcon(cv, slot, it) {
@@ -3472,41 +3419,10 @@ function drawItemIcon(cv, slot, it) {
   }
   d.restore();
 }
-// Kahraman paneli: sağ üstte istatistik özeti, ikonlu satırlar
-const HERO_STAT_ROWS = [
-  ['❤️', 'Maks. Can', () => Math.round(P.maxHp)],
-  ['🗡️', 'Hasar Çarpanı', () => 'x' + P.st.dmg.toFixed(2)],
-  ['🛡️', 'Zırh', () => Math.round(P.st.armor)],
-  ['👟', 'Hız Çarpanı', () => 'x' + P.st.speedMul.toFixed(2)],
-  ['⏱️', 'Saldırı Hızı', () => 'x' + P.st.atkSpeed.toFixed(2)],
-  ['🎯', 'Kritik Şansı', () => Math.round(P.st.crit * 100) + '%'],
-  ['🧲', 'Mıknatıs', () => 'x' + P.st.magnet.toFixed(2)],
-  ['✚', 'Rejenerasyon', () => P.st.regen.toFixed(1) + ' HP/sn'],
-];
-function renderHeroStats() {
-  if (!elHeroStats) return;
-  elHeroStats.innerHTML = HERO_STAT_ROWS.map(([ico, label, val]) =>
-    `<div class="heroStatRow"><span><span class="hsIco">${ico}</span>${label}</span><b>${val()}</b></div>`).join('');
-}
-// Seçilen eşyanın tasvirini (ad, statlar, lore) sağ panelde göster
-function showHeroDetail(it) {
-  if (!elHeroDetail) return;
-  if (!it) {
-    elHeroDetail.innerHTML = '<div class="heroDetailEmpty">Bir eşyaya dokun — istatistiklerini ve tasvirini burada gör.</div>';
-    return;
-  }
-  const stats = statLines(it.plus).map(t => `<span class="p">${t}</span>`).join('') +
-                statLines(it.minus).map(t => `<span class="m">${t}</span>`).join('');
-  elHeroDetail.innerHTML =
-    `<div class="hdName" style="color:${RAR[it.rar].col}">${it.name}</div>` +
-    `<div class="hdStats">${stats}</div>` +
-    (it.lore ? `<div class="hdLore">${it.lore}</div>` : '');
-}
 function itemCell(slot, it, equipped) {
   const el = document.createElement('button');
   el.className = 'icell' + (equipped ? ' eq' : '');
   if (it) el.style.borderColor = RAR[it.rar].col;
-  el.addEventListener('click', () => showHeroDetail(it));
   const cv = document.createElement('canvas');
   cv.width = cv.height = 72; cv.className = 'ico';
   el.appendChild(cv);
@@ -3534,7 +3450,6 @@ function itemCell(slot, it, equipped) {
 function renderInventory() {
   if (!elInv) return;
   elInvSlots.innerHTML = ''; elInvBag.innerHTML = '';
-  renderHeroStats();
   // Aktif set bonusları: kaç parça giyildiği + hangi bonusun açık olduğu
   if (elInvSets) {
     const counts = equippedSetCounts();
@@ -3888,6 +3803,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
                   updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
-                  UI_ATLAS, get uiImg() { return uiImg; }, drawRpgBar, renderHeroStats, showHeroDetail,
+                  UI_ATLAS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

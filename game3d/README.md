@@ -455,36 +455,8 @@ yazıldı.
   düz üçgen yerine `arrowBeige_right` sprite'ı (`ctx.drawImage` + rotasyon).
 
 Kullanılmayan sprite'lar (imleçler, yuvarlak/kare düğmeler, diğer renk
-varyantları) atlas'ta duruyor ama şu an dokunulmuyor.
-
-**Not:** `canvas.toDataURL()` ile çalışma anında kırpma yaklaşımı sonradan
-terk edildi (bkz. "Kahraman paneli" altındaki not) — düğme/panel/ikon
-sprite'ları artık build.mjs tarafından build zamanında AYRI PNG'ler olarak
-gömülüyor, atlas yalnızca bar/ok gibi `ctx.drawImage`-only kullanımlar için
-kalıyor.
-
-### Kahraman paneli: istatistikler + eşya tasviri + Kütüphane ızgarası
-Kullanıcının paylaştığı referans ekran görüntülerine (karakter önizlemeli
-HERO ekranı + ARMOR LIBRARY ızgarası) göre envanter ekranı yeniden
-tasarlandı:
-
-- **İstatistik paneli**: `P.st`'den okunan 8 satır (can/hasar/zırh/hız/
-  saldırı hızı/kritik/mıknatıs/rejen), ikon + etiket + değer, `panelInset_beige`
-  çerçeveli kutu içinde (`renderHeroStats()`).
-- **Eşya tasviri**: bir eşyaya dokununca ad (nadirlik rengiyle), art/eksi
-  statlar ve kısa bir **lore cümlesi** sağ panelde beliriyor
-  (`showHeroDetail()`). 36 eşyanın hepsine özgün birer tasvir cümlesi
-  yazıldı (`ITEMS` tablosundaki yeni `lore` alanı).
-- **Koleksiyon ızgarası** (menüdeki KOLEKSİYON sekmesi): bulunan eşyalar
-  artık genel yuva ikonu yerine kendi `drawItemIcon()` çizimiyle gösteriliyor
-  — her satır ince bir bej çerçeveyle ayrılmış "kütüphane rafı" hissi veriyor
-  (`border-image` yalnızca kenarlarda, `fill` YOK — aksi hâlde iç metinlerin
-  koyu-zemin-için ayarlanmış renkleri okunaksız kalırdı).
-
-Bir sonraki adım olarak istenirse: 36 eşya için AI görsel üretimiyle
-(referans görsellerdeki gibi) benzersiz resimli ikonlar — bu prosedürel
-canvas-çizim sisteminden raster PNG'lere geçiş gerektiren ayrı, daha büyük
-bir iş; bu oturumda görsel üretim aracı erişilebilir değildi.
+varyantları) atlas'ta duruyor ama şu an dokunulmuyor — ihtiyaç oldukça aynı
+kırpma deseni (`UI_BUTTONS`/`UI_PANELS`/`UI_ICONS` + `cropAll()`) genişletilebilir.
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,
