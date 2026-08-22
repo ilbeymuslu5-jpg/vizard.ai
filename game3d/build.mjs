@@ -23,6 +23,7 @@ const js = res.outputFiles[0].text;
 const shell = fs.readFileSync(path.join(DIR, 'shell.html'), 'utf8');
 const glb = fs.readFileSync(path.join(DIR, 'knight.glb')).toString('base64');
 const tex = fs.readFileSync(path.join(DIR, 'knight_tex.jpg')).toString('base64');
+const uipack = fs.readFileSync(path.join(DIR, 'assets', 'uipack_rpg_sheet.png')).toString('base64');
 
 const TITLE = 'HORDE SURVIVOR 3D — İzometrik Bullet Heaven' + (testMode ? ' [TEST]' : '');
 
@@ -33,7 +34,7 @@ if(!m){m=document.createElement("meta");m.name="viewport";document.head.appendCh
 m.content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 addEventListener("load",function(){setTimeout(function(){dispatchEvent(new Event("resize"));},60);});})();</script>`;
 
-const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";</script>\n<script>${js}</script>`;
+const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";</script>\n<script>${js}</script>`;
 
 let out;
 if (artifactMode) {

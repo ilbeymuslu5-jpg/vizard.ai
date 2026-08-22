@@ -71,6 +71,70 @@ const fx2d = document.getElementById('fx');          // üst katman 2B canvas
 const ctx = fx2d.getContext('2d');
 let VW = 0, VH = 0, DPR = 1, SAFE_TOP = 0;
 
+/* Kenney "UI Pack: RPG Expansion" (CC0) — tek 512×512 sprite sayfası, atlas
+   koordinatları XML'den elle çıkarıldı (çalışma anında XML ayrıştırmaya
+   gerek yok). Üç parçalı ("3-slice") bar dokuları HP/XP/boss barlarında,
+   düğme dokuları menü butonlarında (CSS custom property ile) kullanılıyor. */
+const UI_ATLAS = {
+  back:   { L: { x: 372, y: 330, w: 9, h: 18 }, M: { x: 338, y: 386, w: 18, h: 18 }, R: { x: 190, y: 294, w: 9, h: 18 } },
+  red:    { L: { x: 370, y: 90,  w: 9, h: 18 }, M: { x: 356, y: 368, w: 18, h: 18 }, R: { x: 190, y: 348, w: 9, h: 18 } },
+  yellow: { L: { x: 370, y: 126, w: 9, h: 18 }, M: { x: 338, y: 449, w: 18, h: 18 }, R: { x: 190, y: 330, w: 9, h: 18 } },
+  blue:   { L: { x: 372, y: 294, w: 9, h: 18 }, M: { x: 356, y: 431, w: 18, h: 18 }, R: { x: 372, y: 312, w: 9, h: 18 } },
+};
+// Düğme sprite'ları: atlas x/y/w/h (buttonLong_beige/_pressed, buttonLong_brown/_pressed)
+const UI_BUTTONS = {
+  primary:        { x: 0, y: 282, w: 190, h: 49 },
+  primaryActive:  { x: 0, y: 237, w: 190, h: 45 },
+  ghost:          { x: 0, y: 49,  w: 190, h: 49 },
+  ghostActive:    { x: 0, y: 98,  w: 190, h: 45 },
+};
+let uiImg = null;
+{
+  const b64 = window.__UIPACK_B64;
+  if (b64) {
+    const img = new Image();
+    img.onload = () => {
+      uiImg = img;
+      // CSS border-image tüm görseli diliyor; atlas'tan alt-dikdörtgen kırpamıyor,
+      // bu yüzden her düğme sprite'ı kendi küçük tuvaline kırpılıp ayrı data: URL olarak
+      // kök elemana bağlanıyor (böylece her biri kendi doğal boyutunda border-image olabilir).
+      const cv = document.createElement('canvas'), cx = cv.getContext('2d');
+      for (const key in UI_BUTTONS) {
+        const s = UI_BUTTONS[key];
+        cv.width = s.w; cv.height = s.h;
+        cx.clearRect(0, 0, s.w, s.h);
+        cx.drawImage(img, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+        document.documentElement.style.setProperty(`--ui-btn-${key}`, `url(${cv.toDataURL('image/png')})`);
+      }
+    };
+    img.src = 'data:image/png;base64,' + b64;
+  }
+}
+// Bar dokusunu 3 parça hâlinde çiz: sol/sağ uçlar sabit, orta gerilir
+function drawBarPiece(part, x, y, w, h) {
+  const capW = Math.min(part.L.w, w / 2);
+  ctx.drawImage(uiImg, part.L.x, part.L.y, part.L.w, part.L.h, x, y, capW, h);
+  const midW = Math.max(0, w - capW * 2);
+  if (midW > 0) ctx.drawImage(uiImg, part.M.x, part.M.y, part.M.w, part.M.h, x + capW, y, midW, h);
+  ctx.drawImage(uiImg, part.R.x, part.R.y, part.R.w, part.R.h, x + w - capW, y, capW, h);
+}
+// RPG bar çiz: arka (boş) doku + orana göre kırpılmış renkli dolgu.
+// uiImg henüz yüklenmediyse (ilk birkaç kare) çağıran taraf eski düz dikdörtgene döner.
+function drawRpgBar(x, y, w, h, frac, colorKey) {
+  if (!uiImg) return false;
+  ctx.imageSmoothingEnabled = false;
+  drawBarPiece(UI_ATLAS.back, x, y, w, h);
+  const fw = w * clamp(frac, 0, 1);
+  if (fw > 0.5) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, fw, h); ctx.clip();
+    drawBarPiece(UI_ATLAS[colorKey] || UI_ATLAS.red, x, y, w, h);
+    ctx.restore();
+  }
+  ctx.imageSmoothingEnabled = true;
+  return true;
+}
+
 function resize() {
   VW = Math.round(innerWidth); VH = Math.round(innerHeight);
   DPR = Math.min(devicePixelRatio || 1, LOW_END ? 2 : 2.5);
@@ -2783,10 +2847,12 @@ function drawHUD() {
   // XP barı
   const barH = 12, y = top + 6;
   ctx.fillStyle = 'rgba(10,12,22,.85)'; ctx.fillRect(0, top, VW, barH + 12);
-  ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(10, y, VW - 20, barH);
-  const g = ctx.createLinearGradient(10, 0, VW - 10, 0);
-  g.addColorStop(0, '#4ea8ff'); g.addColorStop(1, '#9be7ff');
-  ctx.fillStyle = g; ctx.fillRect(10, y, (VW - 20) * clamp(G.xp / G.xpNext, 0, 1), barH);
+  if (!drawRpgBar(10, y, VW - 20, barH, G.xp / G.xpNext, 'blue')) {
+    ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(10, y, VW - 20, barH);
+    const g = ctx.createLinearGradient(10, 0, VW - 10, 0);
+    g.addColorStop(0, '#4ea8ff'); g.addColorStop(1, '#9be7ff');
+    ctx.fillStyle = g; ctx.fillRect(10, y, (VW - 20) * clamp(G.xp / G.xpNext, 0, 1), barH);
+  }
   ctx.textAlign = 'left'; ctx.font = '900 12px Trebuchet MS, sans-serif';
   ctx.fillStyle = '#08101c'; ctx.fillRect(10, y, 58, barH);
   ctx.fillStyle = '#ffd479'; ctx.fillText('SV. ' + G.level, 16, y + barH / 2 + 1);
@@ -2853,10 +2919,12 @@ function drawHUD() {
   if (G.boss) {
     const bw = Math.min(VW - 40, 460), bx = (VW - bw) / 2, by = iy - 2;
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 16);
-    ctx.fillStyle = '#3a1010'; ctx.fillRect(bx, by, bw, 12);
-    const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-    bg.addColorStop(0, '#ff2b3d'); bg.addColorStop(1, '#ff9d3d');
-    ctx.fillStyle = bg; ctx.fillRect(bx, by, bw * clamp(G.boss.hp / G.boss.maxHp, 0, 1), 12);
+    if (!drawRpgBar(bx, by, bw, 12, G.boss.hp / G.boss.maxHp, 'red')) {
+      ctx.fillStyle = '#3a1010'; ctx.fillRect(bx, by, bw, 12);
+      const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+      bg.addColorStop(0, '#ff2b3d'); bg.addColorStop(1, '#ff9d3d');
+      ctx.fillStyle = bg; ctx.fillRect(bx, by, bw * clamp(G.boss.hp / G.boss.maxHp, 0, 1), 12);
+    }
     ctx.textAlign = 'center'; ctx.font = '900 11px Trebuchet MS, sans-serif';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.65)';
     ctx.strokeText(G.boss.bossName, VW / 2, by + 7);
@@ -3727,5 +3795,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
                   updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
+                  UI_ATLAS, UI_BUTTONS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

@@ -12,6 +12,8 @@ Tek dosyalık `../horde-survivor-3d.html` bu klasörden üretilir.
   nadirlik rengi + seviye 3/5 ek detay); `refreshHeldWeapon()` ile `main.js`'e bağlı
 - `src/armorModels.js` — Destansı+ zırhlarda ince ışıltı halesi; `addPiece()` üzerinden
   mevcut eşya-bazlı detaylı geometrinin (`SHAPE`) üstüne bindirilir, yerini almaz
+- `assets/uipack_rpg_sheet.png` — Kenney "UI Pack: RPG Expansion" (CC0) sprite sayfası;
+  menü düğmeleri ve HP/XP/boss barlarında kullanılıyor (aşağıya bakınız)
 - `shell.html`   — stil + menü/kart/sonuç işaretlemesi
 - `knight.glb`   — oyuncu modeli (aşağıya bakınız)
 
@@ -414,6 +416,29 @@ child'ı mevcut detaylı geometrinin üstüne ekleniyor (temel gövde dalları h
 eşleşmediği için boş kalıyor). Oyunun 4 kademeli nadirlik kimliği
 (`common/rare/epic/legend`) üretecin 6 kademeli tablosuna `ARMOR_RARITY_ALIAS`
 ile eşlendi (`legend` → `legendary`).
+
+### Kenney UI Pack entegrasyonu
+`assets/uipack_rpg_sheet.png` — 512×512'lik tek sprite sayfası (32 KB), `build.mjs`
+tarafından `window.__UIPACK_B64` olarak diğer varlıklarla (GLB, doku) aynı yolla
+tek dosyaya gömülüyor. XML atlas çalışma anında ayrıştırılmıyor; ihtiyaç
+duyulan birkaç sprite'ın koordinatları `UI_ATLAS`/`UI_BUTTONS` sabitlerine elle
+yazıldı.
+
+- **HP/XP/boss barları**: üç parçalı ("3-slice") bar dokuları — sabit uç
+  kapaklar + gerilen orta parça — `drawRpgBar()` ile canvas'a çiziliyor. Dolum
+  oranı, tam bar genişliğinde çizilen dolgu sprite'ını `ctx.clip()` ile
+  kırparak elde ediliyor (uçlar orana göre doğal biçimde kesiliyor). Doku
+  henüz yüklenmediyse (ilk kare) fonksiyon `false` döner, çağıran taraf eski
+  düz `fillRect` çizimine düşer.
+- **Menü düğmeleri**: CSS `border-image` tüm kaynak görseli dilimlediği için
+  atlas'tan doğrudan alt-dikdörtgen kullanılamıyor — her düğme sprite'ı
+  (`buttonLong_beige/_pressed`, `buttonLong_brown/_pressed`) yüklenince bir
+  kerelik bir `<canvas>` ile kırpılıp kendi `data:` URL'i olarak
+  `--ui-btn-*` özel özelliğine yazılıyor; `.btn`/`.btn.ghost` bunu
+  `border-image-source` olarak okuyor. `border-image-slice` değerleri
+  (10 14) sprite'ın gerçek bevel kalınlığına göre ölçülüp ayarlandı — ilk
+  denemede çok büyük seçilince (20 40) buton düz bir taş levha gibi
+  görünüyordu.
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,

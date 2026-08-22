@@ -29,14 +29,24 @@
     text-shadow:0 0 30px rgba(255,120,60,.35);
   }
   .subtitle{ font-size:clamp(12px,3.4vw,16px); color:#9aa4bd; max-width:540px; line-height:1.5; }
+  /* Kenney "UI Pack: RPG Expansion" (CC0) düğme dokusu: her düğme sprite'ı
+     (--ui-btn-primary/-ghost/-Active) main.js'te atlas'tan kırpılıp kendi
+     data: URL'i olarak kök elemana bağlanır — border-image tüm görseli
+     dilimlediği için atlas'tan doğrudan alt-dikdörtgen kullanılamıyor. Doku
+     hazır olana kadar (ilk kare) düz gradyan arkaya düşülür. */
   .btn{
     padding:14px 34px; font-size:clamp(15px,4vw,20px); font-weight:800; letter-spacing:1px;
-    border:none; border-radius:12px; cursor:pointer; color:#12121c; text-transform:uppercase;
-    background:linear-gradient(180deg,#ffd479,#ff9a3c); box-shadow:0 6px 0 #a4521a,0 10px 24px rgba(0,0,0,.5);
+    border-style:solid; border-width:10px 14px; border-radius:12px; cursor:pointer; color:#3a2410; text-transform:uppercase;
+    background:linear-gradient(180deg,#ffd479,#ff9a3c);
+    border-image-source:var(--ui-btn-primary, none); border-image-slice:10 14 fill;
+    border-image-width:10px 14px; border-image-repeat:stretch;
+    box-shadow:0 6px 0 rgba(0,0,0,.35), 0 10px 24px rgba(0,0,0,.5);
     transition:transform .06s ease, box-shadow .06s ease;
   }
-  .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #a4521a,0 6px 14px rgba(0,0,0,.5); }
-  .btn.ghost{ background:linear-gradient(180deg,#39405c,#252a3d); color:#e9edf5; box-shadow:0 6px 0 #161a28; }
+  .btn:active{ border-image-source:var(--ui-btn-primaryActive, none); transform:translateY(3px);
+    box-shadow:0 3px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.5); }
+  .btn.ghost{ color:#e9edf5; border-image-source:var(--ui-btn-ghost, none); box-shadow:0 6px 0 rgba(0,0,0,.4); }
+  .btn.ghost:active{ border-image-source:var(--ui-btn-ghostActive, none); }
   .hint{ font-size:11px; color:#6f7896; letter-spacing:1px; }
 
   /* ========== SEVİYE KARTLARI ========== */
