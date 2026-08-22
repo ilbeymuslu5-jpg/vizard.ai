@@ -445,6 +445,18 @@ yazıldı.
   `border-image-slice ... fill` orta parçayı da arka plan olarak
   bastığından `.classInfo`'nun metin rengi açık bejle kontrast için
   koyulaştırıldı (`#aab4cc`/`#ffd479` → `#5a4a30`/`#a4521a`).
+- **İkon rozetleri**: `iconCheck_beige`/`iconCross_grey` küçük sprite'lar
+  olduğu için `border-image` yerine düz `background-image` olarak
+  `--ui-icon-*`'a bağlanıyor; seçili sınıf kartı ve yetenek düğümünde
+  (`.classCard.on`/`.skillOpt.on`) köşede onay işareti, kilitli yetenek
+  düğümünde (`.skillOpt.locked`) çarpı rozeti — ikisi de saf CSS `::after`
+  ile, DOM/JS değişikliği gerekmeden.
+- **Boss yön oku**: ekran dışındaki boss'u gösteren ok artık elle çizilen
+  düz üçgen yerine `arrowBeige_right` sprite'ı (`ctx.drawImage` + rotasyon).
+
+Kullanılmayan sprite'lar (imleçler, yuvarlak/kare düğmeler, diğer renk
+varyantları) atlas'ta duruyor ama şu an dokunulmuyor — ihtiyaç oldukça aynı
+kırpma deseni (`UI_BUTTONS`/`UI_PANELS`/`UI_ICONS` + `cropAll()`) genişletilebilir.
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,

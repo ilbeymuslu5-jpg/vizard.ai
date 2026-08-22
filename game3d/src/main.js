@@ -93,6 +93,13 @@ const UI_PANELS = {
   panelBrown:       { x: 0,   y: 376, w: 100, h: 100 },
   panelInsetBeige:  { x: 200, y: 294, w: 93,  h: 94 },
 };
+// Küçük rozet ikonları: seçili/kilitli durumları ve boss yön oku için
+const UI_ICONS = {
+  checkBeige:      { x: 369, y: 184, w: 16, h: 15 },
+  crossGrey:       { x: 370, y: 60,  w: 16, h: 15 },
+};
+// Yön oku (boss ekran dışındayken): sprite +X yönüne (sağa) bakıyor
+const ARROW_SPR = { x: 303, y: 486, w: 22, h: 21 };
 let uiImg = null;
 {
   const b64 = window.__UIPACK_B64;
@@ -115,6 +122,7 @@ let uiImg = null;
       };
       cropAll(UI_BUTTONS, 'ui-btn');
       cropAll(UI_PANELS, 'ui-panel');
+      cropAll(UI_ICONS, 'ui-icon');
     };
     img.src = 'data:image/png;base64,' + b64;
   }
@@ -2946,8 +2954,14 @@ function drawHUD() {
       const a = Math.atan2(bsy - PY, bsx - PX);
       ctx.save();
       ctx.translate(VW / 2 + Math.cos(a) * Math.min(VW, VH) * 0.36, VH / 2 + Math.sin(a) * Math.min(VW, VH) * 0.36);
-      ctx.rotate(a); ctx.fillStyle = '#ff5a3d';
-      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8); ctx.closePath(); ctx.fill();
+      ctx.rotate(a);
+      if (uiImg) {
+        const s = ARROW_SPR, w = 26, h = w * s.h / s.w;
+        ctx.drawImage(uiImg, s.x, s.y, s.w, s.h, -w * 0.35, -h / 2, w, h);
+      } else {
+        ctx.fillStyle = '#ff5a3d';
+        ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8); ctx.closePath(); ctx.fill();
+      }
       ctx.restore();
     }
   }
@@ -3804,6 +3818,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
                   updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
-                  UI_ATLAS, UI_BUTTONS, UI_PANELS, get uiImg() { return uiImg; }, drawRpgBar,
+                  UI_ATLAS, UI_BUTTONS, UI_PANELS, UI_ICONS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
