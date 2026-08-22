@@ -1838,6 +1838,27 @@ const ITEMS = {
       plus: { armor: 7, dmg: 0.15 }, minus: { maxHp: -20 }, set: 'volcano' },
     { id: 'haloH',   name: 'Kutsal Hale',    rar: 'legend', det: 4, col: 0xf3eddc, trim: 0xffd479,
       plus: { armor: 5, maxHp: 40, regen: 0.8 } },
+    // ---- GLB seti eşyaları (helm) ----
+    { id: 'amethystH', name: 'Ametist Miğfer', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
+      plus: { crit: 0.06, regen: 0.6 }, glbSet: 'amethyst' },
+    { id: 'aquaH', name: 'Su Perisi Miğfer', rar: 'legend', det: 4, col: 0x3fb8c9, trim: 0xbdf2ff,
+      plus: { regen: 0.9, magnet: 0.2 }, glbSet: 'aqua' },
+    { id: 'phoenixH', name: 'Alevli Anka Miğfer', rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffb03a,
+      plus: { dmg: 0.1, crit: 0.05 }, glbSet: 'phoenix' },
+    { id: 'boneguardH', name: 'Kemik Muhafız Miğfer', rar: 'legend', det: 4, col: 0xd8cfa8, trim: 0x4a4438,
+      plus: { armor: 6, maxHp: 30 }, glbSet: 'boneguard' },
+    { id: 'clockwork_advH', name: 'Çarklı Maceracı Miğfer', rar: 'legend', det: 4, col: 0xb5793a, trim: 0xe0b876,
+      plus: { atkSpeed: 0.1, crit: 0.04 }, glbSet: 'clockwork_adv' },
+    { id: 'clockwork_knightH', name: 'Çarklı Şövalye Miğfer', rar: 'legend', det: 4, col: 0x8a8f9c, trim: 0xb03a3a,
+      plus: { armor: 5, atkSpeed: 0.06 }, glbSet: 'clockwork_knight' },
+    { id: 'samuraiH', name: 'Kızıl Samuray Miğfer', rar: 'legend', det: 4, col: 0x9c2b3a, trim: 0x1a1a1a,
+      plus: { crit: 0.08, dmg: 0.05 }, glbSet: 'samurai' },
+    { id: 'totemH', name: 'Orman Totemi Miğfer', rar: 'legend', det: 4, col: 0x4a8b3a, trim: 0x8a6b3c,
+      plus: { regen: 0.5, magnet: 0.25 }, glbSet: 'totem' },
+    { id: 'mushroomH', name: 'Mantar Maceracı Miğfer', rar: 'legend', det: 4, col: 0xb0483a, trim: 0xe8e2cf,
+      plus: { regen: 0.7, maxHp: 20 }, glbSet: 'mushroom' },
+    { id: 'vanguardH', name: 'Neon Öncü Miğfer', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
+      plus: { atkSpeed: 0.08, crit: 0.06 }, glbSet: 'vanguard' },
   ],
   chest: [
     { id: 'padC',    name: 'Pamuklu Zırh',   rar: 'common', det: 1, col: 0x8a7550, trim: 0x63523a,
@@ -1852,6 +1873,28 @@ const ITEMS = {
       plus: { armor: 11, maxHp: 70 }, minus: { speedMul: -0.1 } },
     { id: 'phoenixC',name: 'Anka Zırhı',     rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffd479,
       plus: { armor: 9, maxHp: 60, regen: 1 }, set: 'volcano' },
+    // ---- GLB seti eşyaları (chest) ----
+    { id: 'amethystC', name: 'Ametist Göğüslük', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
+      plus: { armor: 8, maxHp: 45 }, glbSet: 'amethyst' },
+    { id: 'aquaC', name: 'Su Perisi Göğüslük', rar: 'legend', det: 4, col: 0x3fb8c9, trim: 0xbdf2ff,
+      plus: { armor: 6, maxHp: 55 }, glbSet: 'aqua' },
+    // Not: id 'phoenixGlbC' — mevcut prosedürel 'phoenixC' (Anka Zırhı) ile çakışmasın diye
+    { id: 'phoenixGlbC', name: 'Alevli Anka Göğüslük', rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffb03a,
+      plus: { armor: 7, maxHp: 40, regen: 0.6 }, glbSet: 'phoenix' },
+    { id: 'boneguardC', name: 'Kemik Muhafız Göğüslük', rar: 'legend', det: 4, col: 0xd8cfa8, trim: 0x4a4438,
+      plus: { armor: 12, maxHp: 55 }, glbSet: 'boneguard' },
+    { id: 'clockwork_advC', name: 'Çarklı Maceracı Göğüslük', rar: 'legend', det: 4, col: 0xb5793a, trim: 0xe0b876,
+      plus: { armor: 6, maxHp: 35, atkSpeed: 0.05 }, glbSet: 'clockwork_adv' },
+    { id: 'clockwork_knightC', name: 'Çarklı Şövalye Göğüslük', rar: 'legend', det: 4, col: 0x8a8f9c, trim: 0xb03a3a,
+      plus: { armor: 10, maxHp: 50 }, glbSet: 'clockwork_knight' },
+    { id: 'samuraiC', name: 'Kızıl Samuray Göğüslük', rar: 'legend', det: 4, col: 0x9c2b3a, trim: 0x1a1a1a,
+      plus: { armor: 5, dmg: 0.1 }, glbSet: 'samurai' },
+    { id: 'totemC', name: 'Orman Totemi Göğüslük', rar: 'legend', det: 4, col: 0x4a8b3a, trim: 0x8a6b3c,
+      plus: { armor: 7, maxHp: 45, regen: 0.4 }, glbSet: 'totem' },
+    { id: 'mushroomC', name: 'Mantar Maceracı Göğüslük', rar: 'legend', det: 4, col: 0xb0483a, trim: 0xe8e2cf,
+      plus: { armor: 6, maxHp: 40, regen: 0.3 }, glbSet: 'mushroom' },
+    { id: 'vanguardC', name: 'Neon Öncü Göğüslük', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
+      plus: { armor: 6, atkSpeed: 0.06 }, glbSet: 'vanguard' },
   ],
   gloves: [
     { id: 'wrapG',   name: 'Bez Sargı',      rar: 'common', det: 1, col: 0xa89678, trim: 0x8a7a5e,
@@ -1866,6 +1909,27 @@ const ITEMS = {
       plus: { dmg: 0.25, crit: 0.08 }, minus: { armor: -3 }, set: 'volcano' },
     { id: 'titanG',  name: 'Titan Yumruğu',  rar: 'legend', det: 4, col: 0xc9a24a, trim: 0xfff0b8,
       plus: { dmg: 0.22, atkSpeed: 0.12, area: 0.1 } },
+    // ---- GLB seti eşyaları (gloves) ----
+    { id: 'amethystG', name: 'Ametist Kolluk', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
+      plus: { dmg: 0.14, crit: 0.05 }, glbSet: 'amethyst' },
+    { id: 'aquaG', name: 'Su Perisi Kolluk', rar: 'legend', det: 4, col: 0x3fb8c9, trim: 0xbdf2ff,
+      plus: { atkSpeed: 0.12, magnet: 0.2 }, glbSet: 'aqua' },
+    { id: 'phoenixG', name: 'Alevli Anka Kolluk', rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffb03a,
+      plus: { dmg: 0.16, atkSpeed: 0.08 }, glbSet: 'phoenix' },
+    { id: 'boneguardG', name: 'Kemik Muhafız Kolluk', rar: 'legend', det: 4, col: 0xd8cfa8, trim: 0x4a4438,
+      plus: { armor: 4, dmg: 0.08 }, glbSet: 'boneguard' },
+    { id: 'clockwork_advG', name: 'Çarklı Maceracı Kolluk', rar: 'legend', det: 4, col: 0xb5793a, trim: 0xe0b876,
+      plus: { atkSpeed: 0.14 }, glbSet: 'clockwork_adv' },
+    { id: 'clockwork_knightG', name: 'Çarklı Şövalye Kolluk', rar: 'legend', det: 4, col: 0x8a8f9c, trim: 0xb03a3a,
+      plus: { dmg: 0.1, armor: 3 }, glbSet: 'clockwork_knight' },
+    { id: 'samuraiG', name: 'Kızıl Samuray Kolluk', rar: 'legend', det: 4, col: 0x9c2b3a, trim: 0x1a1a1a,
+      plus: { dmg: 0.18, crit: 0.05 }, glbSet: 'samurai' },
+    { id: 'totemG', name: 'Orman Totemi Kolluk', rar: 'legend', det: 4, col: 0x4a8b3a, trim: 0x8a6b3c,
+      plus: { magnet: 0.3, dmg: 0.06 }, glbSet: 'totem' },
+    { id: 'mushroomG', name: 'Mantar Maceracı Kolluk', rar: 'legend', det: 4, col: 0xb0483a, trim: 0xe8e2cf,
+      plus: { regen: 0.3, magnet: 0.2 }, glbSet: 'mushroom' },
+    { id: 'vanguardG', name: 'Neon Öncü Kolluk', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
+      plus: { atkSpeed: 0.16 }, glbSet: 'vanguard' },
   ],
   boots: [
     { id: 'sandalB', name: 'Sandalet',       rar: 'common', det: 1, col: 0x8a6b45, trim: 0x63502f,
@@ -1880,6 +1944,27 @@ const ITEMS = {
       plus: { speedMul: 0.12, dmg: 0.1 }, minus: { magnet: -0.2 }, set: 'volcano' },
     { id: 'hermesB', name: 'Hermes Kanadı',  rar: 'legend', det: 4, col: 0xe8e2cf, trim: 0xffd479,
       plus: { speedMul: 0.22, atkSpeed: 0.08 } },
+    // ---- GLB seti eşyaları (boots) ----
+    { id: 'amethystB', name: 'Ametist Bot', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
+      plus: { speedMul: 0.14, magnet: 0.3 }, glbSet: 'amethyst' },
+    { id: 'aquaB', name: 'Su Perisi Bot', rar: 'legend', det: 4, col: 0x3fb8c9, trim: 0xbdf2ff,
+      plus: { speedMul: 0.18, regen: 0.3 }, glbSet: 'aqua' },
+    { id: 'phoenixB', name: 'Alevli Anka Bot', rar: 'legend', det: 4, col: 0xd9682e, trim: 0xffb03a,
+      plus: { speedMul: 0.12, dmg: 0.06 }, glbSet: 'phoenix' },
+    { id: 'boneguardB', name: 'Kemik Muhafız Bot', rar: 'legend', det: 4, col: 0xd8cfa8, trim: 0x4a4438,
+      plus: { armor: 4, speedMul: -0.02 }, glbSet: 'boneguard' },
+    { id: 'clockwork_advB', name: 'Çarklı Maceracı Bot', rar: 'legend', det: 4, col: 0xb5793a, trim: 0xe0b876,
+      plus: { speedMul: 0.16 }, glbSet: 'clockwork_adv' },
+    { id: 'clockwork_knightB', name: 'Çarklı Şövalye Bot', rar: 'legend', det: 4, col: 0x8a8f9c, trim: 0xb03a3a,
+      plus: { armor: 3, speedMul: 0.06 }, glbSet: 'clockwork_knight' },
+    { id: 'samuraiB', name: 'Kızıl Samuray Bot', rar: 'legend', det: 4, col: 0x9c2b3a, trim: 0x1a1a1a,
+      plus: { speedMul: 0.14, crit: 0.04 }, glbSet: 'samurai' },
+    { id: 'totemB', name: 'Orman Totemi Bot', rar: 'legend', det: 4, col: 0x4a8b3a, trim: 0x8a6b3c,
+      plus: { speedMul: 0.1, magnet: 0.25 }, glbSet: 'totem' },
+    { id: 'mushroomB', name: 'Mantar Maceracı Bot', rar: 'legend', det: 4, col: 0xb0483a, trim: 0xe8e2cf,
+      plus: { speedMul: 0.1, regen: 0.3 }, glbSet: 'mushroom' },
+    { id: 'vanguardB', name: 'Neon Öncü Bot', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
+      plus: { speedMul: 0.2 }, glbSet: 'vanguard' },
   ],
   cloak: [
     { id: 'raggedK', name: 'Yırtık Pelerin', rar: 'common', det: 1, col: 0x6b6152, trim: 0x50483d,
@@ -1953,6 +2038,47 @@ const ITEM_LORE = {
   spikeS: 'Sadece savunmayan, dokunanı da cezalandıran dikenli bir kalkan.',
   towerS: 'Neredeyse bir insan boyunda, arkasına saklanan herkesi koruyan devasa bir kalkan.',
   aegisS: 'Efsanelerde adı geçen, taşıyanını hemen hemen her darbeye karşı koruyan kutsal kalkan.',
+  // ---- GLB seti eşyaları ----
+  amethystH: 'Ametist kristalinden yontulmuş, zihni berraklaştıran bir miğfer.',
+  amethystC: 'Göğsündeki iri kristal, taşıyanın yaşam gücünü koruma kalkanına dönüştürür.',
+  amethystG: 'Kristal uçlu eldivenler, her yumrukta ince bir titreşim bırakır.',
+  amethystB: 'Kristal tabanlar, yürüyüşü neredeyse sessiz kılan bir rezonans yayar.',
+  aquaH: 'Derin sularda yaşayan bir perinin jöle kabuğundan biçimlenmiş başlık.',
+  aquaC: 'Yarı saydam zırh, yara izlerini yavaşça iyileştiren bir suyla nabız atar.',
+  aquaG: 'Jöle eldivenler suyun içinde de dışında da aynı çeviklikle hareket eder.',
+  aquaB: 'Yüzergen tabanlar, karada bile su üstünde yürür gibi hafif adımlar sağlar.',
+  phoenixH: 'Tepesinde sönmeyen bir alev taşıyan, Anka kuşundan ilham alınmış bir miğfer.',
+  phoenixGlbC: 'Küllerinden yeniden doğan Anka kuşunun sıcaklığını hiç kaybetmeyen bir zırh.',
+  phoenixG: 'Her vuruşta parmak uçlarından kıvılcım saçan alevli eldivenler.',
+  phoenixB: 'Bastığı yerde kısa süreliğine kor parıltısı bırakan bot çifti.',
+  boneguardH: 'Unutulmuş bir devin kafatasından oyulmuş, ürkütücü bir kask.',
+  boneguardC: 'İç içe geçmiş kemiklerden örülmüş, mezarlık sessizliğinde dövülmüş bir zırh.',
+  boneguardG: 'Parmak kemikleri dışa açık bırakılmış, gözü pek bir çift eldiven.',
+  boneguardB: 'Her adımda hafifçe takırdayan, kemikten dövülmüş ağır botlar.',
+  clockwork_advH: 'Dişlileri sürekli dönen, mesafeleri otomatik ölçen bir gözlüklü başlık.',
+  clockwork_advC: 'İçindeki küçük çarkların vızıltısı hiç durmayan bakır bir zırh.',
+  clockwork_advG: 'Parmak eklemlerine gizlenmiş minik dişliler tepkiyi hızlandırır.',
+  clockwork_advB: 'Topuklarındaki yaylar her adımı bir sonrakine hazırlar.',
+  clockwork_knightH: 'Bir çarkçı loncasının ustalık eseri, dişli desenli çelik bir miğfer.',
+  clockwork_knightC: 'Ağır ama dengeli; içindeki mekanizma darbelerin bir kısmını sönümler.',
+  clockwork_knightG: 'Sıkıldığında hafif bir dişli sesi çıkaran, güçlendirilmiş kolluklar.',
+  clockwork_knightB: 'Zemini kavrayan çelik dişli tabanlı, sağlam duruşlu botlar.',
+  samuraiH: 'Kızıl lakeli, boynuzlu bir kabuto — bir savaş alanı efsanesinin mirası.',
+  samuraiC: 'İnce ama keskin darbeler için tasarlanmış, hafif kızıl zırh plakaları.',
+  samuraiG: 'Kılıç kabzasını asla bırakmayan, sıkı dokunmuş kızıl eldivenler.',
+  samuraiB: 'Sessiz ve hızlı adımlar için dövülmüş kızıl tabi çizmeler.',
+  totemH: 'Ormanın en yaşlı totem direğinden oyulmuş, doğayla konuşan bir başlık.',
+  totemC: 'Kabuk ve kökten örülmüş zırh, taşıyanını ormanın gözcüsü kılar.',
+  totemG: 'Toprağa dokunan her el, ormanın bereketinden bir pay alır.',
+  totemB: 'Bastığı yerde kısa ömürlü filizler açan kökten örülmüş botlar.',
+  mushroomH: 'Kızıl benekli dev bir mantar şapkasından biçimlenmiş tuhaf ama işlevsel başlık.',
+  mushroomC: 'Misel iplikleriyle örülmüş zırh, küçük yaraları kendiliğinden onarır.',
+  mushroomG: 'Mantar sporlarıyla kaplı eldivenler dokunduğu her şeyi hafifçe iyileştirir.',
+  mushroomB: 'Nemli orman zeminine mükemmel tutunan mantar tabanlı botlar.',
+  vanguardH: 'Karanlıkta parıldayan neon çizgilerle kaplı, geleceğin öncü kaskı.',
+  vanguardC: 'Enerji hatlarıyla nabız gibi atan, hafif ama yüksek teknoloji bir zırh.',
+  vanguardG: 'Sinir uçlarına bağlı neon devreler tepki süresini keskinleştirir.',
+  vanguardB: 'Taban devreleri her adımda kısa bir enerji darbesiyle iter.',
 };
 
 /* ---------- SET BONUSLARI ----------
@@ -2288,6 +2414,142 @@ function addPiece(holder, geo, rar) {
     for (const child of aura.children) holder.add(child);
   }
 }
+/* ---------- GLB ZIRH SETLERİ (Meshy AI, kullanıcının repoya yüklediği paketler) ----------
+   Her set tek bir birleşik mesh olarak geliyordu (helm+göğüslük+eldiven×2+bot×2
+   hepsi bir arada, aralarında boşluk bırakılarak diziliş halinde); bağlı bileşen
+   analiziyle (union-find) 6 parçaya ayrılıp SimplifyModifier yerine hızlı bir
+   ızgara-kümeleme basitleştirmesiyle ~9-11K üçgene indirildi ve build.mjs'in
+   tek-dosya gömme yoluna DAHİL EDİLMEDİ (60 parça × ~370KB = tek HTML'i devasa
+   şişirirdi) — bunun yerine ilk kuşanıldığında assets/armor_packs/ altından
+   fetch edilip önbelleğe alınıyor (bkz. loadGlbPiece). Kalibrasyon (offset =
+   parçanın kendi dosya-uzayı bbox merkezi, scale = tüm setler için ortak sabit)
+   Ametist seti üstünde görsel deneme-yanılmayla bulundu; karakterin orantısız
+   büyük kafası yüzünden miğfer/göğüslük dosya boyutlarının fazlasıyla üstünde
+   ölçeklenmesi gerekti (README'de detaylı anlatılıyor). */
+const GLB_ARMOR_SETS = {
+  amethyst: { name: "Ametist Kristal Zırhı", pieces: {
+    helm: [-0.7915, 0.071, -0.0231],
+    chest: [-0.3054, -0.0346, -0.0316],
+    glove_A: [0.1171, -0.1421, -0.025],
+    glove_B: [0.3222, -0.1234, -0.0246],
+    boot_A: [0.624, -0.1435, 0.0872],
+    boot_B: [0.8633, -0.1407, 0.0833],
+  } },
+  aqua: { name: "Su Perisi Zırhı", pieces: {
+    helm: [-0.7851, 0.0454, -0.0741],
+    chest: [-0.2884, -0.069, -0.0809],
+    glove_A: [0.3262, -0.1389, -0.0298],
+    glove_B: [0.0917, -0.1487, 0.0055],
+    boot_A: [0.6112, -0.1645, 0.1348],
+    boot_B: [0.8493, -0.1626, 0.1108],
+  } },
+  phoenix: { name: "Alevli Anka Zırhı", pieces: {
+    helm: [-0.7721, 0.0727, -0.0007],
+    chest: [-0.2701, -0.0435, -0.0105],
+    glove_A: [0.3798, -0.185, -0.1018],
+    glove_B: [0.153, -0.1845, -0.0447],
+    boot_A: [0.8567, -0.201, 0.0713],
+    boot_B: [0.6431, -0.2072, 0.0761],
+  } },
+  boneguard: { name: "Kemik Muhafız Zırhı", pieces: {
+    helm: [-0.7751, 0.0014, -0.1641],
+    chest: [-0.3138, 0.0097, -0.0124],
+    glove_A: [0.2825, -0.0562, 0.0822],
+    glove_B: [0.0483, -0.0531, 0.1208],
+    boot_A: [0.5756, -0.0755, 0.2073],
+    boot_B: [0.8239, -0.0742, 0.2037],
+  } },
+  clockwork_adv: { name: "Çarklı Maceracı Zırhı", pieces: {
+    helm: [-0.7859, 0.0528, -0.025],
+    chest: [-0.3006, -0.0356, -0.0019],
+    glove_A: [0.0924, -0.1201, 0.0257],
+    glove_B: [0.3188, -0.0988, -0.0041],
+    boot_A: [0.6167, -0.1522, 0.0935],
+    boot_B: [0.8573, -0.1495, 0.055],
+  } },
+  clockwork_knight: { name: "Çarklı Şövalye Zırhı", pieces: {
+    helm: [-0.7771, 0.0301, -0.0622],
+    chest: [-0.2933, -0.0496, -0.0133],
+    glove_A: [0.103, -0.1284, 0.0251],
+    glove_B: [0.3238, -0.104, 0.0034],
+    boot_A: [0.618, -0.1343, 0.1395],
+    boot_B: [0.8538, -0.1247, 0.0968],
+  } },
+  samurai: { name: "Kızıl Samuray Zırhı", pieces: {
+    helm: [-0.7374, 0.035, -0.1255],
+    chest: [-0.2559, -0.0487, -0.0436],
+    glove_A: [0.1072, -0.0855, 0.0772],
+    glove_B: [0.328, -0.0823, 0.0507],
+    boot_A: [0.8514, -0.1129, 0.1403],
+    boot_B: [0.6224, -0.1086, 0.1816],
+  } },
+  totem: { name: "Orman Totemi Zırhı", pieces: {
+    helm: [-0.7221, 0.0564, -0.0485],
+    chest: [-0.2221, -0.1238, -0.118],
+    glove_A: [0.1429, -0.201, -0.0083],
+    glove_B: [0.3493, -0.1846, -0.0255],
+    boot_A: [0.8616, -0.2146, 0.1197],
+    boot_B: [0.6381, -0.2188, 0.1283],
+  } },
+  mushroom: { name: "Mantar Maceracı Zırhı", pieces: {
+    helm: [-0.7385, 0.0451, -0.0235],
+    chest: [-0.265, -0.0228, -0.0589],
+    glove_A: [0.1203, -0.1112, -0.0288],
+    glove_B: [0.3316, -0.0886, -0.0523],
+    boot_A: [0.614, -0.128, 0.0783],
+    boot_B: [0.8565, -0.1203, 0.0345],
+  } },
+  vanguard: { name: "Neon Öncü Zırhı", pieces: {
+    helm: [-0.784, 0.028, -0.0131],
+    chest: [-0.2815, 0.0086, -0.0193],
+    glove_A: [0.3336, -0.045, -0.0375],
+    glove_B: [0.1189, -0.0711, -0.0032],
+    boot_A: [0.6348, -0.0783, 0.0596],
+    boot_B: [0.8535, -0.0687, 0.0279],
+  } },
+};
+// Yuva -> hangi parça dosyaları (eldiven/bot iki dosyalı: sol/sağ ayrı gerçek
+// mesh'ler, prosedürel sistemdeki gibi ayna ölçeklemesi YOK — her biri kendi
+// gerçek geometrisiyle kendi kemiğine (LeftForeArm/RightForeArm vb.) takılıyor)
+const GLB_SLOT_PIECES = { helm: ['helm'], chest: ['chest'], gloves: ['glove_A', 'glove_B'], boots: ['boot_A', 'boot_B'] };
+// Tüm setlerde ortak (Ametist üstünde kalibre edildi, README'de gerekçesi var)
+const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 1.1, glove_B: 1.1, boot_A: 1.1, boot_B: 1.1 };
+const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
+const glbArmorLoader = new GLTFLoader();
+function loadGlbPiece(setId, piece) {
+  const key = setId + '/' + piece;
+  let p = glbPieceCache.get(key);
+  if (!p) {
+    p = new Promise((resolve, reject) => {
+      // Yol, üretilen ../horde-survivor-3d.html'in (depo kökü) konumuna göre;
+      // build.mjs bu dosyaları GÖMMÜYOR, doğrudan game3d/assets/ altından fetch ediliyor.
+      glbArmorLoader.load(`game3d/assets/armor_packs/${setId}_${piece}.glb`,
+        gltf => resolve(gltf.scene), undefined, reject);
+    });
+    glbPieceCache.set(key, p);
+  }
+  return p;
+}
+// Bir yuvanın GLB seti eşyasını sahneye yansıt — asenkron (ilk kuşanmada ağdan
+// gelir); istek tamamlandığında yuva hâlâ AYNI seti bekliyorsa eklenir (arada
+// hızlıca başka bir eşyaya geçilmişse eski istek sonucu sessizce atlanır).
+function attachGlbArmor(slot, holder, setId, reqToken) {
+  const def = GLB_ARMOR_SETS[setId]; if (!def) return;
+  const pieceNames = GLB_SLOT_PIECES[slot];
+  const idx = gearNodes[slot].indexOf(holder);
+  const pieceName = pieceNames[idx] ?? pieceNames[0];
+  loadGlbPiece(setId, pieceName).then(scene => {
+    if (holder.userData.glbReq !== reqToken) return;   // bu arada eşya değişmiş
+    const inst = scene.clone(true);
+    const c = def.pieces[pieceName];
+    inst.position.set(-c[0], -c[1], -c[2]);
+    const wrap = new THREE.Group();
+    wrap.add(inst);
+    wrap.scale.setScalar(GLB_PIECE_SCALE[pieceName] || 1);
+    holder.add(wrap);
+  }).catch(err => console.warn('zırh parçası yüklenemedi:', setId, pieceName, err));
+}
+let glbReqSeq = 0;
 // Kuşanılanları sahneye yansıt (kademe değiştikçe çağrılır)
 function refreshGearVisuals() {
   for (const slot of GEAR_SLOTS) {
@@ -2296,9 +2558,11 @@ function refreshGearVisuals() {
     for (const holder of holders) {
       while (holder.children.length) {
         const c = holder.children.pop();
-        if (c.geometry) c.geometry.dispose();
+        c.traverse(o => { if (o.geometry) o.geometry.dispose(); });
       }
+      holder.userData.glbReq = ++glbReqSeq;   // bekleyen eski fetch'leri geçersiz kıl
       if (!it) continue;
+      if (it.glbSet) { attachGlbArmor(slot, holder, it.glbSet, holder.userData.glbReq); continue; }
       const geo = mergeGeometries(SHAPE[slot](it.det, it), false);
       if (geo) addPiece(holder, geo, it.rar);
     }

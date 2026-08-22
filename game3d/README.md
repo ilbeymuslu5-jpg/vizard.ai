@@ -541,3 +541,74 @@ yazmak yeniden başlatmadan sonra kayboluyordu (ölçüldü).
 
 Doğrulama: paneldeki 34 düğmenin tamamı katı CSP altında tek tek tıklandı,
 sıfır hata; üretim paketinde test kodu aranıp bulunmadığı doğrulandı.
+
+## Meshy AI zırh setleri (10 efsanevi set, GLB)
+
+Kullanıcı repoya 10 adet Meshy AI tarafından üretilmiş tam-vücut zırh modeli
+yükledi (`model pack 1/`, `model pack 2/`, her biri ~7-8MB Draco'lu GLB).
+Bunları oyuna eklemek üç ayrı sorunu çözmeyi gerektirdi:
+
+**1) Her dosya TEK bir birleşik mesh** — kask/göğüslük/eldiven/bot ayrı
+düğümler/nesneler değil, hepsi tek bir `mesh` primitive'i içinde (muhtemelen
+Meshy'nin "texture-optimized" export adımı hepsini birleştiriyor). Çözüm:
+üçgenlerin paylaştığı vertex indekslerinden **bağlı bileşen analizi**
+(union-find) — her set 300-36.000+ arası "ada"ya ayrıldı (çoğu tek üçgenlik
+gürültü). Adalar önce SADECE bbox/tri istatistiğiyle hızlıca taranıp (geometri
+kurmadan — 36K ada için bile ~2sn), sonra:
+- 4 ana bant (miğfer/göğüslük/eldiven/bot) X ekseninde ağırlıklı 1B k-means'le,
+- eldiven/bot bantları kendi içinde sol/sağ için TAM 3B k-means(k=2)'le
+  (varsayılan bir eksen yerine — Ametist'te botlar Z değil X'te ayrılıyordu)
+
+ayrılıp gerçek geometri sadece bu 6 grup için kuruldu. İş akışı ve kullanılan
+script'ler `scratch_glb_split.html`/`scratch_calib.html` (depoya girmez,
+`.gitignore`'da `scratch_*.html`) — three.js'i tarayıcıda (Playwright) çalıştırıp
+Draco decode + kümeleme + basitleştirme + `GLTFExporter` ile ayrı GLB'ler üretti.
+
+**2) ~1M vertex/parça — SimplifyModifier kullanılamayacak kadar yavaş**
+(300K+ vertex'te dakikalarca sürüp bitmiyordu). Yerine O(n) ızgara tabanlı bir
+basitleştirme yazıldı (`decimateGrid`): vertex'leri bir hücre ızgarasına
+kümeleyip her hücreyi tek noktaya indiriyor, dejenere üçgenleri atıyor, hedef
+üçgen sayısına bisection ile yaklaşıyor. ~9-11K üçgene indirildi (orijinalin
+~%3'ü) — saniyeler içinde bitiyor, sonuç biraz "kristal/faceted" görünüyor ama
+kabul edilebilir (bazı setlerde temaya bile uyuyor — örn. Ametist).
+
+**3) Tek dosya boyutu**: 60 parça × ~370KB ≈ 22MB — mevcut "tek HTML"
+gömme yoluna (`build.mjs`, base64) **DAHİL EDİLMEDİ** (kullanıcıyla bu ödünleşim
+netleştirildi: Artifact/tek-dosya taşınabilirliği bu parçalar için kayboluyor,
+karşılığında sayfa boyutu makul kalıyor). Parçalar `game3d/assets/armor_packs/`
+altında ayrı dosyalar; `loadGlbPiece()` bir eşya ilk kez kuşanıldığında
+`GLTFLoader` ile fetch edip önbelleğe alıyor (`glbPieceCache`). Bu yüzden bu
+setler yalnız **http üzerinden servis edilince** çalışır — `file://` ile açılan
+tek dosyada (fetch CORS kısıtı) veya Artifact'e gömülü sürümde görünmezler;
+geri kalan her şey (silah modelleri, prosedürel zırh, UI Pack) etkilenmedi.
+
+**Karaktere oturtma**: `GEAR_SLOTS`'un mevcut kemik-bağlama sistemi
+(`attachNode`) aynen kullanıldı — `holder.scale` zaten kemik-yerel/dünya birimi
+dönüşümünü (`U`) uyguluyor, bu yüzden GLB parçası `holder`'a **ölçek 1 ile**
+eklenmeli (prosedürel `SHAPE` fonksiyonlarıyla aynı kural). İlk denemede bunun
+yerine `1/U` ile bölünmüştü — parça nokta kadar küçülüp kayboluyordu; doğrusu
+"parça zaten dünya birimindeymiş gibi davran" oldu. Kalibrasyon (offset =
+parçanın kendi dosya-uzayı bbox merkezi, scale = miğfer 2.3×, göğüslük 1.8×,
+eldiven/bot 1.1×) Ametist seti üstünde görsel deneme-yanılmayla bulunup diğer
+9 sete de uygulandı (bbox merkezleri/boyutları setler arası şaşırtıcı derecede
+tutarlı çıktı — aynı üretim boru hattından geldikleri için). **Bilinen sınır**:
+bu oyunun karakteri orantısız büyük bir kafaya sahip (çoçuksu/"chibi" stil),
+Meshy modelleri ise normal insan oranlarına göre üretilmiş — miğfer/göğüslük
+bu yüzden kafayı/gövdeyi TAM oturarak sarmıyor (gözlük deliği gözlerle birebir
+hizalı değil gibi), yine de tanınabilir ve tematik olarak doğru duruyor.
+Piksel-mükemmel hizalama istenirse her set için ayrı ince ayar gerekir.
+
+**Yeni eşyalar**: her set 4 parça (miğfer/göğüslük/kolluk/bot — pelerin/kalkan
+pakette yok) `legend` nadirlikte 40 yeni eşya olarak `ITEMS`'e eklendi
+(`glbSet: '<setId>'` alanıyla işaretli), her birine bir cümlelik tasvir
+(`ITEM_LORE`) yazıldı. Mevcut 6 prosedürel efsanevi eşyanın YERİNE değil,
+ONLARA EK olarak eklendiler (kullanıcı onayı: "her birini ayrı ayrı eklersin").
+Set bonusu (`SET_BONUS`) sistemine BAĞLANMADI — kapsamı sınırlı tutmak için
+bilinçli bir tercih; istenirse 10 yeni tema/2-4 parça bonusu ayrı bir iş.
+`amethyst` setinin göğüslük id'si `phoenixGlbC` (mevcut prosedürel `phoenixC`
+"Anka Zırhı" ile çakışmasın diye).
+
+Doğrulama: 10 setin tamamı toplu script ile işlendi (`out/_summary.json`),
+5 set görsel olarak render edilip incelendi, 2 set (`amethyst`, `samurai`)
+gerçek oyunda kuşanılıp envanter önizlemesinde sıfır konsol hatasıyla
+doğrulandı.
