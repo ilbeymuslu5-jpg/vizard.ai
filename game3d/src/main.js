@@ -2434,9 +2434,14 @@ function loadGlbPiece(setId, piece) {
   if (!p) {
     p = new Promise((resolve, reject) => {
       // Yol, üretilen ../horde-survivor-3d.html'in (depo kökü) konumuna göre;
-      // build.mjs bu dosyaları GÖMMÜYOR, doğrudan game3d/assets/ altından fetch ediliyor.
-      glbArmorLoader.load(`game3d/assets/armor_packs/${setId}_${piece}.glb`,
-        gltf => resolve(gltf.scene), undefined, reject);
+      // build.mjs normalde bu dosyaları GÖMMÜYOR, doğrudan game3d/assets/
+      // altından fetch ediliyor. --embed-armor ile derlenen (ör. Artifact)
+      // paketlerde ise window.__ARMOR_GLB_B64 doludur — dış istek yapılamayan
+      // sandbox'larda o hâlde data: URI'den yüklenir.
+      const b64map = window.__ARMOR_GLB_B64;
+      const b64 = b64map && b64map[`${setId}_${piece}`];
+      const url = b64 ? `data:model/gltf-binary;base64,${b64}` : `game3d/assets/armor_packs/${setId}_${piece}.glb`;
+      glbArmorLoader.load(url, gltf => resolve(gltf.scene), undefined, reject);
     });
     glbPieceCache.set(key, p);
   }

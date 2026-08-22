@@ -13,6 +13,16 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const outFile = process.argv[2] || path.join(DIR, '..', 'horde-survivor-3d.html');
 const artifactMode = process.argv.includes('--artifact');
 const testMode = process.argv.includes('--test');
+// --embed-armor[=dizin] : zırh GLB'lerini de (varsayılan assets/armor_packs,
+// veya verilen dizin — ör. Artifact için sıkıştırılmış "lite" kopya) base64
+// olarak göm. Normal derlemede bu KAPALI: zırhlar depo klasöründen ağ
+// üzerinden tembel yüklenir (bkz. loadGlbPiece); Artifact sandbox'ında dış
+// dosya isteği YAPILAMADIĞI için orada zırhların görünmesi bu bayrağı ister.
+const embedArmorArg = process.argv.find(a => a.startsWith('--embed-armor'));
+const embedArmor = !!embedArmorArg;
+const armorDir = embedArmorArg && embedArmorArg.includes('=')
+  ? path.resolve(embedArmorArg.slice(embedArmorArg.indexOf('=') + 1))
+  : path.join(DIR, 'assets', 'armor_packs');
 
 const res = await build({
   entryPoints: [path.join(DIR, 'src', testMode ? 'test-entry.js' : 'main.js')],
@@ -56,6 +66,13 @@ const itemIcons = {};
 for (const key in ITEM_ICON_FILES) {
   itemIcons[key] = fs.readFileSync(path.join(DIR, 'assets', ITEM_ICON_FILES[key])).toString('base64');
 }
+const armorGlb = {};
+if (embedArmor) {
+  for (const f of fs.readdirSync(armorDir)) {
+    if (!f.endsWith('.glb')) continue;
+    armorGlb[f.slice(0, -4)] = fs.readFileSync(path.join(armorDir, f)).toString('base64');
+  }
+}
 
 const TITLE = 'HORDE SURVIVOR 3D — İzometrik Bullet Heaven' + (testMode ? ' [TEST]' : '');
 
@@ -66,7 +83,7 @@ if(!m){m=document.createElement("meta");m.name="viewport";document.head.appendCh
 m.content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 addEventListener("load",function(){setTimeout(function(){dispatchEvent(new Event("resize"));},60);});})();</script>`;
 
-const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};window.__ITEM_ICONS_B64=${JSON.stringify(itemIcons)};</script>\n<script>${js}</script>`;
+const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};window.__ITEM_ICONS_B64=${JSON.stringify(itemIcons)};window.__ARMOR_GLB_B64=${embedArmor ? JSON.stringify(armorGlb) : 'null'};</script>\n<script>${js}</script>`;
 
 let out;
 if (artifactMode) {
@@ -92,8 +109,9 @@ ${payload}
 
 fs.writeFileSync(outFile, out);
 const kb = n => (n / 1024).toFixed(0) + ' KB';
+const armorKb = embedArmor ? kb(Object.values(armorGlb).reduce((s, v) => s + v.length, 0)) : '0';
 console.log(`${path.basename(outFile)}: ${kb(Buffer.byteLength(out))}` +
-  `  (js ${kb(js.length)} · model ${kb(glb.length)})${testMode ? ' [TEST]' : ''}`);
+  `  (js ${kb(js.length)} · model ${kb(glb.length)} · armor ${armorKb})${testMode ? ' [TEST]' : ''}`);
 
 // Üretim paketine test kodu sızmadığını doğrula (sessizce bozulmasın)
 if (!testMode && /TEST PANEL|tpBadge|initTestPanel/.test(out))
