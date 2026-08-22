@@ -612,3 +612,52 @@ Doğrulama: 10 setin tamamı toplu script ile işlendi (`out/_summary.json`),
 5 set görsel olarak render edilip incelendi, 2 set (`amethyst`, `samurai`)
 gerçek oyunda kuşanılıp envanter önizlemesinde sıfır konsol hatasıyla
 doğrulandı.
+
+## Sadeleştirme: sadece 4 yuva, sadece GLB setleri, sade giriş ekranı
+
+Kullanıcı isteği üzerine büyük bir temizlik yapıldı:
+
+- **Eski 36 prosedürel eşya + pelerin/kalkan yuvaları tamamen kaldırıldı.**
+  `GEAR`'dan `cloak`/`shield` silindi — artık sadece 4 yuva var: miğfer,
+  göğüslük, kolluk, bot. `ITEMS` sadece 40 GLB eşyasını içeriyor (`glbSet`
+  alanlı). `SHAPE.cloak`/`SHAPE.shield` fonksiyonları ve eski `forest`/
+  `volcano`/`ruins`/`glacier` set-bonusu mekanikleri (`leafShield`/
+  `burnTrail`/vb., `updateSkillTimers`'da) koda hâlâ duruyor ama artık hiç
+  tetiklenmiyor — ulaşılamaz, zararsız ölü kod (silinmedi, risk/fayda
+  dengesi gözetildi). **Bulunan gerçek bir kırılma**: "Miras" (kalıcı,
+  koşuya deri teçhizatla başlama) sistemi `HEIR_MAX=6` sabit değeriyle
+  6 yuvayı varsayıyordu; 4 yuvaya düşünce `ITEMS['shield'][0]` gibi artık var
+  olmayan bir diziye erişip çökerdi — `HEIR_MAX` artık `GEAR_SLOTS.length`'e
+  bağlı, `HEIR_ORDER` 4 yuvaya kısaltıldı.
+- **40 GLB eşyasına `set:` alanı eklendi, 10 yeni SET_BONUS tanımlandı**
+  (ör. Ametist 2pc: Kritik +%4, 4pc: Hasar +%10) — sade `apply` tabanlı stat
+  bonusları, yeni bir çalışma-anı mekaniği eklenmedi (risk azaltmak için).
+  Mevcut set-bonusu UI'ı (`invSets`, `equippedSetCounts()`) hiç değişmeden
+  yeni içerikle anlamlı hale geldi.
+- **Gerçek ikonlar**: kullanıcının repoya yüklediği genel bir RPG ikon
+  paketinden (`claude/oyun-gelistirme-1kd8ez` dalındaki `items 1`–`items 8`
+  klasörleri, 132 PNG) 9 tanesi seçildi — 4 yuva ikonu (miğfer/göğüslük/
+  kolluk/bot) + 5 istatistik rozeti (can/hasar/zırh/hız/kritik; saldırı
+  hızı/mıknatıs/rejen için iyi eşleşen bir ikon yoktu, emoji kaldı). Beyaz
+  arka planlı 3 ikon (göğüslük/kolluk/bot) Pillow ile şeffaflaştırıldı
+  (`r>235 && g>235 && b>235` eşiğiyle). Envanterdeki canvas'a-elle-çizilen
+  `drawItemIcon()` SHAPE sistemi artık YALNIZCA ikon paketi yüklenemezse
+  geri düşüş olarak kullanılıyor (`ITEM_ICON_URL` boşsa). İkonlar küçük
+  (~230KB toplam) olduğu için GLB parçalarının aksine `build.mjs` ile tek
+  dosyaya gömüldü (`window.__ITEM_ICONS_B64`).
+- **Giriş ekranı sadeleştirildi**: `#menu` artık sadece başlık + 4 sınıf
+  kartı + BAŞLA butonu. Alt metin, biyom listesi ve KOLEKSİYON/YÜKSELTMELER/
+  YETENEK sekmeli paneli (kalıcı altın dükkanı + yetenek ağacı) kaldırıldı —
+  kullanıcı onayıyla `#paused` (duraklat) ekranına taşındı, DEVAM ET/ENVANTER/
+  BAŞA DÖN düğmelerinin altında sürekli görünür. Hiçbir JS değişikliği
+  gerekmedi: sekme geçişi (`.tab` tıklama) ve panel doldurma (`renderShop()`/
+  `renderGear()`/`renderSkills()`) DOM'daki elemanların id'sine göre çalışıyor,
+  hangi overlay'in içinde olduklarına bakmıyor.
+- **Yetenek ağacına dokunulmadı** — kullanıcı bunu ayrıca birlikte
+  şekillendirmek istedi, sadece konteyner ekranı değişti.
+
+Doğrulama: 4 sınıfın her biriyle koşu başlatılıp GEAR_SLOTS'taki her yuvaya
+rastgele bir GLB eşya kuşandırıldı, envanter açılıp kapatıldı, koşu
+sıfırlanıp menüye dönüldü — sıfır konsol hatası. Duraklat ekranındaki üç
+sekme (KOLEKSİYON/YÜKSELTMELER/YETENEK) tek tek açılıp ekran görüntüsüyle
+doğrulandı.

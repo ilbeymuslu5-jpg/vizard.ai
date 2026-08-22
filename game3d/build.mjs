@@ -42,6 +42,20 @@ const uiSprites = {};
 for (const key in UI_SPRITE_FILES) {
   uiSprites[key] = fs.readFileSync(path.join(DIR, 'assets', UI_SPRITE_FILES[key])).toString('base64');
 }
+// Envanter yuva ikonları + kahraman istatistik rozetleri (kullanıcının
+// repoya yüklediği genel RPG ikon paketinden seçildi) — küçük (toplam
+// ~230KB), GLB zırh parçalarının aksine tek dosyaya gömülmesi sorun değil.
+const ITEM_ICON_FILES = {
+  slotHelm: 'icons/slot_helm.png', slotChest: 'icons/slot_chest.png',
+  slotGloves: 'icons/slot_gloves.png', slotBoots: 'icons/slot_boots.png',
+  statHp: 'icons/stat_hp.png', statDmg: 'icons/stat_dmg.png',
+  statArmor: 'icons/stat_armor.png', statSpeed: 'icons/stat_speed.png',
+  statCrit: 'icons/stat_crit.png',
+};
+const itemIcons = {};
+for (const key in ITEM_ICON_FILES) {
+  itemIcons[key] = fs.readFileSync(path.join(DIR, 'assets', ITEM_ICON_FILES[key])).toString('base64');
+}
 
 const TITLE = 'HORDE SURVIVOR 3D — İzometrik Bullet Heaven' + (testMode ? ' [TEST]' : '');
 
@@ -52,7 +66,7 @@ if(!m){m=document.createElement("meta");m.name="viewport";document.head.appendCh
 m.content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 addEventListener("load",function(){setTimeout(function(){dispatchEvent(new Event("resize"));},60);});})();</script>`;
 
-const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};</script>\n<script>${js}</script>`;
+const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};window.__ITEM_ICONS_B64=${JSON.stringify(itemIcons)};</script>\n<script>${js}</script>`;
 
 let out;
 if (artifactMode) {

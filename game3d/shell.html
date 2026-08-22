@@ -242,7 +242,7 @@
     background:rgba(10,10,20,.5); border:2px solid rgba(255,255,255,.16);
     display:flex; align-items:center; justify-content:center; position:relative;
     cursor:var(--ui-cursor-hand, pointer); font-family:inherit; }
-  .railSlot canvas{ width:38px; height:38px; }
+  .railSlot canvas, .railSlot img.ico{ width:38px; height:38px; object-fit:contain; }
   .railSlot .ph{ font-size:19px; opacity:.35; }
   .railSlot.on{ border-color:#ffd479; background:rgba(70,52,10,.55); box-shadow:0 0 12px rgba(255,212,121,.5); }
   .railSlot:active{ transform:scale(.94); }
@@ -257,6 +257,7 @@
   .hsCell{ background:rgba(255,255,255,.05); border-radius:8px; padding:6px 4px;
     display:flex; flex-direction:column; align-items:center; gap:1px; }
   .hsIco{ font-size:14px; }
+  img.hsIco{ width:22px; height:22px; object-fit:contain; }
   .hsCell b{ font-size:12px; color:#ffd479; font-variant-numeric:tabular-nums; }
   .hsCell small{ font-size:8px; color:#7f8aa6; letter-spacing:.3px; text-align:center; line-height:1.1; }
   .heroDetail{ background:rgba(0,0,0,.24); border-radius:10px; padding:9px 11px; margin-bottom:8px; }
@@ -306,6 +307,7 @@
     padding:6px 4px; border-radius:8px; cursor:var(--ui-cursor-hand, pointer); font-family:inherit;
     background:rgba(255,255,255,.05); border:2px solid transparent; color:#dbe2f0; }
   .gitem .gi{ font-size:19px; line-height:1.1; }
+  img.gi{ width:22px; height:22px; object-fit:contain; }
   /* Dar telefonda 4 parçalı satırda isim sığmıyordu: kesmek yerine sarsın */
   .gitem .gn{ font-size:9.5px; font-weight:700; line-height:1.2; text-align:center;
     overflow-wrap:anywhere; max-width:100%; }
@@ -330,26 +332,28 @@
 
 <div id="menu" class="overlay">
   <div class="title">Horde Survivor 3D</div>
-  <div class="subtitle">
-    İzometrik arenada sonsuz sürüye karşı 15 dakika hayatta kal.
-    Kahraman <b>sade</b> başlar; düşen zırh parçalarıyla üstü adım adım donanır.
-    Silahların <b>otomatik</b> ateş eder — senin işin kaçmak, ganimet toplamak ve doğru kartı seçmek.
-  </div>
   <div class="classPick">
     <div class="classPickLbl">KARAKTER SINIFI</div>
     <div class="classRow" id="classRow"></div>
     <div class="classInfo" id="classInfo"></div>
   </div>
-  <div class="biomes">
-    <span class="biome" style="border-color:#4a8b3a">🌲 Yaprak Dökücü Orman</span>
-    <span class="biome" style="border-color:#c2ad80">⛰️ Kayalık Plato</span>
-    <span class="biome" style="border-color:#2f6ea8">🏛️ Batık Harabeler</span>
-    <span class="biome" style="border-color:#ff5a1f">🌋 Volkanik Çorak Arazi</span>
-    <span class="biome" style="border-color:#00CED1">🧊 Buzul (Sv.20+ final boss teması)</span>
-  </div>
   <button class="btn" id="startBtn">OYUNA BAŞLA</button>
-  <!-- İki panel SEKMELİ: alt alta konsaydı menü uzayıp BAŞLA düğmesini
-       küçük ekranlarda görüş alanının dışına itiyordu. -->
+</div>
+
+<div id="levelup" class="overlay">
+  <div class="lvHead">SEVİYE ATLADIN!</div>
+  <div class="lvSub" id="lvSub">BİR YETENEK SEÇ</div>
+  <div id="cards"></div>
+</div>
+
+<div id="paused" class="overlay">
+  <div class="title" style="font-size:clamp(24px,7vw,48px)">DURAKLATILDI</div>
+  <div class="subtitle" id="pauseInv"></div>
+  <button class="btn" id="resumeBtn">DEVAM ET</button>
+  <button class="btn ghost" id="invBtn">🎒 ENVANTER</button>
+  <button class="btn ghost" id="quitBtn">BAŞA DÖN</button>
+  <!-- Kalıcı yükseltme dükkanı + koleksiyon + yetenek ağacı buraya taşındı:
+       giriş ekranı artık sadece sınıf seçimi (kullanıcı isteği). -->
   <div class="shopWrap">
     <div class="shopHead">
       <div class="tabs">
@@ -378,20 +382,6 @@
   <div class="hint">MOBİL: SOL yarı = yürüme, SAĞ yarı = nişan &nbsp;•&nbsp; ⚡ ile atıl<br>
     PC: WASD ile yürü, FARE ile nişan al &nbsp;•&nbsp; Boşluk/Shift: atılma
     &nbsp;•&nbsp; I: envanter &nbsp;•&nbsp; P: duraklat</div>
-</div>
-
-<div id="levelup" class="overlay">
-  <div class="lvHead">SEVİYE ATLADIN!</div>
-  <div class="lvSub" id="lvSub">BİR YETENEK SEÇ</div>
-  <div id="cards"></div>
-</div>
-
-<div id="paused" class="overlay">
-  <div class="title" style="font-size:clamp(24px,7vw,48px)">DURAKLATILDI</div>
-  <div class="subtitle" id="pauseInv"></div>
-  <button class="btn" id="resumeBtn">DEVAM ET</button>
-  <button class="btn ghost" id="invBtn">🎒 ENVANTER</button>
-  <button class="btn ghost" id="quitBtn">BAŞA DÖN</button>
 </div>
 
 <div id="inv" class="overlay invOv">
