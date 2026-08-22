@@ -2430,7 +2430,10 @@ const GLB_SLOT_PIECES = { helm: ['helm'], chest: ['chest'], gloves: ['glove_A', 
    baldırın opak gövde-mesh'inin İÇİNE gömüyordu — dışarıdan görününce "eksik
    bot" gibi duruyordu. Diğer 3 parçadan farklı olarak bot burada BÜYÜTÜLEREK
    dışarı taşırılıyor (10 setin hepsinde aynı sorun, tek ortak sabitle çözüldü). */
-const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 1.1, glove_B: 1.1, boot_A: 2.2, boot_B: 2.2 };
+/* eldiven de bot ile aynı sorunu yaşıyordu: ince bilek/el geometrisi
+   kalın kol etinin içinde neredeyse tamamen kayboluyordu (bkz. yukarıdaki
+   bot notu) — aynı şekilde büyütülerek dışarı taşırıldı. */
+const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 2.0, glove_B: 2.0, boot_A: 2.2, boot_B: 2.2 };
 const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
 const glbArmorLoader = new GLTFLoader();
 function loadGlbPiece(setId, piece) {
