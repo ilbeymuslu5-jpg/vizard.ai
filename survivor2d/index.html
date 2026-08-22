@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0b1a">
+<title>Survivor 2D — Prototip</title>
+<!-- CDN'e bağımlı Tailwind Play script'i yerine build zamanında derlenmiş,
+     tamamen yerel bir stylesheet: internet erişimi olmadan/kısıtlı ağlarda
+     da çalışsın diye (bkz. dist/style.css nasıl üretilir: README.md). -->
+<link rel="stylesheet" href="dist/style.css">
+<style>
+  html,body{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#0d0b1a;
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif; -webkit-tap-highlight-color:transparent;
+    user-select:none; touch-action:none; }
+  /* 1080x1920 portre çerçevesi: geniş ekranlarda ortalanır ve mektup-kutusu (letterbox) olur */
+  #viewport{ position:relative; width:100vw; height:100vh; max-width:calc(100vh * 9 / 16);
+    max-height:calc(100vw * 16 / 9); margin:0 auto; overflow:hidden;
+    box-shadow:0 0 60px rgba(0,0,0,.6); background:#141225; }
+  #game-canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+</style>
+</head>
+<body>
+  <div id="viewport">
+    <canvas id="game-canvas"></canvas>
+    <div id="hud-root" class="absolute inset-0 z-10"></div>
+    <div id="inventory-root" class="absolute inset-0 z-30 hidden"></div>
+    <div id="levelup-root" class="absolute inset-0 z-40 hidden"></div>
+
+    <div id="gameover-root" class="absolute inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+      <div class="text-3xl font-black text-rose-400 tracking-widest [text-shadow:0_2px_10px_rgba(255,60,80,.6)]">YOU DIED</div>
+      <div id="go-stats" class="text-sm text-white/80"></div>
+      <button id="restart-btn" class="mt-2 px-8 py-3 rounded-xl bg-gradient-to-b from-amber-300 to-amber-600
+        border-2 border-yellow-200 font-black text-amber-950 shadow-lg active:scale-95 transition-transform">RESTART</button>
+    </div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
