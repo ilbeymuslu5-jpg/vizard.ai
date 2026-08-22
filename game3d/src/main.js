@@ -2425,7 +2425,12 @@ const GLB_ARMOR_SETS = {
 // gerçek geometrisiyle kendi kemiğine (LeftForeArm/RightForeArm vb.) takılıyor)
 const GLB_SLOT_PIECES = { helm: ['helm'], chest: ['chest'], gloves: ['glove_A', 'glove_B'], boots: ['boot_A', 'boot_B'] };
 // Tüm setlerde ortak (Ametist üstünde kalibre edildi, README'de gerekçesi var)
-const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 1.1, glove_B: 1.1, boot_A: 1.1, boot_B: 1.1 };
+/* bot: eldiven/miğfer/göğüslükle AYNI kalibrasyon formülü (parça kendi
+   dosya-uzayı bbox merkezinde) ayak/bacak bölgesinde onu neredeyse tamamen
+   baldırın opak gövde-mesh'inin İÇİNE gömüyordu — dışarıdan görününce "eksik
+   bot" gibi duruyordu. Diğer 3 parçadan farklı olarak bot burada BÜYÜTÜLEREK
+   dışarı taşırılıyor (10 setin hepsinde aynı sorun, tek ortak sabitle çözüldü). */
+const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 1.1, glove_B: 1.1, boot_A: 2.2, boot_B: 2.2 };
 const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
 const glbArmorLoader = new GLTFLoader();
 function loadGlbPiece(setId, piece) {
@@ -3807,6 +3812,48 @@ function renderInventory() {
     ['common', 'rare', 'epic', 'legend'].map(k =>
       `<b style="color:${RAR[k].col}">${RAR[k].name} %${o[k].toFixed(0)}</b>`).join(' · ');
 }
+/* Envanter önizlemesi AYNI 3B sahneyi kullanır (bkz. frame() içindeki
+   kamera yakınlaştırma) ama arenanın geri kalanı (zemin, su, düşman,
+   efektler) arkada görünmeye devam ediyordu — karakter arka plan
+   karmaşasına karışıyordu. Envantere girerken karakter (+ışıklar) DIŞINDAKİ
+   her sahne nesnesi gizlenir, yerine sade bir taban ışıltısı konur; eski
+   görünürlük durumları çıkışta aynen geri yüklenir (ör. bossMesh zaten
+   gizliydi — yanlışlıkla görünür kalmasın). */
+const previewPedestalTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,199,120,.4)');
+  grd.addColorStop(0.55, 'rgba(255,199,120,.14)');
+  grd.addColorStop(1, 'rgba(255,199,120,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const previewPedestal = new THREE.Mesh(
+  new THREE.CircleGeometry(2.6, 32),
+  new THREE.MeshBasicMaterial({ map: previewPedestalTex, transparent: true, depthWrite: false }));
+previewPedestal.rotation.x = -Math.PI / 2;
+previewPedestal.renderOrder = -1;
+previewPedestal.visible = false;
+scene.add(previewPedestal);
+let _invWorldSnapshot = null;
+function setPreviewIsolation(on) {
+  if (on) {
+    if (_invWorldSnapshot) return;
+    _invWorldSnapshot = [];
+    for (const child of scene.children) {
+      if (child === P.model || child === previewPedestal || child.isLight) continue;
+      _invWorldSnapshot.push([child, child.visible]);
+      child.visible = false;
+    }
+    previewPedestal.visible = true;
+  } else {
+    if (!_invWorldSnapshot) return;
+    for (const [child, vis] of _invWorldSnapshot) child.visible = vis;
+    _invWorldSnapshot = null;
+    previewPedestal.visible = false;
+  }
+}
 function openInventory() {
   if (G.state !== 'PLAY' && G.state !== 'PAUSED') return;
   G.prevState = G.state; G.state = 'INV';
@@ -3814,12 +3861,14 @@ function openInventory() {
   elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show');
   if (elBagBtn) elBagBtn.classList.remove('show');
   elInv.classList.add('show');
+  setPreviewIsolation(true);
 }
 function closeInventory() {
   elInv.classList.remove('show');
   G.state = G.prevState === 'PAUSED' ? 'PAUSED' : 'PLAY';
   elPauseBtn.classList.add('show'); elDashBtn.classList.add('show');
   if (elBagBtn) elBagBtn.classList.add('show');
+  setPreviewIsolation(false);
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -3852,6 +3901,7 @@ function startGame() {
   elMenu.classList.remove('show'); elOver.classList.remove('show');
   elPaused.classList.remove('show'); elLevelup.classList.remove('show');
   if (elInv) elInv.classList.remove('show');
+  setPreviewIsolation(false);
   elPauseBtn.classList.add('show');
   elDashBtn.classList.add('show');
   if (elBagBtn) elBagBtn.classList.add('show');
@@ -3871,6 +3921,7 @@ function showPauseInfo() {
 function gameOver(win) {
   G.state = 'OVER'; G.win = win;
   if (elInv) elInv.classList.remove('show');
+  setPreviewIsolation(false);
   META.bank += G.gold; META.skillPts += G.skillPtsEarned; metaSave(); renderShop();  // toplanan altın + yetenek puanı kalıcı
   win ? SFX.win() : SFX.over();
   elPauseBtn.classList.remove('show');
@@ -4106,6 +4157,7 @@ function frame(now) {
     const face = Math.PI / 4 + MODEL_YAW;
     const d = ((face - P.model.rotation.y + Math.PI * 3) % TAU) - Math.PI;
     P.model.rotation.y += d * Math.min(1, rdt * 6);
+    previewPedestal.position.set(P.x, MODEL_Y + 0.02, P.z);
   }
 
   // kamera + ekran sallantısı
