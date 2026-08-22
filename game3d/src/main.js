@@ -88,6 +88,11 @@ const UI_BUTTONS = {
   ghost:          { x: 0, y: 49,  w: 190, h: 49 },
   ghostActive:    { x: 0, y: 98,  w: 190, h: 45 },
 };
+// Panel sprite'ları: büyük kapsayıcılar (panel_brown) + iç kutular (panelInset_beige)
+const UI_PANELS = {
+  panelBrown:       { x: 0,   y: 376, w: 100, h: 100 },
+  panelInsetBeige:  { x: 200, y: 294, w: 93,  h: 94 },
+};
 let uiImg = null;
 {
   const b64 = window.__UIPACK_B64;
@@ -96,16 +101,20 @@ let uiImg = null;
     img.onload = () => {
       uiImg = img;
       // CSS border-image tüm görseli diliyor; atlas'tan alt-dikdörtgen kırpamıyor,
-      // bu yüzden her düğme sprite'ı kendi küçük tuvaline kırpılıp ayrı data: URL olarak
+      // bu yüzden her sprite kendi küçük tuvaline kırpılıp ayrı data: URL olarak
       // kök elemana bağlanıyor (böylece her biri kendi doğal boyutunda border-image olabilir).
       const cv = document.createElement('canvas'), cx = cv.getContext('2d');
-      for (const key in UI_BUTTONS) {
-        const s = UI_BUTTONS[key];
-        cv.width = s.w; cv.height = s.h;
-        cx.clearRect(0, 0, s.w, s.h);
-        cx.drawImage(img, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
-        document.documentElement.style.setProperty(`--ui-btn-${key}`, `url(${cv.toDataURL('image/png')})`);
-      }
+      const cropAll = (table, prefix) => {
+        for (const key in table) {
+          const s = table[key];
+          cv.width = s.w; cv.height = s.h;
+          cx.clearRect(0, 0, s.w, s.h);
+          cx.drawImage(img, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+          document.documentElement.style.setProperty(`--${prefix}-${key}`, `url(${cv.toDataURL('image/png')})`);
+        }
+      };
+      cropAll(UI_BUTTONS, 'ui-btn');
+      cropAll(UI_PANELS, 'ui-panel');
     };
     img.src = 'data:image/png;base64,' + b64;
   }
@@ -3795,6 +3804,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
                   updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
-                  UI_ATLAS, UI_BUTTONS, get uiImg() { return uiImg; }, drawRpgBar,
+                  UI_ATLAS, UI_BUTTONS, UI_PANELS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

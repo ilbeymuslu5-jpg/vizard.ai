@@ -439,6 +439,12 @@ yazıldı.
   (10 14) sprite'ın gerçek bevel kalınlığına göre ölçülüp ayarlandı — ilk
   denemede çok büyük seçilince (20 40) buton düz bir taş levha gibi
   görünüyordu.
+- **Paneller**: aynı kırpma yöntemi `panel_brown` (menüdeki KOLEKSİYON/
+  YÜKSELTMELER/YETENEK kutusu, `.shopWrap`) ve `panelInset_beige` (sınıf
+  açıklama kutusu, `.classInfo`) için de kullanılıyor (`--ui-panel-*`).
+  `border-image-slice ... fill` orta parçayı da arka plan olarak
+  bastığından `.classInfo`'nun metin rengi açık bejle kontrast için
+  koyulaştırıldı (`#aab4cc`/`#ffd479` → `#5a4a30`/`#a4521a`).
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,

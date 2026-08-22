@@ -115,7 +115,9 @@
 
   /* ========== KALICI YÜKSELTME DÜKKANI ========== */
   .shopWrap{ width:100%; max-width:460px; background:rgba(255,255,255,.04);
-    border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px 12px 10px; }
+    border-style:solid; border-width:18px; border-radius:14px; padding:12px 12px 10px;
+    border-image-source:var(--ui-panel-panelBrown, none); border-image-slice:18 fill;
+    border-image-width:18px; border-image-repeat:stretch; }
   .shopHead{ display:flex; flex-wrap:wrap; gap:6px; justify-content:space-between; align-items:center;
     font-size:11px; font-weight:800; letter-spacing:2px; color:#8f99b4; margin-bottom:8px; }
   .shopHead #bank{ color:#ffd479; font-size:14px; letter-spacing:0; }
@@ -154,9 +156,14 @@
     box-shadow:0 0 10px color-mix(in srgb, var(--cc) 45%, transparent); }
   .classCard .ci{ font-size:22px; line-height:1.1; }
   .classCard .cn{ font-size:10.5px; font-weight:800; }
-  .classInfo{ margin-top:7px; font-size:11px; color:#aab4cc; line-height:1.5; text-align:left;
-    background:rgba(0,0,0,.22); border-radius:8px; padding:7px 10px; }
-  .classInfo b{ color:#ffd479; }
+  /* panelInset_beige "fill" ile içeriğin arkasını da boyuyor (açık bej), bu
+     yüzden metin rengi koyulaştırıldı (doku yüklenmeden önceki tek kareye
+     kadarki koyu arkaplanda okunurluk hafifçe düşük kalır — ihmal edilebilir). */
+  .classInfo{ margin-top:7px; font-size:11px; color:#5a4a30; line-height:1.5; text-align:left;
+    background:rgba(0,0,0,.22); border-style:solid; border-width:14px; border-radius:8px; padding:7px 10px;
+    border-image-source:var(--ui-panel-panelInsetBeige, none); border-image-slice:14 fill;
+    border-image-width:14px; border-image-repeat:stretch; }
+  .classInfo b{ color:#a4521a; }
 
   /* ========== YETENEK AĞACI ========== */
   .skillPts{ font-size:12px; font-weight:700; color:#aab4cc; margin-bottom:8px; text-align:left; }
