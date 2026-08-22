@@ -431,14 +431,15 @@ yazıldı.
   henüz yüklenmediyse (ilk kare) fonksiyon `false` döner, çağıran taraf eski
   düz `fillRect` çizimine düşer.
 - **Menü düğmeleri**: CSS `border-image` tüm kaynak görseli dilimlediği için
-  atlas'tan doğrudan alt-dikdörtgen kullanılamıyor — her düğme sprite'ı
-  (`buttonLong_beige/_pressed`, `buttonLong_brown/_pressed`) yüklenince bir
-  kerelik bir `<canvas>` ile kırpılıp kendi `data:` URL'i olarak
-  `--ui-btn-*` özel özelliğine yazılıyor; `.btn`/`.btn.ghost` bunu
-  `border-image-source` olarak okuyor. `border-image-slice` değerleri
-  (10 14) sprite'ın gerçek bevel kalınlığına göre ölçülüp ayarlandı — ilk
-  denemede çok büyük seçilince (20 40) buton düz bir taş levha gibi
-  görünüyordu.
+  atlas'tan doğrudan alt-dikdörtgen kullanılamıyor — bu yüzden düğme/panel/
+  ikon sprite'ları atlas'tan değil, Kenney paketinin kendi ayrı PNG
+  dosyalarından (`buttonLong_beige/_pressed`, `buttonLong_brown/_pressed`, …)
+  geliyor; `build.mjs` bunları build zamanında base64 gömüp `--ui-btn-*` özel
+  özelliğine yazıyor, `.btn`/`.btn.ghost` bunu `border-image-source` olarak
+  okuyor (çalışma anında canvas kırpma YOK, bkz. bir üstteki "toDataURL"
+  notu). `border-image-slice` değerleri (10 14) sprite'ın gerçek bevel
+  kalınlığına göre ölçülüp ayarlandı — ilk denemede çok büyük seçilince
+  (20 40) buton düz bir taş levha gibi görünüyordu.
 - **Paneller**: aynı kırpma yöntemi `panel_brown` (menüdeki KOLEKSİYON/
   YÜKSELTMELER/YETENEK kutusu, `.shopWrap`) ve `panelInset_beige` (sınıf
   açıklama kutusu, `.classInfo`) için de kullanılıyor (`--ui-panel-*`).
@@ -453,10 +454,21 @@ yazıldı.
   ile, DOM/JS değişikliği gerekmeden.
 - **Boss yön oku**: ekran dışındaki boss'u gösteren ok artık elle çizilen
   düz üçgen yerine `arrowBeige_right` sprite'ı (`ctx.drawImage` + rotasyon).
+- **Atılma/duraklat/çanta düğmeleri**: kullanıcının repoya tam pakedi
+  (`kenney_ui-pack-rpg-expansion/`) eklemesinin ardından üç ikon-düğme de
+  metinsiz sprite'lara geçti — `buttonRound_blue` (dairesel `#dashBtn`),
+  `buttonSquare_grey`/`_pressed` (kare `#pauseBtn`/`#bagBtn`, basılıyken
+  doku değişiyor). `#pauseBtn`'in "II" simgesi açık gri dokuya karşı önceki
+  açık mavi-gri rengiyle neredeyse görünmezdi; doku yüklendiğinde eklenen
+  `uiPackReady` sınıfı üzerinden koyu bir tona geçiyor.
+- **İmleç**: masaüstünde tüm tıklanabilir öğeler (`--ui-cursor-hand`)
+  `cursorHand_beige` sprite'ını CSS `cursor` özelliği olarak kullanıyor —
+  dokunmatikte etkisi yok, mobil davranış değişmedi.
 
-Kullanılmayan sprite'lar (imleçler, yuvarlak/kare düğmeler, diğer renk
-varyantları) atlas'ta duruyor ama şu an dokunulmuyor — ihtiyaç oldukça aynı
-kırpma deseni (`UI_BUTTONS`/`UI_PANELS`/`UI_ICONS` + `cropAll()`) genişletilebilir.
+Hâlâ kullanılmayan sprite'lar (kılıç/eldiven imleçleri, diğer renk
+varyantları, `panel_beige`/`panel_blue`, dikey barlar) pakette duruyor —
+ihtiyaç oldukça `UI_SPRITE_FILES` (build.mjs) tablosuna eklenip aynı desenle
+genişletilebilir.
 
 Doğrulama: her sistem için ayrı Playwright script'i (sınıf istatistikleri,
 yetenek kapıları, set eşikleri/hasar çarpanları, biyoma göre boss teması,

@@ -104,12 +104,20 @@ try {
   const sprites = window.__UI_SPRITES_B64;
   if (sprites) {
     for (const key in sprites) {
-      document.documentElement.style.setProperty(
-        key === 'panelBrown' || key === 'panelInsetBeige' ? `--ui-panel-${key}`
-          : key === 'checkBeige' || key === 'crossGrey' ? `--ui-icon-${key}`
-          : `--ui-btn-${key}`,
-        `url(data:image/png;base64,${sprites[key]})`);
+      const url = `url(data:image/png;base64,${sprites[key]})`;
+      if (key === 'cursorHand') {
+        // "cursor" özelliği url()'den sonra bir düşüş anahtar kelimesi ister;
+        // bunu değişkenin içine gömüyoruz ki kullanan yerde sadece var(...) yazılsın.
+        document.documentElement.style.setProperty('--ui-cursor-hand', `${url} 6 4, pointer`);
+      } else {
+        document.documentElement.style.setProperty(
+          key === 'panelBrown' || key === 'panelInsetBeige' ? `--ui-panel-${key}`
+            : key === 'checkBeige' || key === 'crossGrey' ? `--ui-icon-${key}`
+            : `--ui-btn-${key}`,
+          url);
+      }
     }
+    document.documentElement.classList.add('uiPackReady');
   }
 } catch (e) { console.warn('UI paketi kurulamadı, düz CSS/canvas geri düşüşü kullanılıyor', e); }
 // Bar dokusunu 3 parça hâlinde çiz: sol/sağ uçlar sabit, orta gerilir

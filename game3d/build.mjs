@@ -34,6 +34,9 @@ const UI_SPRITE_FILES = {
   ghost: 'buttonLong_brown.png', ghostActive: 'buttonLong_brown_pressed.png',
   panelBrown: 'panel_brown.png', panelInsetBeige: 'panelInset_beige.png',
   checkBeige: 'iconCheck_beige.png', crossGrey: 'iconCross_grey.png',
+  dashRound: 'buttonRound_blue.png',
+  iconSquare: 'buttonSquare_grey.png', iconSquareActive: 'buttonSquare_grey_pressed.png',
+  cursorHand: 'cursorHand_beige.png',
 };
 const uiSprites = {};
 for (const key in UI_SPRITE_FILES) {
