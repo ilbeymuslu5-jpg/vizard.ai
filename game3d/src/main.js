@@ -81,52 +81,37 @@ const UI_ATLAS = {
   yellow: { L: { x: 370, y: 126, w: 9, h: 18 }, M: { x: 338, y: 449, w: 18, h: 18 }, R: { x: 190, y: 330, w: 9, h: 18 } },
   blue:   { L: { x: 372, y: 294, w: 9, h: 18 }, M: { x: 356, y: 431, w: 18, h: 18 }, R: { x: 372, y: 312, w: 9, h: 18 } },
 };
-// Düğme sprite'ları: atlas x/y/w/h (buttonLong_beige/_pressed, buttonLong_brown/_pressed)
-const UI_BUTTONS = {
-  primary:        { x: 0, y: 282, w: 190, h: 49 },
-  primaryActive:  { x: 0, y: 237, w: 190, h: 45 },
-  ghost:          { x: 0, y: 49,  w: 190, h: 49 },
-  ghostActive:    { x: 0, y: 98,  w: 190, h: 45 },
-};
-// Panel sprite'ları: büyük kapsayıcılar (panel_brown) + iç kutular (panelInset_beige)
-const UI_PANELS = {
-  panelBrown:       { x: 0,   y: 376, w: 100, h: 100 },
-  panelInsetBeige:  { x: 200, y: 294, w: 93,  h: 94 },
-};
-// Küçük rozet ikonları: seçili/kilitli durumları ve boss yön oku için
-const UI_ICONS = {
-  checkBeige:      { x: 369, y: 184, w: 16, h: 15 },
-  crossGrey:       { x: 370, y: 60,  w: 16, h: 15 },
-};
 // Yön oku (boss ekran dışındayken): sprite +X yönüne (sağa) bakıyor
 const ARROW_SPR = { x: 303, y: 486, w: 22, h: 21 };
 let uiImg = null;
-{
+// Bu blok tamamen kozmetik (barlar/düğmeler/rozetler); herhangi bir sebeple
+// (beklenmedik tarayıcı/sandbox kısıtı) hata verirse oyunun geri kalanını
+// düşürmesin diye try/catch içine alındı — düz CSS/canvas geriye düşer.
+try {
   const b64 = window.__UIPACK_B64;
   if (b64) {
     const img = new Image();
-    img.onload = () => {
-      uiImg = img;
-      // CSS border-image tüm görseli diliyor; atlas'tan alt-dikdörtgen kırpamıyor,
-      // bu yüzden her sprite kendi küçük tuvaline kırpılıp ayrı data: URL olarak
-      // kök elemana bağlanıyor (böylece her biri kendi doğal boyutunda border-image olabilir).
-      const cv = document.createElement('canvas'), cx = cv.getContext('2d');
-      const cropAll = (table, prefix) => {
-        for (const key in table) {
-          const s = table[key];
-          cv.width = s.w; cv.height = s.h;
-          cx.clearRect(0, 0, s.w, s.h);
-          cx.drawImage(img, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
-          document.documentElement.style.setProperty(`--${prefix}-${key}`, `url(${cv.toDataURL('image/png')})`);
-        }
-      };
-      cropAll(UI_BUTTONS, 'ui-btn');
-      cropAll(UI_PANELS, 'ui-panel');
-      cropAll(UI_ICONS, 'ui-icon');
-    };
+    img.onload = () => { uiImg = img; };   // yalnızca ctx.drawImage ile kullanılır (bar/ok) — toDataURL YOK
+    img.onerror = () => { console.warn('UI sprite sayfası yüklenemedi'); };
     img.src = 'data:image/png;base64,' + b64;
   }
-}
+  /* CSS'te kullanılan düğme/panel/ikon sprite'ları build.mjs tarafından AYRI
+     küçük PNG'ler olarak gömülür ve doğrudan burada CSS custom property'ye
+     yazılır — atlas'tan çalışma anında canvas.toDataURL() ile kırpmak
+     Artifact'ın sandbox'lı (cross-origin) iframe'inde SecurityError
+     fırlatıyordu ("tainted canvas"); bu tamamen canvas'sız yol o riski
+     ortadan kaldırıyor. */
+  const sprites = window.__UI_SPRITES_B64;
+  if (sprites) {
+    for (const key in sprites) {
+      document.documentElement.style.setProperty(
+        key === 'panelBrown' || key === 'panelInsetBeige' ? `--ui-panel-${key}`
+          : key === 'checkBeige' || key === 'crossGrey' ? `--ui-icon-${key}`
+          : `--ui-btn-${key}`,
+        `url(data:image/png;base64,${sprites[key]})`);
+    }
+  }
+} catch (e) { console.warn('UI paketi kurulamadı, düz CSS/canvas geri düşüşü kullanılıyor', e); }
 // Bar dokusunu 3 parça hâlinde çiz: sol/sağ uçlar sabit, orta gerilir
 function drawBarPiece(part, x, y, w, h) {
   const capW = Math.min(part.L.w, w / 2);
@@ -3818,6 +3803,6 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
                   updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
-                  UI_ATLAS, UI_BUTTONS, UI_PANELS, UI_ICONS, get uiImg() { return uiImg; }, drawRpgBar,
+                  UI_ATLAS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };

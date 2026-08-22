@@ -24,6 +24,21 @@ const shell = fs.readFileSync(path.join(DIR, 'shell.html'), 'utf8');
 const glb = fs.readFileSync(path.join(DIR, 'knight.glb')).toString('base64');
 const tex = fs.readFileSync(path.join(DIR, 'knight_tex.jpg')).toString('base64');
 const uipack = fs.readFileSync(path.join(DIR, 'assets', 'uipack_rpg_sheet.png')).toString('base64');
+/* CSS'te kullanılan tekil sprite'lar AYRI dosyalar olarak gömülür (Kenney paketinde
+   zaten hazır geliyorlar) — çalışma anında atlas'tan canvas.toDataURL() ile kırpmak
+   yerine. Artifact'ın sandbox'lı iframe'inde toDataURL() SecurityError fırlatıyordu
+   (data: URI'den yüklenen görsel o bağlamda "tainted" sayılıyor); dosyaları build
+   zamanında (Node, tarayıcı yok) gömmek bu riski tamamen ortadan kaldırıyor. */
+const UI_SPRITE_FILES = {
+  primary: 'buttonLong_beige.png', primaryActive: 'buttonLong_beige_pressed.png',
+  ghost: 'buttonLong_brown.png', ghostActive: 'buttonLong_brown_pressed.png',
+  panelBrown: 'panel_brown.png', panelInsetBeige: 'panelInset_beige.png',
+  checkBeige: 'iconCheck_beige.png', crossGrey: 'iconCross_grey.png',
+};
+const uiSprites = {};
+for (const key in UI_SPRITE_FILES) {
+  uiSprites[key] = fs.readFileSync(path.join(DIR, 'assets', UI_SPRITE_FILES[key])).toString('base64');
+}
 
 const TITLE = 'HORDE SURVIVOR 3D — İzometrik Bullet Heaven' + (testMode ? ' [TEST]' : '');
 
@@ -34,7 +49,7 @@ if(!m){m=document.createElement("meta");m.name="viewport";document.head.appendCh
 m.content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 addEventListener("load",function(){setTimeout(function(){dispatchEvent(new Event("resize"));},60);});})();</script>`;
 
-const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";</script>\n<script>${js}</script>`;
+const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};</script>\n<script>${js}</script>`;
 
 let out;
 if (artifactMode) {
