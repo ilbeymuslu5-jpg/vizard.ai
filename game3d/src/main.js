@@ -1861,6 +1861,8 @@ const ITEMS = {
       plus: { regen: 0.7, maxHp: 20 }, glbSet: 'mushroom', set: 'mushroom' },
     { id: 'vanguardH', name: 'Neon Öncü Miğfer', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
       plus: { atkSpeed: 0.08, crit: 0.06 }, glbSet: 'vanguard', set: 'vanguard' },
+    { id: 'templarH', name: 'Azur Tapınak Şövalyesi Miğferi', rar: 'legend', det: 4, col: 0x2255aa, trim: 0xd9b34a,
+      plus: { armor: 8, maxHp: 25 }, glbSet: 'templar', set: 'templar' },
   ],
   chest: [
     { id: 'amethystC', name: 'Ametist Göğüslük', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
@@ -1883,6 +1885,8 @@ const ITEMS = {
       plus: { armor: 6, maxHp: 40, regen: 0.3 }, glbSet: 'mushroom', set: 'mushroom' },
     { id: 'vanguardC', name: 'Neon Öncü Göğüslük', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
       plus: { armor: 6, atkSpeed: 0.06 }, glbSet: 'vanguard', set: 'vanguard' },
+    { id: 'templarC', name: 'Azur Tapınak Şövalyesi Göğüslüğü', rar: 'legend', det: 4, col: 0x2255aa, trim: 0xd9b34a,
+      plus: { armor: 14, maxHp: 55 }, glbSet: 'templar', set: 'templar' },
   ],
   gloves: [
     { id: 'amethystG', name: 'Ametist Kolluk', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
@@ -1905,6 +1909,8 @@ const ITEMS = {
       plus: { regen: 0.3, magnet: 0.2 }, glbSet: 'mushroom', set: 'mushroom' },
     { id: 'vanguardG', name: 'Neon Öncü Kolluk', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
       plus: { atkSpeed: 0.16 }, glbSet: 'vanguard', set: 'vanguard' },
+    { id: 'templarG', name: 'Azur Tapınak Şövalyesi Kolluğu', rar: 'legend', det: 4, col: 0x2255aa, trim: 0xd9b34a,
+      plus: { armor: 5, dmg: 0.06 }, glbSet: 'templar', set: 'templar' },
   ],
   boots: [
     { id: 'amethystB', name: 'Ametist Bot', rar: 'legend', det: 4, col: 0x8b5fd1, trim: 0xc9c9d6,
@@ -1927,6 +1933,8 @@ const ITEMS = {
       plus: { speedMul: 0.1, regen: 0.3 }, glbSet: 'mushroom', set: 'mushroom' },
     { id: 'vanguardB', name: 'Neon Öncü Bot', rar: 'legend', det: 4, col: 0x2fd6c9, trim: 0x1a1a2e,
       plus: { speedMul: 0.2 }, glbSet: 'vanguard', set: 'vanguard' },
+    { id: 'templarB', name: 'Azur Tapınak Şövalyesi Botu', rar: 'legend', det: 4, col: 0x2255aa, trim: 0xd9b34a,
+      plus: { armor: 4, maxHp: 20 }, glbSet: 'templar', set: 'templar' },
   ],
 };
 // id -> {item, slot} arama tablosu
@@ -1976,6 +1984,10 @@ const ITEM_LORE = {
   vanguardC: 'Enerji hatlarıyla nabız gibi atan, hafif ama yüksek teknoloji bir zırh.',
   vanguardG: 'Sinir uçlarına bağlı neon devreler tepki süresini keskinleştirir.',
   vanguardB: 'Taban devreleri her adımda kısa bir enerji darbesiyle iter.',
+  templarH: 'Kutsal alevle dövülmüş azur çelik, taşıyıcısına asla eğilmeyen bir irade verir.',
+  templarC: 'Tapınak yeminiyle mühürlenmiş göğüs zırhı, en ağır darbeleri bile savuşturur.',
+  templarG: 'Altın kabartmalı kolluklar, kılıç tutan eli hiç yorulmayan bir güçle donatır.',
+  templarB: 'Mabet taşlarında asırlarca aşınmamış botlar, sağlam bir duruş sağlar.',
 };
 
 /* ---------- SET BONUSLARI ----------
@@ -2022,6 +2034,9 @@ const SET_BONUS = {
   vanguard: { name: 'Neon Öncü Seti', icon: '⚡',
     p2: { txt: 'Saldırı hızı +%10', apply: s => { s.atkSpeed += 0.1; } },
     p4: { txt: 'Hareket hızı +%12', apply: s => { s.speedMul += 0.12; } } },
+  templar: { name: 'Azur Tapınak Şövalyesi Seti', icon: '🛡️',
+    p2: { txt: 'Zırh +6', apply: s => { s.armor += 6; } },
+    p4: { txt: 'Maks. can +60', apply: s => { s.maxHp += 60; } } },
 };
 function equippedSetCounts() {
   const counts = {};
@@ -2423,6 +2438,13 @@ const GLB_ARMOR_SETS = {
     boot_A: [0.6348, -0.0783, 0.0596],
     boot_B: [0.8535, -0.0687, 0.0279],
   } },
+  /* Azur Tapınak Şövalyesi: diğer 10 setten farklı kaynaktan geliyor —
+     kullanıcının verdiği "zırh giymiş" tam karakter modelinden (govde+zırh
+     kaynaşık tek mesh) bölge bazlı kırpma ile çıkarıldı (bkz.
+     scratchpad/extract_armor.mjs, bu oturumda). `pieces` burada da diğer
+     setlerdeki gibi KULLANILMIYOR (fitGlbPiece ölçüp otomatik oturtuyor,
+     bkz. GLB_FIT) — sadece setin var olduğunu işaretlemek için duruyor. */
+  templar: { name: 'Azur Tapınak Şövalyesi Zırhı', pieces: {} },
 };
 // Yuva -> hangi parça dosyaları (eldiven/bot iki dosyalı: sol/sağ ayrı gerçek
 // mesh'ler, prosedürel sistemdeki gibi ayna ölçeklemesi YOK — her biri kendi
@@ -2590,8 +2612,23 @@ function loadGlbPiece(setId, piece) {
    (anchor) wrap orijinine getir. Dönen grup doğrudan kemik tutucusuna
    (holder) eklenebilir: holder.scale zaten "1 birim = 1 dünya birimi"
    dönüşümünü yaptığı için burada ek bir çarpan gerekmiyor. */
+/* Azur Tapınak Şövalyesi seti, diğer 10 setten farklı olarak zırhın gövdeye
+   SIFIR boşlukla kaynaşık olduğu bir kaynaktan (bkz. GLB_ARMOR_SETS.templar
+   notu) kırpılarak çıkarıldı. Sentinel'in kendi kafa/gövde/uzuv yüzeyine
+   normalize edilince parça yüzeyi neredeyse tam o yüzeyin üstüne denk
+   geliyor — z-kavgasına (aynı derinlikte iki opak yüzey) girip karakterin
+   OPAK gövdesi tarafından tamamen yutuluyordu (helm'de doğrulandı: 1.0
+   ölçekte sadece tepelik ucu görünüyordu). Sabit bir "şişirme" çarpanıyla
+   parça gövdeden net biçimde dışarı taşırılıyor. Diğer setler zaten
+   boşluklu kaynaklardan geldiği için buna ihtiyaç duymuyor (varsayılan 1). */
+/* Parça tipine göre farklı miktarda şişirme gerekti: eldivenler botlardan
+   daha ince kesildiği ve el kemiğinin T-poz düzeltmesi sonrası şekli daha
+   "uzun/dar" kaldığı için daha fazla büyütülmesi gerekiyordu (görsel
+   taramayla bulundu — 1.35 miğfer/göğüslükte yeterliyken eldivende hâlâ
+   gövdenin içindeydi). */
+const GLB_SET_INFLATE = { templar: { helm: 1.35, chest: 1.35, glove_A: 1.6, glove_B: 1.6, boot_A: 1.8, boot_B: 1.8 } };
 const _fitBox = new THREE.Box3(), _fitSize = new THREE.Vector3(), _fitCtr = new THREE.Vector3();
-function fitGlbPiece(src, pieceName) {
+function fitGlbPiece(src, pieceName, setId) {
   const cfg = GLB_FIT[pieceName] || { size: 0.5, axis: 'max', anchor: 0.5 };
   const inst = src.clone(true);
   const wrap = new THREE.Group();
@@ -2605,7 +2642,8 @@ function fitGlbPiece(src, pieceName) {
   inst.position.y += (0.5 - cfg.anchor) * _fitSize.y;
   const base = cfg.axis === 'x' ? Math.max(_fitSize.x, _fitSize.z)
                                 : Math.max(_fitSize.x, _fitSize.y, _fitSize.z);
-  wrap.scale.setScalar(cfg.size / (base || 1));
+  const inflate = (GLB_SET_INFLATE[setId] && GLB_SET_INFLATE[setId][pieceName]) || 1;
+  wrap.scale.setScalar(cfg.size / (base || 1) * inflate);
   return wrap;
 }
 function attachGlbArmor(slot, holder, setId, reqToken) {
@@ -2615,7 +2653,7 @@ function attachGlbArmor(slot, holder, setId, reqToken) {
   const pieceName = pieceNames[idx] ?? pieceNames[0];
   loadGlbPiece(setId, pieceName).then(src => {
     if (holder.userData.glbReq !== reqToken) return;   // bu arada eşya değişmiş
-    const wrap = fitGlbPiece(src, pieceName);
+    const wrap = fitGlbPiece(src, pieceName, setId);
     if (wrap) holder.add(wrap);
   }).catch(err => console.warn('zırh parçası yüklenemedi:', setId, pieceName, err));
 }

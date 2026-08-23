@@ -738,3 +738,58 @@ bayt dizisinden `createImageBitmap` ile çözüyor, hiç ağ isteği yapmıyor;
 sonucu ilgili materyale (`applyGlbTextures`) uyguluyor. Zırh dokuları da bu
 sayede 512px + tam PBR'a (meshopt ile açılan yerden) çıkarıldı, kalite
 gözle görülür biçimde arttı.
+
+## 11. set: Azur Tapınak Şövalyesi — kaynaşık tam-karakter modelinden çıkarma
+
+Kullanıcı önceki 10 setten FARKLI bir kaynak verdi: ayrı ayrı zırh parçaları
+değil, gövde+zırhın TEK mesh'te kaynaştığı tam bir "zırhlı karakter" modeli
+(+ aynı iskelete sahip yürüme/koşma animasyonlu sürümleri). Hedef: bu
+modelden miğfer/göğüslük/kolluk/bot çıkarıp Sentinel'e giydirmek.
+
+**Bağlı-bileşen ayrımı burada işe yaramadı.** Önceki 10 set, parçalar
+ARALARINDA BOŞLUK bırakılarak dizilmiş tek dosya olarak geliyordu — union-find
+(paylaşılan üçgen köşe noktaları) onları temiz şekilde ayırabiliyordu. Bu yeni
+modelde zırh gövdeye SIFIR boşlukla kaynaşık; hatta üçgenler index bile
+paylaşmıyor ("hard-shaded" dışa aktarım, her yüz kendi köşe kopyasını
+taşıyor). Konum-tabanlı kendi "weld" işlemim de işe yaramadı: zırh gövdeye
+gerçekten temas ettiği için her şey TEK bileşene birleşiyordu.
+
+**Çözüm: kemik-yerel BÖLGE KIRPMA.** three.js ile (Node'da, render'sız —
+sadece ileri kinematik matris hesabı için) glTF iskeleti kuruldu, her hedef
+kemiğin (Head/Spine02/LeftHand/RightHand/LeftFoot/RightFoot) DÜNYA
+dönüşümünün tersi alınıp üçgen ağırlık merkezleri o kemiğin YEREL uzayına
+taşındı; belirli bir kutuya düşen üçgenler o bölgeye ait sayıldı. Kutu
+boyutları körlemesine değil, ekran görüntüsüyle yinelenerek bulundu (bkz.
+scratchpad/extract_armor.mjs + iter.sh — bir viewer sayfası kurup her deneme
+sonrası screenshot almak, "bilesen sayisi"na bakmaktan çok daha hızlı çözdü).
+
+**Üç ayrı gizli hata, üçü de sadece OYUN İÇİNDE ortaya çıktı (izole test
+viewer'ımda hiçbiri görünmüyordu):**
+1. *Tek-yüzlü materyal → tamamen görünmezlik.* Kırpma, üçgenleri kaynaşık
+   mesh'in her yerinden topladığı için sarma yönü (winding) elle
+   düzenlenmedi. Test viewer'ım DoubleSide'ı HER ZAMAN zorluyordu (öyle
+   kurulmuştu), o yüzden tüm ekran görüntülerinde parçalar mükemmel
+   görünüyordu — ama gerçek oyunun varsayılan tek-yüzlü materyaliyle
+   arka-yüz ayıklaması onları sessizce yok ediyordu. Ders: bir doğrulama
+   aracı üretim koşullarından DAHA TOLERANSLIYSA, o araç yanıltıyordur —
+   düzeltme `doc.createMaterial().setDoubleSided(true)`.
+2. *Z-kavgası → miğfer gövdenin içinde kayboldu.* Kaynak zırh gövdeye SIFIR
+   boşlukla oturduğu için, Sentinel'in kendi yüzeyine normalize edilince
+   parça yüzeyi neredeyse TAM O YÜZEYİN üstüne denk geldi — iki opak yüzey
+   aynı derinlikte yarışınca karakterin gövdesi kazandı. GLB_SET_INFLATE ile
+   parça sete özel bir çarpanla (1.35-1.8, parçaya göre değişiyor) dışarı
+   taşırıldı. Diğer 10 set zaten boşluklu kaynaklardan geldiği için buna
+   ihtiyaç duymuyor.
+3. *Eldiven ~90° yanlış yönde.* Kaynak model T-poza yakın bir dinlenme
+   duruşunda (kollar yanlara açık); Sentinel'in dinlenmesi kollar aşağı
+   sarkık. Miğfer/göğüslük/bot için kemiğin dünya dönüşü her iki pozda da
+   neredeyse özdeşlik olduğundan sorun çıkmadı, ama El kemiği ~90° farklı
+   yönleniyordu. Çözüm: parça, kendi kemiğinin dünya dönüşünün TERSİYLE
+   döndürülüp "kanonik" (dönüşsüz) yönelime getirildi (attachNode zaten
+   SENTINEL kemiğinin dönüşünü çalışma anında iptal ediyor — içerik bu
+   kanonik halde verilmeli). Sadece glove_L/glove_R'a uygulandı.
+
+`GLB_ARMOR_SETS.templar.pieces` kasıtlı olarak BOŞ — diğer 10 setteki
+`pieces` konum tabloları da artık ÖLÜ VERİ (fitGlbPiece ölçüp otomatik
+oturtuyor, bkz. yukarıdaki "ölçüm tabanlı oturtma" bölümü); sadece setin var
+olduğunu işaretlemek için tutuluyor.
