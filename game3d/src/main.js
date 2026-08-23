@@ -2456,20 +2456,37 @@ const GLB_FIT = {
 };
 const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
 const glbArmorLoader = new GLTFLoader();
+/* Gömülü (Artifact) zırh paketi meshopt ile sıkıştırılmış geometri içerir —
+   çözücü knight.glb için zaten pakette. Sıkıştırılmamış depo dosyalarında
+   bu ayarın bir etkisi olmuyor, o yüzden koşulsuz veriliyor. */
+glbArmorLoader.setMeshoptDecoder(MeshoptDecoder);
 function loadGlbPiece(setId, piece) {
   const key = setId + '/' + piece;
   let p = glbPieceCache.get(key);
   if (!p) {
     p = new Promise((resolve, reject) => {
-      // Yol, üretilen ../horde-survivor-3d.html'in (depo kökü) konumuna göre;
-      // build.mjs normalde bu dosyaları GÖMMÜYOR, doğrudan game3d/assets/
-      // altından fetch ediliyor. --embed-armor ile derlenen (ör. Artifact)
-      // paketlerde ise window.__ARMOR_GLB_B64 doludur — dış istek yapılamayan
-      // sandbox'larda o hâlde data: URI'den yüklenir.
+      /* --embed-armor ile derlenen paketlerde (Artifact) parça base64 olarak
+         window.__ARMOR_GLB_B64 içinde gelir. ÖNEMLİ: bu durumda loader.load()
+         ile "data:" URI vermek YETMİYOR — GLTFLoader onu da ağ isteği olarak
+         (fetch/XHR) çeker ve Artifact'ın sıkı CSP'si connect-src dışındaki
+         şemaları engellediği için istek sessizce düşüyordu; zırhın telefonda
+         hiç görünmemesinin sebebi buydu. Bunun yerine base64 burada çözülüp
+         doğrudan parse() ediliyor — knight.glb'nin zaten kullandığı,
+         hiç ağ katmanına dokunmayan yol. */
       const b64map = window.__ARMOR_GLB_B64;
       const b64 = b64map && b64map[`${setId}_${piece}`];
-      const url = b64 ? `data:model/gltf-binary;base64,${b64}` : `game3d/assets/armor_packs/${setId}_${piece}.glb`;
-      glbArmorLoader.load(url, gltf => resolve(gltf.scene), undefined, reject);
+      if (b64) {
+        try {
+          const bin = atob(b64);
+          const buf = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+          glbArmorLoader.parse(buf.buffer, '', gltf => resolve(gltf.scene), reject);
+        } catch (e) { reject(e); }
+        return;
+      }
+      // Depodan sunulan normal derleme: dosyayı olduğu yerden çek
+      glbArmorLoader.load(`game3d/assets/armor_packs/${setId}_${piece}.glb`,
+        gltf => resolve(gltf.scene), undefined, reject);
     });
     glbPieceCache.set(key, p);
   }
@@ -3867,6 +3884,13 @@ function renderInventory() {
    kendine geliyor; kapanışta model oyun sahnesine geri veriliyor. */
 let pvwRenderer = null, pvwScene = null, pvwCam = null, pvwCanvas = null;
 let pvwOn = false, pvwYaw = 0;
+/* Ters-kabuk dış çizgisi karakter oyunda ~60 piksel olduğu varsayımıyla
+   ayarlandı (OUTLINE_W). Önizlemede karakter ~10 kat büyük göründüğü için
+   aynı kalınlık, kabuğun gövdeyi delip yüzde/kolda/bacakta koyu lekeler
+   bırakmasına yol açıyordu — "karakterin kaplaması bozuk" görüntüsünün
+   sebebi buydu. Önizleme boyunca incelt, çıkışta eski değerine döndür. */
+const PREVIEW_OUTLINE_W = 0.0001;
+let outlineUniform = null;
 function initPreview() {
   if (pvwRenderer !== null) return pvwRenderer;
   pvwCanvas = document.getElementById('pvw');
@@ -3904,10 +3928,12 @@ function openPreview() {
   pvwScene.add(P.model);                 // three.js eski ebeveynden kendisi çıkarır
   P.model.position.set(0, 0, 0);
   pvwYaw = 0;
+  if (outlineUniform) outlineUniform.value = PREVIEW_OUTLINE_W;
 }
 function closePreview() {
   if (!pvwOn) return;
   pvwOn = false;
+  if (outlineUniform) outlineUniform.value = OUTLINE_W;
   if (P.model) scene.add(P.model);       // oyun sahnesine geri ver
 }
 /* Modelin (zırhlar dahil) gerçek sınırlarını ölçüp kadrajı ona göre kurar —
@@ -4131,6 +4157,7 @@ function loadKnight() {
         return mat;
       };
       window.__outlineU = outlineU;                 // ölçüm/ayar için (test)
+      outlineUniform = outlineU;                    // önizlemede inceltmek için
       const outlines = [];
       m.traverse(o => {
         if (o.isMesh || o.isSkinnedMesh) {

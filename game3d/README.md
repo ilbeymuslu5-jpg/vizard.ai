@@ -661,3 +661,35 @@ rastgele bir GLB eşya kuşandırıldı, envanter açılıp kapatıldı, koşu
 sıfırlanıp menüye dönüldü — sıfır konsol hatası. Duraklat ekranındaki üç
 sekme (KOLEKSİYON/YÜKSELTMELER/YETENEK) tek tek açılıp ekran görüntüsüyle
 doğrulandı.
+
+## Zırhın görünmemesi + bozuk kaplama: üç ayrı kök neden
+
+Telefonda "giydiğim zırh karakterin üstünde görünmüyor, kaplamalar berbat"
+şikâyetinin arkasında birbirinden bağımsız üç sorun çıktı.
+
+**1) Gömülü GLB'ler Artifact'ta hiç yüklenmiyordu.** `--embed-armor` ile
+üretilen pakette parçalar base64 olarak geliyor ve kod bunu
+`GLTFLoader.load("data:model/gltf-binary;base64,...")` ile veriyordu.
+GLTFLoader `data:` URI'yi de bir AĞ İSTEĞİ olarak (fetch/XHR) çekiyor;
+Artifact'ın sıkı CSP'si bunu engelliyor ve istek sessizce düşüyordu (hata
+`console.warn`'a gittiği için de fark edilmiyordu). Yerel `file://`
+testlerinde CSP olmadığı için sorun görünmüyordu — bu yüzden birkaç tur
+boyunca yanlış yerde arandı. Çözüm: base64 JS tarafında çözülüp doğrudan
+`loader.parse(arrayBuffer)` ediliyor; ağ katmanına hiç dokunulmuyor.
+knight.glb zaten bu yolu kullanıyordu.
+
+**2) Zırh dokuları düz ve düşük çözünürlüklüydü.** Artifact 16MB sınırına
+sığmak için parçalar `unlit`e çevrilip (normal + metalik/pürüzlülük
+haritaları atılıyordu) dokular 256px/webp q45'e indirilmişti; sonuç ışığa
+tepki vermeyen, plastik görünümlü zırhtı. Geometri sıkıştırması eklenerek
+bu takas tamamen ortadan kaldırıldı: `meshopt` (çözücüsü knight.glb için
+zaten pakette) geometriyi yarıya indiriyor, kazanılan yerle dokular
+**512px/webp q70** ve tam PBR olarak korunuyor. Paket 13.9MB → 10.4MB
+düşerken kalite belirgin şekilde arttı.
+
+**3) Karakterin "bozuk kaplaması" aslında dış çizgi kabuğuydu.** Ters-kabuk
+(inverted hull) dış çizgisinin kalınlığı (`OUTLINE_W`), karakter oyunda
+~60 piksel görünecek diye ayarlanmıştı. Önizlemede karakter ~10 kat
+büyüdüğü için aynı kabuk gövdeyi delip yüzde, kolda ve bacaklarda koyu
+lekeler bırakıyordu. Önizleme boyunca kalınlık inceltiliyor
+(`PREVIEW_OUTLINE_W`), kapanışta eski değerine dönüyor.
