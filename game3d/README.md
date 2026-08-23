@@ -693,3 +693,48 @@ düşerken kalite belirgin şekilde arttı.
 büyüdüğü için aynı kabuk gövdeyi delip yüzde, kolda ve bacaklarda koyu
 lekeler bırakıyordu. Önizleme boyunca kalınlık inceltiliyor
 (`PREVIEW_OUTLINE_W`), kapanışta eski değerine dönüyor.
+
+## Karakter modeli değişti: Sentinel (yürüme + koşma animasyonlu)
+
+Kullanıcının repoya eklediği üç Meshy AI dosyası (`modelll/`, tabanda Draco
+sıkıştırmalı) tek bir `hero.glb`'ye birleştirildi: mesh+doku ikisinde de aynı
+olduğu için sadece bir kez gömülüyor, iki animasyon klibi (`Walking`,
+`Running`) `@gltf-transform` ile aynı dosyaya taşındı. Draco three.js'te
+harici bir çözücü dosyası gerektirdiği ve tek-dosya paket bunu barındıramadığı
+için önce düz glTF'ye çözülüp meshopt ile yeniden sıkıştırıldı (çözücüsü
+zaten pakette). Sonuç: 335KB, iki klip + 1024px doku.
+
+İskelet kemik adları eskisiyle (Head, Spine02, LeftForeArm, LeftFoot, ...)
+BİREBİR aynı — her iki model de Meshy rig'i kullanıyor — bu yüzden zırh
+takma sistemi hiç değişmeden çalıştı, yalnız GEAR pozisyonları ve GLB_FIT
+boyutları yeni gövde ölçülerine göre yeniden ölçüldü.
+
+**Prosedürel temel kıyafet kaldırıldı.** Eski model çıplaktı, üstüne
+tunik/kemer/pantolon kutuları ekleniyordu; Sentinel kendi kıyafetini
+dokusunda taşıyor, üstüne o kutular binince kocaman ve tuhaf duruyordu.
+Sınıf rengi artık kutu eklemek yerine gövde materyalinin `emissive` tonuna
+işleniyor.
+
+**Elde tutulan silah artık sadece ÖNİZLEMEDE gizli** (`openPreview`/
+`closePreview`); gerçek oyunda göründüğü gibi görünmeye devam ediyor —
+model küçükken (~60px) silah bir sorun değildi, önizleme yakınlaştırmasında
+dikkat dağıtıcıydı.
+
+**Eldiven ForeArm yerine Hand kemiğine bağlandı.** ForeArm'ın kendi yerel
+dönüşü dünya eksenleriyle hizalı değildi (botta daha önce karşılaşılan aynı
+sorun); küçük bir pozisyon ofseti orada büyütülerek göğüs hizasına
+sıçrıyordu. Elde taşınan silah zaten Hand'e bağlanıp sorunsuz duruyordu —
+aynı kemiğe, aynı küçük-ofset mantığıyla eldiveni de bağlamak sorunu kökten
+çözdü.
+
+## Artifact CSP'si GLB-içi dokuları da engelliyordu
+
+Yalnız gömülü GLB dosyasının kendisi değil, GLB'nin İÇİNDEKİ görseller de
+aynı soruna çarpıyordu: three.js onları `blob:` URL ile yüklüyor, katı CSP
+`connect-src`i bunu düşürüyor, materyal `map:null` kalıyordu — hem yeni
+karakterin hem zırhların "kaplaması yok/berbat" görünmesinin sebebi buydu.
+`decodeGlbTextures()` artık GLB kabını elle ayrıştırıp görselleri ham
+bayt dizisinden `createImageBitmap` ile çözüyor, hiç ağ isteği yapmıyor;
+sonucu ilgili materyale (`applyGlbTextures`) uyguluyor. Zırh dokuları da bu
+sayede 512px + tam PBR'a (meshopt ile açılan yerden) çıkarıldı, kalite
+gözle görülür biçimde arttı.

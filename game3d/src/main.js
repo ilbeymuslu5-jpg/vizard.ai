@@ -1814,17 +1814,23 @@ const OUTFIT = {
 /* Yuvalar: hangi kemiğe, hangi konum/dönüşle bağlanacak.
    pos/rot KARAKTER uzayında (dünya birimi, +Z ileri, +Y yukarı). */
 const GEAR = {
-  /* pos değerleri kemiğin DÜNYA konumuna eklenen ofsettir (dünya birimi);
-     karakterin gerçek kemik/gövde ölçüleri ölçülerek seçildi — bkz. GLB_FIT
-     ve oradaki anchor kuralı (miğferin alt kenarı boyun hizasına oturur). */
+  /* pos değerleri kemiğin DÜNYA konumuna eklenen ofsettir (dünya birimi).
+     Sentinel modeli için ölçülerek seçildi (boy 2.24; Head y=1.87,
+     Spine02 y=1.36, ForeArm y=1.40, Foot y=0.26) — bkz. GLB_FIT ve oradaki
+     anchor kuralı (miğferin alt kenarı çene hizasına oturur). */
   helm:   { name: 'Miğfer',   icon: '⛑️', bones: ['Head'],
-            pos: [0, 0.46, -0.11], rot: [0, 0, 0] },
+            pos: [0, 0.06, 0.02], rot: [0, 0, 0] },
   chest:  { name: 'Göğüslük', icon: '🎽', bones: ['Spine02'],
-            pos: [0, 0.11, -0.11], rot: [0.06, 0, 0] },
-  gloves: { name: 'Kolluk',   icon: '🧤', bones: ['LeftForeArm', 'RightForeArm'], mirror: true,
-            pos: [0.03, -0.14, -0.1], rot: [0, 0, 0] },
+            pos: [0, 0.09, 0], rot: [0.06, 0, 0] },
+  /* Not: eldiven ForeArm'a değil HAND'e bağlı — ForeArm'ın kendi yerel
+     dönüşü dünya eksenleriyle hizalı değil (bkz. bot kalibrasyonunda aynı
+     sorun), küçük bir pos ofseti orada büyütülmüş biçimde sapıyordu. Elde
+     taşınan silah zaten Hand'e bağlanıp sorunsuz duruyordu (bkz. aşağıda) —
+     aynı kemik, aynı küçük ofset mantığı burada da güvenilir çalışıyor. */
+  gloves: { name: 'Kolluk',   icon: '🧤', bones: ['LeftHand', 'RightHand'], mirror: true,
+            pos: [0, 0, 0], rot: [0, 0, 0] },
   boots:  { name: 'Bot',      icon: '🥾', bones: ['LeftFoot', 'RightFoot'], mirror: true,
-            pos: [0.03, -0.11, -0.09], rot: [0, 0, 0] },
+            pos: [0.01, -0.19, 0.02], rot: [0, 0, 0] },
 };
 const GEAR_SLOTS = Object.keys(GEAR);
 
@@ -2282,19 +2288,11 @@ function initGearNodes(root) {
       if (h) { gearNodes[slot].push(h); gearBones[slot].push(findBone(root, bn)); }
     });
   }
-  // Temel kıyafet: koşu boyunca hiç değişmez, bir kez kurulur
-  const outfit = [
-    [OUTFIT.torso, 'Spine02', [0, 0.22, -0.1], [0.06, 0, 0]],
-    [OUTFIT.hips, 'Hips', [0, -0.05, -0.11], [0, 0, 0]],
-    [OUTFIT.foot, 'LeftFoot', [0.03, -0.01, -0.09], [0, 0, 0]],
-    [OUTFIT.foot, 'RightFoot', [-0.03, -0.01, -0.09], [0, 0, 0]],
-  ];
+  /* Prosedürel temel kıyafet KALDIRILDI: Sentinel modeli kendi kıyafetini
+     dokusunda taşıyor, üstüne eklenen tunik/kemer/pantolon kutuları eski
+     (iri kafalı, bodur) modele göre ölçülüydü ve yeni gövdede kocaman
+     duruyordu. Sınıf rengi refreshOutfitVisuals'ta materyale işleniyor. */
   outfitNodes = [];
-  for (const [make, bone, pos, rot] of outfit) {
-    const h = attachNode(root, bone, pos, rot);
-    if (!h) continue;
-    outfitNodes.push({ holder: h, make });
-  }
   // Elde taşınan silah: sağ ele bağlı, sınıfın silah tipine göre kurulur
   weaponHolder = attachNode(root, 'RightHand', [0.03, 0.06, -0.14], [0, 0.2, 0]);
   heldWeaponKey = '';
@@ -2302,15 +2300,18 @@ function initGearNodes(root) {
   refreshOutfitVisuals();
 }
 // Kıyafeti güncel sınıfın paletiyle yeniden boya (sınıf değişince / koşu başında)
+/* Sınıf kimliği: eski modelde prosedürel kıyafet (tunik/kemer/pantolon)
+   takılıyordu. Yeni Sentinel modeli kendi kıyafetini dokusunda taşıyor;
+   üstüne o kutular eklenince orantısız ve kötü duruyordu (bkz. initGearNodes,
+   outfitNodes artık boş). Sınıf rengi bunun yerine gövde materyalinin
+   emissive tonuna işleniyor — doku okunur kalıyor, silüet bozulmuyor. */
+let heroMats = [];
 function refreshOutfitVisuals() {
   const cls = CLASSES[P.classId] || CLASSES[META.classId] || CLASSES.paladin;
-  for (const { holder, make } of outfitNodes) {
-    while (holder.children.length) {
-      const c = holder.children.pop();
-      if (c.geometry) c.geometry.dispose();
-    }
-    const geo = mergeGeometries(make(cls.palette), false);
-    if (geo) addPiece(holder, geo);
+  for (const mat of heroMats) {
+    if (mat.emissive) mat.emissive.setHex(cls.palette.trim);
+    mat.emissiveIntensity = 0.22;
+    mat.needsUpdate = true;
   }
   refreshHeldWeapon();
 }
@@ -2447,13 +2448,97 @@ const GLB_SLOT_PIECES = { helm: ['helm'], chest: ['chest'], gloves: ['glove_A', 
               gerçek bir kaskın kafaya oturma biçimi. Botta 0.2: taban
               zemine yakın durur. */
 const GLB_FIT = {
-  helm:    { size: 1.00, axis: 'x',   anchor: 0.15 },
-  chest:   { size: 1.05, axis: 'x',   anchor: 0.5 },
-  glove_A: { size: 0.44, axis: 'max', anchor: 0.5 },
-  glove_B: { size: 0.44, axis: 'max', anchor: 0.5 },
-  boot_A:  { size: 0.54, axis: 'max', anchor: 0.2 },
-  boot_B:  { size: 0.54, axis: 'max', anchor: 0.2 },
+  helm:    { size: 0.34, axis: 'x',   anchor: 0.15 },
+  chest:   { size: 0.55, axis: 'x',   anchor: 0.5 },
+  glove_A: { size: 0.26, axis: 'max', anchor: 0.5 },
+  glove_B: { size: 0.26, axis: 'max', anchor: 0.5 },
+  boot_A:  { size: 0.34, axis: 'max', anchor: 0.2 },
+  boot_B:  { size: 0.34, axis: 'max', anchor: 0.2 },
 };
+/* ---------- GLB İÇİ DOKULARI CSP-GÜVENLİ ÇÖZME ----------
+   three.js, GLB'ye gömülü görselleri bufferView'dan bir Blob yapıp blob: URL
+   üzerinden yükler (ImageBitmapLoader ise fetch ile). Artifact'ın katı CSP'si
+   connect-src/img-src üzerinden bunu engelliyor: geometri geliyor ama
+   materyalin map'i null kalıyor — zırhın "kaplaması yok/berbat" görünmesinin
+   sebebi tam olarak buydu (yerel file:// testlerinde CSP olmadığı için
+   görünmüyordu). Burada GLB kabı elle ayrıştırılıp görseller doğrudan
+   ham baytlardan createImageBitmap ile çözülüyor; hiçbir URL/istek yok.
+   knight dokusunun uzun zamandır kullandığı yöntemin aynısı. */
+function glbChunks(buf) {
+  const dv = new DataView(buf);
+  if (dv.byteLength < 12 || dv.getUint32(0, true) !== 0x46546C67) return {};
+  let off = 12, json = null, bin = null;
+  while (off + 8 <= dv.byteLength) {
+    const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true);
+    const body = buf.slice(off + 8, off + 8 + len);
+    if (type === 0x4E4F534A) { try { json = JSON.parse(new TextDecoder().decode(body)); } catch (e) { /* yok say */ } }
+    else if (type === 0x004E4942) bin = body;
+    off += 8 + len;
+  }
+  return { json, bin };
+}
+// glTF doku kaydı -> görsel (source) indeksi. EXT_texture_webp kendi source'unu taşır.
+function texSourceIndex(t) {
+  const w = t.extensions && t.extensions.EXT_texture_webp;
+  return w && w.source !== undefined ? w.source : t.source;
+}
+/* Ham GLB baytlarından materyal başına doku kümesi üretir.
+   Dönen: Promise<Array<{map,normalMap,roughnessMap,metalnessMap}>> (glTF
+   materyal sırasına göre) — hiç görsel yoksa null. */
+function decodeGlbTextures(buf) {
+  const { json, bin } = glbChunks(buf);
+  if (!json || !bin || !json.images || !json.images.length) return Promise.resolve(null);
+  if (typeof createImageBitmap !== 'function') return Promise.resolve(null);
+  const jobs = json.images.map(img => {
+    if (img.bufferView === undefined) return Promise.resolve(null);
+    const bv = json.bufferViews[img.bufferView];
+    const bytes = new Uint8Array(bin, bv.byteOffset || 0, bv.byteLength);
+    return createImageBitmap(new Blob([bytes], { type: img.mimeType || 'image/png' }),
+      { premultiplyAlpha: 'none' }).catch(() => null);
+  });
+  return Promise.all(jobs).then(bitmaps => {
+    const mk = (texIdx, srgb) => {
+      if (texIdx === undefined || !json.textures) return null;
+      const bmp = bitmaps[texSourceIndex(json.textures[texIdx])];
+      if (!bmp) return null;
+      const t = new THREE.Texture(bmp);
+      t.flipY = false;                                  // glTF UV yönü
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.needsUpdate = true;
+      return t;
+    };
+    return (json.materials || []).map(m => {
+      const pbr = m.pbrMetallicRoughness || {};
+      const mr = mk(pbr.metallicRoughnessTexture && pbr.metallicRoughnessTexture.index, false);
+      return {
+        map: mk(pbr.baseColorTexture && pbr.baseColorTexture.index, true),
+        normalMap: mk(m.normalTexture && m.normalTexture.index, false),
+        roughnessMap: mr, metalnessMap: mr,
+        name: m.name,
+      };
+    });
+  }).catch(() => null);
+}
+/* Çözülen dokuları sahnedeki materyallere bağlar. Tek materyalli dosyalarda
+   (zırh parçalarının ve kahramanın hepsi böyle) doğrudan hepsine uygulanır;
+   çok materyalli olursa ada göre eşlenir. */
+function applyGlbTextures(root, sets) {
+  if (!sets || !sets.length) return;
+  root.traverse(o => {
+    if (!o.isMesh && !o.isSkinnedMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const mat of mats) {
+      if (!mat) continue;
+      const s = sets.length === 1 ? sets[0] : (sets.find(x => x.name && x.name === mat.name) || sets[0]);
+      if (!s) continue;
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) {
+        if (s[k] && k in mat && !mat[k]) mat[k] = s[k];
+      }
+      mat.needsUpdate = true;
+    }
+  });
+}
 const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
 const glbArmorLoader = new GLTFLoader();
 /* Gömülü (Artifact) zırh paketi meshopt ile sıkıştırılmış geometri içerir —
@@ -2480,7 +2565,12 @@ function loadGlbPiece(setId, piece) {
           const bin = atob(b64);
           const buf = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-          glbArmorLoader.parse(buf.buffer, '', gltf => resolve(gltf.scene), reject);
+          glbArmorLoader.parse(buf.buffer, '', gltf => {
+            // Gömülü dokular CSP yüzünden boş kalmış olabilir: ham baytlardan çöz
+            decodeGlbTextures(buf.buffer)
+              .then(sets => { applyGlbTextures(gltf.scene, sets); resolve(gltf.scene); })
+              .catch(() => resolve(gltf.scene));
+          }, reject);
         } catch (e) { reject(e); }
         return;
       }
@@ -2542,15 +2632,14 @@ function refreshGearVisuals() {
       }
       holder.userData.glbReq = ++glbReqSeq;   // bekleyen eski fetch'leri geçersiz kıl
       if (!it) continue;
-      if (it.glbSet) { attachGlbArmor(slot, holder, it.glbSet, holder.userData.glbReq); continue; }
-      const geo = mergeGeometries(SHAPE[slot](it.det, it), false);
-      if (geo) addPiece(holder, geo, it.rar);
+      /* Kuşanılabilir HER eşya GLB setinden geliyor (bkz. ITEMS) — prosedürel
+         SHAPE tabanlı eski zırh sistemi tamamen kaldırıldı. glbSet'i olmayan
+         bir eşya tanımlanırsa (veri hatası) sessizce hiçbir şey takılmaz. */
+      if (it.glbSet) attachGlbArmor(slot, holder, it.glbSet, holder.userData.glbReq);
+      else console.warn('eşyanın glbSet\'i yok, atlandı:', it.id);
     }
   }
-  // Göğüslük/bot giyilince temel kıyafet altında kalır; z-kavgası olmasın diye gizle
-  if (outfitNodes[0]) outfitNodes[0].holder.visible = !P.eq.chest;
-  if (outfitNodes[2]) outfitNodes[2].holder.visible = !P.eq.boots;
-  if (outfitNodes[3]) outfitNodes[3].holder.visible = !P.eq.boots;
+  // (Prosedürel temel kıyafet kaldırıldı; gizlenecek parça kalmadı.)
 }
 
 /* ---------- ENVANTER ----------
@@ -3929,11 +4018,15 @@ function openPreview() {
   P.model.position.set(0, 0, 0);
   pvwYaw = 0;
   if (outlineUniform) outlineUniform.value = PREVIEW_OUTLINE_W;
+  // Elde tutulan silah kuşanılabilir bir eşya değil (SET_BONUS'la ilgisi
+  // yok) — kıyafet/manken önizlemesinde dikkat dağıtıp tuhaf duruyordu.
+  if (weaponHolder) weaponHolder.visible = false;
 }
 function closePreview() {
   if (!pvwOn) return;
   pvwOn = false;
   if (outlineUniform) outlineUniform.value = OUTLINE_W;
+  if (weaponHolder) weaponHolder.visible = true;
   if (P.model) scene.add(P.model);       // oyun sahnesine geri ver
 }
 /* Modelin (zırhlar dahil) gerçek sınırlarını ölçüp kadrajı ona göre kurar —
@@ -4119,7 +4212,7 @@ function loadKnightTexture() {
 
 function loadKnight() {
   return new Promise(resolve => {
-    const b64 = window.__KNIGHT_B64;
+    const b64 = window.__HERO_B64;
     if (!b64) return resolve(null);
     const bin = atob(b64);
     const buf = new Uint8Array(bin.length);
@@ -4127,7 +4220,11 @@ function loadKnight() {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);      // model meshopt ile sıkıştırıldı
     loader.parse(buf.buffer, '', async gltf => {
-      const map = await loadKnightTexture();
+      /* Doku modelin İÇİNDE geliyor ama three.js onu blob: URL ile yüklüyor ve
+         katı CSP altında engelleniyor; ham baytlardan çözüyoruz. Eski harici
+         jpg yolu geriye dönük yedek olarak duruyor (artık gömülmüyor). */
+      const texSets = await decodeGlbTextures(buf.buffer);
+      const map = (texSets && texSets[0] && texSets[0].map) || await loadKnightTexture();
       const m = gltf.scene;
       const box = new THREE.Box3().setFromObject(m);
       const size = box.getSize(new THREE.Vector3());
@@ -4170,6 +4267,7 @@ function loadKnight() {
             color: 0xffffff,
             emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.1,
           });
+          heroMats.push(o.material);        // sınıf tonu buradan işlenir
           // Dış çizgi: aynı geometri + iskelet, ters yüzeyle çizilir
           const om = makeOutlineMat();
           let ol;

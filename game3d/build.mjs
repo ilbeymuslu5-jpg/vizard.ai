@@ -31,8 +31,11 @@ const res = await build({
 });
 const js = res.outputFiles[0].text;
 const shell = fs.readFileSync(path.join(DIR, 'shell.html'), 'utf8');
-const glb = fs.readFileSync(path.join(DIR, 'knight.glb')).toString('base64');
-const tex = fs.readFileSync(path.join(DIR, 'knight_tex.jpg')).toString('base64');
+/* Kahraman modeli: Meshy AI "Low Poly Sentinel" — yürüme + koşma klipleri tek
+   dosyada birleştirilmiş, meshopt ile sıkıştırılmış (çözücüsü pakette). Dokusu
+   GLB'nin İÇİNDE; çalışma anında ham baytlardan çözülüyor (bkz. main.js
+   decodeGlbTextures), o yüzden ayrı bir doku dosyası gömülmüyor. */
+const glb = fs.readFileSync(path.join(DIR, 'hero.glb')).toString('base64');
 const uipack = fs.readFileSync(path.join(DIR, 'assets', 'uipack_rpg_sheet.png')).toString('base64');
 /* CSS'te kullanılan tekil sprite'lar AYRI dosyalar olarak gömülür (Kenney paketinde
    zaten hazır geliyorlar) — çalışma anında atlas'tan canvas.toDataURL() ile kırpmak
@@ -83,7 +86,7 @@ if(!m){m=document.createElement("meta");m.name="viewport";document.head.appendCh
 m.content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
 addEventListener("load",function(){setTimeout(function(){dispatchEvent(new Event("resize"));},60);});})();</script>`;
 
-const payload = `<script>window.__KNIGHT_B64="${glb}";window.__KNIGHT_TEX_B64="${tex}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};window.__ITEM_ICONS_B64=${JSON.stringify(itemIcons)};window.__ARMOR_GLB_B64=${embedArmor ? JSON.stringify(armorGlb) : 'null'};</script>\n<script>${js}</script>`;
+const payload = `<script>window.__HERO_B64="${glb}";window.__UIPACK_B64="${uipack}";window.__UI_SPRITES_B64=${JSON.stringify(uiSprites)};window.__ITEM_ICONS_B64=${JSON.stringify(itemIcons)};window.__ARMOR_GLB_B64=${embedArmor ? JSON.stringify(armorGlb) : 'null'};</script>\n<script>${js}</script>`;
 
 let out;
 if (artifactMode) {
