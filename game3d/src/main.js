@@ -2626,7 +2626,7 @@ function loadGlbPiece(setId, piece) {
    "uzun/dar" kaldığı için daha fazla büyütülmesi gerekiyordu (görsel
    taramayla bulundu — 1.35 miğfer/göğüslükte yeterliyken eldivende hâlâ
    gövdenin içindeydi). */
-const GLB_SET_INFLATE = { templar: { helm: 1.35, chest: 1.35, glove_A: 1.6, glove_B: 1.6, boot_A: 1.8, boot_B: 1.8 } };
+const GLB_SET_INFLATE = { templar: { helm: 1.35, chest: 1.35, glove_A: 1.85, glove_B: 1.85, boot_A: 1.8, boot_B: 1.8 } };
 const _fitBox = new THREE.Box3(), _fitSize = new THREE.Vector3(), _fitCtr = new THREE.Vector3();
 function fitGlbPiece(src, pieceName, setId) {
   const cfg = GLB_FIT[pieceName] || { size: 0.5, axis: 'max', anchor: 0.5 };
