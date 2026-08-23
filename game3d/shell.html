@@ -229,20 +229,23 @@
      kalıyor ki #gl/#fx'teki gerçek 3B karakter (main.js bu ekranda kamerayı
      karaktere yakınlaştırıp sola kaydırıyor) arkadan görünsün; sağ taraf
      bilgi panelinin okunabilmesi için opak. */
+  /* Karakter artık arkadaki oyun canvas'ından DEĞİL, .invPreview içindeki
+     kendi #pvw canvas'ından geliyor; o yüzden zemin baştan sona opak —
+     .overlay'den miras kalan backdrop-filter:blur() de kapatıldı (arkadaki
+     sahneyi bulanıklaştırıp önizlemeyi "sisli" gösteriyordu). */
   #inv.invOv{
-    background:linear-gradient(90deg, rgba(6,7,14,.08) 0%, rgba(7,7,15,.42) 34%, rgba(8,7,16,.94) 46%, rgba(6,7,14,.97) 100%);
+    background:radial-gradient(ellipse at 22% 45%, rgba(26,30,52,.98), rgba(6,7,14,.99) 70%);
     align-items:stretch; justify-content:flex-start; gap:10px;
-    /* .overlay'in backdrop-filter:blur(3px)'i SOL taraftaki (neredeyse
-       şeffaf) bölgede arkadaki gerçek 3B karakteri de bulanıklaştırıyordu —
-       karakter önizlemesi hep "sisli" görünüyordu. Burada tamamen kapatılıp
-       netlik sağ paneldeki opak zemine bırakılıyor (zaten okunaklı). */
     backdrop-filter:none; -webkit-backdrop-filter:none;
   }
+  #pvw{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
   .invHead{ text-align:center; flex:none; }
   .invBody{ flex:1 1 auto; width:100%; max-width:900px; margin:0 auto;
     display:grid; grid-template-columns:minmax(64px,30%) 1fr; gap:0; min-height:0; }
   .invPreview{ position:relative; display:flex; align-items:center; pointer-events:none; }
-  .invRail{ display:flex; flex-direction:column; gap:8px; pointer-events:auto; }
+  /* Ray, önizleme canvas'ının ÜSTÜNDE kalmalı (ikisi de .invPreview içinde) */
+  .invRail{ display:flex; flex-direction:column; gap:8px; pointer-events:auto;
+    position:relative; z-index:2; }
   .railSlot{ width:52px; height:52px; border-radius:12px; padding:0;
     background:rgba(10,10,20,.5); border:2px solid rgba(255,255,255,.16);
     display:flex; align-items:center; justify-content:center; position:relative;
@@ -300,6 +303,17 @@
   .setRow b{ font-size:11px; color:#ffd479; }
   .setRow span{ font-size:10.5px; color:#5f6884; }
   .setRow span.on{ color:#7fe6bd; font-weight:700; }
+  /* Telefon: iki sütun yerine ÜST/ALT yerleşim — dar bir sütunda karakter
+     avuç içi kadar kalıyordu. Önizleme tam genişliği alır, yuva rayı da
+     dikey yerine yatay olarak önizlemenin altına yerleşir. (Bu blok
+     .invBody/.invRail tanımlarından SONRA gelmeli, yoksa eziliyor.) */
+  @media (max-width:620px){
+    .invBody{ grid-template-columns:1fr; grid-template-rows:minmax(0,36vh) minmax(0,1fr); }
+    .invPreview{ justify-content:center; overflow:hidden; }
+    .invRail{ flex-direction:row; justify-content:center; width:100%;
+      position:absolute; left:0; bottom:2px; }
+    .invPanel{ padding:4px 6px 4px; }
+  }
 
   /* ========== TEÇHİZAT (GİYİLEBİLİRLER) ========== */
   #gear{ display:flex; flex-direction:column; gap:8px; }
@@ -395,9 +409,15 @@
     <div class="lvSub" id="invOdds"></div>
   </div>
   <div class="invBody">
-    <!-- Sol: canlı 3B karakter önizlemesi (gerçek sahne — kamera bu ekranda
-         karaktere yakınlaşıp sola kayıyor) + kuşanılan 6 yuvanın rayı -->
-    <div class="invPreview"><div class="invRail" id="invRail"></div></div>
+    <!-- Sol: KENDİ canvas'ında canlı 3B karakter önizlemesi (#pvw) + kuşanılan
+         4 yuvanın rayı. Karakter modeli envanter açılınca oyun sahnesinden
+         alınıp buradaki ayrı sahneye taşınıyor (bkz. main.js openPreview) —
+         böylece arenanın arkasından bulanık görünmek yerine kendi kadrajında,
+         net ve tam boy duruyor. -->
+    <div class="invPreview">
+      <canvas id="pvw"></canvas>
+      <div class="invRail" id="invRail"></div>
+    </div>
     <div class="invPanel">
       <div class="invSlotName" id="invSlotName"></div>
       <div class="statsGrid" id="heroStats"></div>

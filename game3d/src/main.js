@@ -1814,14 +1814,17 @@ const OUTFIT = {
 /* Yuvalar: hangi kemiğe, hangi konum/dönüşle bağlanacak.
    pos/rot KARAKTER uzayında (dünya birimi, +Z ileri, +Y yukarı). */
 const GEAR = {
+  /* pos değerleri kemiğin DÜNYA konumuna eklenen ofsettir (dünya birimi);
+     karakterin gerçek kemik/gövde ölçüleri ölçülerek seçildi — bkz. GLB_FIT
+     ve oradaki anchor kuralı (miğferin alt kenarı boyun hizasına oturur). */
   helm:   { name: 'Miğfer',   icon: '⛑️', bones: ['Head'],
-            pos: [0, 0.63, -0.11], rot: [0, 0, 0] },
+            pos: [0, 0.46, -0.11], rot: [0, 0, 0] },
   chest:  { name: 'Göğüslük', icon: '🎽', bones: ['Spine02'],
-            pos: [0, 0.19, -0.11], rot: [0.06, 0, 0] },
+            pos: [0, 0.11, -0.11], rot: [0.06, 0, 0] },
   gloves: { name: 'Kolluk',   icon: '🧤', bones: ['LeftForeArm', 'RightForeArm'], mirror: true,
-            pos: [0.09, -0.05, -0.1], rot: [0, 0, 0] },
+            pos: [0.03, -0.14, -0.1], rot: [0, 0, 0] },
   boots:  { name: 'Bot',      icon: '🥾', bones: ['LeftFoot', 'RightFoot'], mirror: true,
-            pos: [0.03, -0.01, -0.09], rot: [0, 0, 0] },
+            pos: [0.03, -0.11, -0.09], rot: [0, 0, 0] },
 };
 const GEAR_SLOTS = Object.keys(GEAR);
 
@@ -2425,15 +2428,32 @@ const GLB_ARMOR_SETS = {
 // gerçek geometrisiyle kendi kemiğine (LeftForeArm/RightForeArm vb.) takılıyor)
 const GLB_SLOT_PIECES = { helm: ['helm'], chest: ['chest'], gloves: ['glove_A', 'glove_B'], boots: ['boot_A', 'boot_B'] };
 // Tüm setlerde ortak (Ametist üstünde kalibre edildi, README'de gerekçesi var)
-/* bot: eldiven/miğfer/göğüslükle AYNI kalibrasyon formülü (parça kendi
-   dosya-uzayı bbox merkezinde) ayak/bacak bölgesinde onu neredeyse tamamen
-   baldırın opak gövde-mesh'inin İÇİNE gömüyordu — dışarıdan görününce "eksik
-   bot" gibi duruyordu. Diğer 3 parçadan farklı olarak bot burada BÜYÜTÜLEREK
-   dışarı taşırılıyor (10 setin hepsinde aynı sorun, tek ortak sabitle çözüldü). */
-/* eldiven de bot ile aynı sorunu yaşıyordu: ince bilek/el geometrisi
-   kalın kol etinin içinde neredeyse tamamen kayboluyordu (bkz. yukarıdaki
-   bot notu) — aynı şekilde büyütülerek dışarı taşırıldı. */
-const GLB_PIECE_SCALE = { helm: 2.3, chest: 1.8, glove_A: 2.0, glove_B: 2.0, boot_A: 2.2, boot_B: 2.2 };
+/* PARÇA OTURTMA KURALLARI — ölçüm tabanlı, sete bağlı DEĞİL.
+   Önceki sürümler her parça tipine ortak bir ÇARPAN uyguluyordu
+   (ör. "eldiveni 1.1x büyüt"). Bu, kalibrasyonun yapıldığı Ametist setinde
+   çalışıyordu ama setlerin kendi dosya ölçekleri birbirinden çok farklı:
+   aynı çarpan ince bir eldiveni kolun etinin İÇİNDE bırakırken kalın bir
+   miğferi devasa yapıyordu — "giydiğim şey görünmüyor" şikâyetinin kökü
+   buydu. Artık her parça yüklendiğinde kendi sınır kutusu ÖLÇÜLÜP hedef
+   dünya boyutuna normalize ediliyor.
+     size   : hedef dünya boyutu (karakter ~2.23 birim boyunda, kafası
+              orantısız büyük — ölçüler ölçülerek seçildi)
+     axis   : normalize ederken hangi boyut baz alınsın. Miğfer/göğüslükte
+              'x' (GENİŞLİK): tepelik/alev/tüy gibi süslemeler yüksekliği
+              şişirdiği için 'max' kullanmak zırhı küçültüp yüze indiriyordu.
+     anchor : tutucu noktanın parçanın dikey ekseninde nereye denk geldiği
+              (0 = kutunun ALTI, .5 = ortası, 1 = üstü). Miğferde 0.15:
+              alt kenar boyun hizasına oturur, tepelik yukarı taşar —
+              gerçek bir kaskın kafaya oturma biçimi. Botta 0.2: taban
+              zemine yakın durur. */
+const GLB_FIT = {
+  helm:    { size: 1.00, axis: 'x',   anchor: 0.15 },
+  chest:   { size: 1.05, axis: 'x',   anchor: 0.5 },
+  glove_A: { size: 0.44, axis: 'max', anchor: 0.5 },
+  glove_B: { size: 0.44, axis: 'max', anchor: 0.5 },
+  boot_A:  { size: 0.54, axis: 'max', anchor: 0.2 },
+  boot_B:  { size: 0.54, axis: 'max', anchor: 0.2 },
+};
 const glbPieceCache = new Map();      // "setId/parça" -> Promise<THREE.Object3D>
 const glbArmorLoader = new GLTFLoader();
 function loadGlbPiece(setId, piece) {
@@ -2458,20 +2478,38 @@ function loadGlbPiece(setId, piece) {
 // Bir yuvanın GLB seti eşyasını sahneye yansıt — asenkron (ilk kuşanmada ağdan
 // gelir); istek tamamlandığında yuva hâlâ AYNI seti bekliyorsa eklenir (arada
 // hızlıca başka bir eşyaya geçilmişse eski istek sonucu sessizce atlanır).
+/* Yüklenen bir GLB parçasını ölç ve GLB_FIT kuralına göre oturt: sınır
+   kutusunu hedef dünya boyutuna normalize et, dikey tutamak noktasını
+   (anchor) wrap orijinine getir. Dönen grup doğrudan kemik tutucusuna
+   (holder) eklenebilir: holder.scale zaten "1 birim = 1 dünya birimi"
+   dönüşümünü yaptığı için burada ek bir çarpan gerekmiyor. */
+const _fitBox = new THREE.Box3(), _fitSize = new THREE.Vector3(), _fitCtr = new THREE.Vector3();
+function fitGlbPiece(src, pieceName) {
+  const cfg = GLB_FIT[pieceName] || { size: 0.5, axis: 'max', anchor: 0.5 };
+  const inst = src.clone(true);
+  const wrap = new THREE.Group();
+  wrap.add(inst);
+  wrap.updateMatrixWorld(true);
+  _fitBox.setFromObject(wrap);
+  if (_fitBox.isEmpty()) return null;
+  _fitBox.getSize(_fitSize); _fitBox.getCenter(_fitCtr);
+  inst.position.sub(_fitCtr);                       // bbox merkezi -> wrap orijini
+  // anchor 0.5 = merkez (kaydırma yok); 0 = kutunun altı orijine gelsin
+  inst.position.y += (0.5 - cfg.anchor) * _fitSize.y;
+  const base = cfg.axis === 'x' ? Math.max(_fitSize.x, _fitSize.z)
+                                : Math.max(_fitSize.x, _fitSize.y, _fitSize.z);
+  wrap.scale.setScalar(cfg.size / (base || 1));
+  return wrap;
+}
 function attachGlbArmor(slot, holder, setId, reqToken) {
   const def = GLB_ARMOR_SETS[setId]; if (!def) return;
   const pieceNames = GLB_SLOT_PIECES[slot];
   const idx = gearNodes[slot].indexOf(holder);
   const pieceName = pieceNames[idx] ?? pieceNames[0];
-  loadGlbPiece(setId, pieceName).then(scene => {
+  loadGlbPiece(setId, pieceName).then(src => {
     if (holder.userData.glbReq !== reqToken) return;   // bu arada eşya değişmiş
-    const inst = scene.clone(true);
-    const c = def.pieces[pieceName];
-    inst.position.set(-c[0], -c[1], -c[2]);
-    const wrap = new THREE.Group();
-    wrap.add(inst);
-    wrap.scale.setScalar(GLB_PIECE_SCALE[pieceName] || 1);
-    holder.add(wrap);
+    const wrap = fitGlbPiece(src, pieceName);
+    if (wrap) holder.add(wrap);
   }).catch(err => console.warn('zırh parçası yüklenemedi:', setId, pieceName, err));
 }
 let glbReqSeq = 0;
@@ -3815,47 +3853,94 @@ function renderInventory() {
     ['common', 'rare', 'epic', 'legend'].map(k =>
       `<b style="color:${RAR[k].col}">${RAR[k].name} %${o[k].toFixed(0)}</b>`).join(' · ');
 }
-/* Envanter önizlemesi AYNI 3B sahneyi kullanır (bkz. frame() içindeki
-   kamera yakınlaştırma) ama arenanın geri kalanı (zemin, su, düşman,
-   efektler) arkada görünmeye devam ediyordu — karakter arka plan
-   karmaşasına karışıyordu. Envantere girerken karakter (+ışıklar) DIŞINDAKİ
-   her sahne nesnesi gizlenir, yerine sade bir taban ışıltısı konur; eski
-   görünürlük durumları çıkışta aynen geri yüklenir (ör. bossMesh zaten
-   gizliydi — yanlışlıkla görünür kalmasın). */
-const previewPedestalTex = (() => {
+/* ---------- ENVANTER KARAKTER ÖNİZLEMESİ (AYRI RENDER HATTI) ----------
+   Önceki sürümlerde önizleme, oyun sahnesinin kendisiydi: kamera karaktere
+   yakınlaşıp sola kayıyordu ve karakter, üstteki yarı saydam overlay'in
+   ARKASINDAN görünüyordu. Bu iki kalıcı sorun doğuruyordu:
+     1) overlay'in backdrop-filter'ı + yarı saydam zemini karakteri
+        sisli/bulanık gösteriyordu (kadraj da arenanın ortasındaydı),
+     2) yakınlaşma oyun kamerasının frustum'una bağlı olduğu için karakter
+        panelde küçük ve rastgele konumda kalıyordu.
+   Çözüm: karakter modeli envanter açılınca oyun sahnesinden ALINIP kendi
+   sahnesine + kendi canvas'ına (#pvw, panelin sol sütununda) taşınıyor.
+   Model aynı nesne olduğu için kemiklere takılı tüm zırh parçaları kendi
+   kendine geliyor; kapanışta model oyun sahnesine geri veriliyor. */
+let pvwRenderer = null, pvwScene = null, pvwCam = null, pvwCanvas = null;
+let pvwOn = false, pvwYaw = 0;
+function initPreview() {
+  if (pvwRenderer !== null) return pvwRenderer;
+  pvwCanvas = document.getElementById('pvw');
+  if (!pvwCanvas) return null;
+  pvwRenderer = new THREE.WebGLRenderer({ canvas: pvwCanvas, antialias: !LOW_END, alpha: true });
+  pvwRenderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  pvwRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  pvwScene = new THREE.Scene();
+  // Oyun sahnesiyle aynı ışık kurgusu — zırh malzemeleri aynı görünsün
+  pvwScene.add(new THREE.HemisphereLight(0xdcecff, 0x6b5a48, 1.15));
+  const l = new THREE.DirectionalLight(0xfff4e2, 1.5);
+  l.position.set(2.5, 4, 3.5);
+  pvwScene.add(l);
+  const l2 = new THREE.DirectionalLight(0xbcd0ff, 0.5);   // arkadan dolgu: siluet ayrışsın
+  l2.position.set(-2.5, 2, -3);
+  pvwScene.add(l2);
+  // Ayak altı ışıltısı (karakter boşlukta durmasın)
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
   const grd = g.createRadialGradient(64, 64, 4, 64, 64, 64);
-  grd.addColorStop(0, 'rgba(255,199,120,.4)');
-  grd.addColorStop(0.55, 'rgba(255,199,120,.14)');
-  grd.addColorStop(1, 'rgba(255,199,120,0)');
+  grd.addColorStop(0, 'rgba(255,206,130,.42)');
+  grd.addColorStop(0.5, 'rgba(255,206,130,.13)');
+  grd.addColorStop(1, 'rgba(255,206,130,0)');
   g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
-})();
-const previewPedestal = new THREE.Mesh(
-  new THREE.CircleGeometry(2.6, 32),
-  new THREE.MeshBasicMaterial({ map: previewPedestalTex, transparent: true, depthWrite: false }));
-previewPedestal.rotation.x = -Math.PI / 2;
-previewPedestal.renderOrder = -1;
-previewPedestal.visible = false;
-scene.add(previewPedestal);
-let _invWorldSnapshot = null;
-function setPreviewIsolation(on) {
-  if (on) {
-    if (_invWorldSnapshot) return;
-    _invWorldSnapshot = [];
-    for (const child of scene.children) {
-      if (child === P.model || child === previewPedestal || child.isLight) continue;
-      _invWorldSnapshot.push([child, child.visible]);
-      child.visible = false;
-    }
-    previewPedestal.visible = true;
-  } else {
-    if (!_invWorldSnapshot) return;
-    for (const [child, vis] of _invWorldSnapshot) child.visible = vis;
-    _invWorldSnapshot = null;
-    previewPedestal.visible = false;
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.5, 32),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  disc.rotation.x = -Math.PI / 2; disc.position.y = 0.01; disc.renderOrder = -1;
+  pvwScene.add(disc);
+  pvwCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  return pvwRenderer;
+}
+function openPreview() {
+  if (!initPreview() || !P.model || pvwOn) return;
+  pvwOn = true;
+  pvwScene.add(P.model);                 // three.js eski ebeveynden kendisi çıkarır
+  P.model.position.set(0, 0, 0);
+  pvwYaw = 0;
+}
+function closePreview() {
+  if (!pvwOn) return;
+  pvwOn = false;
+  if (P.model) scene.add(P.model);       // oyun sahnesine geri ver
+}
+/* Modelin (zırhlar dahil) gerçek sınırlarını ölçüp kadrajı ona göre kurar —
+   kuşanılan parça değiştikçe silüet büyüyüp küçülse de karakter panelde hep
+   aynı boyda ve ortada durur. */
+const _pvwBox = new THREE.Box3(), _pvwSize = new THREE.Vector3(), _pvwCtr = new THREE.Vector3();
+function renderPreview(rdt) {
+  if (!pvwOn || !pvwRenderer || !P.model) return;
+  const w = pvwCanvas.clientWidth, h = pvwCanvas.clientHeight;
+  if (w < 4 || h < 4) return;
+  if (pvwCanvas.width !== Math.round(w * pvwRenderer.getPixelRatio()) ||
+      pvwCanvas.height !== Math.round(h * pvwRenderer.getPixelRatio())) {
+    pvwRenderer.setSize(w, h, false);
   }
+  pvwYaw += rdt * 0.25;                            // yavaş dönüş: zırhın her yüzü görünsün
+  P.model.rotation.y = MODEL_YAW + Math.sin(pvwYaw) * 0.55;
+  P.model.updateMatrixWorld(true);
+  _pvwBox.setFromObject(P.model);
+  if (_pvwBox.isEmpty()) return;
+  _pvwBox.getSize(_pvwSize); _pvwBox.getCenter(_pvwCtr);
+  /* Kadraj modeli HER İKİ eksende de içine almalı: dar bir sütunda (telefon)
+     sadece yüksekliğe göre kurulan frustum karakteri yanlardan kırpıyordu.
+     Yatay gereksinim, izometrik bakış yüzünden x ve z'nin ikisine de bağlı. */
+  const aspect = w / h;
+  const horiz = Math.max(_pvwSize.x, _pvwSize.z);
+  const viewH = Math.max(Math.max(_pvwSize.y, 0.5), horiz / Math.max(aspect, 0.05)) * 1.15;
+  pvwCam.top = viewH / 2; pvwCam.bottom = -viewH / 2;
+  pvwCam.left = -viewH * aspect / 2; pvwCam.right = viewH * aspect / 2;
+  pvwCam.updateProjectionMatrix();
+  // Hafif yüksekten, hafif yandan bakış (envanter mankeni hissi)
+  pvwCam.position.set(_pvwCtr.x + 6, _pvwCtr.y + 2.2, _pvwCtr.z + 14);
+  pvwCam.lookAt(_pvwCtr.x, _pvwCtr.y, _pvwCtr.z);
+  pvwRenderer.render(pvwScene, pvwCam);
 }
 function openInventory() {
   if (G.state !== 'PLAY' && G.state !== 'PAUSED') return;
@@ -3864,14 +3949,14 @@ function openInventory() {
   elPauseBtn.classList.remove('show'); elDashBtn.classList.remove('show');
   if (elBagBtn) elBagBtn.classList.remove('show');
   elInv.classList.add('show');
-  setPreviewIsolation(true);
+  openPreview();
 }
 function closeInventory() {
   elInv.classList.remove('show');
   G.state = G.prevState === 'PAUSED' ? 'PAUSED' : 'PLAY';
   elPauseBtn.classList.add('show'); elDashBtn.classList.add('show');
   if (elBagBtn) elBagBtn.classList.add('show');
-  setPreviewIsolation(false);
+  closePreview();
 }
 
 /* ============ 12) AKIŞ: MENÜ / DURAKLAT / SONUÇ ============ */
@@ -3904,7 +3989,7 @@ function startGame() {
   elMenu.classList.remove('show'); elOver.classList.remove('show');
   elPaused.classList.remove('show'); elLevelup.classList.remove('show');
   if (elInv) elInv.classList.remove('show');
-  setPreviewIsolation(false);
+  closePreview();
   elPauseBtn.classList.add('show');
   elDashBtn.classList.add('show');
   if (elBagBtn) elBagBtn.classList.add('show');
@@ -3924,7 +4009,7 @@ function showPauseInfo() {
 function gameOver(win) {
   G.state = 'OVER'; G.win = win;
   if (elInv) elInv.classList.remove('show');
-  setPreviewIsolation(false);
+  closePreview();
   META.bank += G.gold; META.skillPts += G.skillPtsEarned; metaSave(); renderShop();  // toplanan altın + yetenek puanı kalıcı
   win ? SFX.win() : SFX.over();
   elPauseBtn.classList.remove('show');
@@ -4153,15 +4238,8 @@ function frame(now) {
     camera.zoom = 1;
     camera.updateProjectionMatrix();
   }
-  // Envanterdeyken karakter kameraya dönsün (oyunda donduğu son yön yerine) —
-  // yaw kuralı: yön vektörü (sin yaw, cos yaw); kamera CAM_DIR=(1,y,1)
-  // yönünden bakıyor, o yüzden karaktere bakan yön π/4.
-  if (G.state === 'INV' && P.model) {
-    const face = Math.PI / 4 + MODEL_YAW;
-    const d = ((face - P.model.rotation.y + Math.PI * 3) % TAU) - Math.PI;
-    P.model.rotation.y += d * Math.min(1, rdt * 6);
-    previewPedestal.position.set(P.x, MODEL_Y + 0.02, P.z);
-  }
+  // Not: envanterde karakter artık bu sahnede DEĞİL — kendi önizleme
+  // sahnesinde/canvas'ında çiziliyor (bkz. renderPreview).
 
   // kamera + ekran sallantısı
   _camOff.copy(CAM_DIR).multiplyScalar(70);
@@ -4180,6 +4258,7 @@ function frame(now) {
   }
   syncEnemyMeshes();
   renderer.render(scene, camera);
+  renderPreview(rdt);                   // envanter açıksa karakter önizlemesi
   drawOverlay();
 }
 
@@ -4211,7 +4290,7 @@ window.__game = { G, P, enemies, bullets, pickups, zones, parts, texts, WEAPONS,
                   SKILLS, pickSkill, renderSkills, applySkillTree, dmgOf, updateSkillTimers,
                   resetAll, resetPlayer, gameOver, explode, SET_BONUS, equippedSetCounts, biomeAt,
                   BOSS_THEMES, bossAttack, CLASS_WEAPON_TYPE, get weaponHolder() { return weaponHolder; },
-                  updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS,
+                  updateWeapons, createArmorPiece, ARMOR_RARITY_ALIAS, GLB_FIT,
                   UI_ATLAS, get uiImg() { return uiImg; }, drawRpgBar,
                   get mixer() { return mixer; }, get anim() { return { walk: actWalk, run: actRun }; },
                   get MODEL_YAW() { return MODEL_YAW; }, set MODEL_YAW(v) { MODEL_YAW = v; } };
