@@ -1,967 +1,896 @@
 /* =========================================================================
-   NEON BEAT RUNNER
-   A rhythm endless-runner: the camera flies down a glowing zig-zag corridor
-   and you tap in time with the beat to make it through every turn.
-   Pure canvas 2D + a hand-rolled perspective projection, no dependencies.
+   NEON ZIGZAG — a rhythm zig-zag runner.
+   A glowing line races along an elevated neon path floating over a synth
+   grid. Tap on the beat to turn 90 degrees at every corner; miss and you
+   fall off the edge. Rendered with Three.js, music synthesized in WebAudio.
    ========================================================================= */
 
 (() => {
   'use strict';
 
-  // ---------------------------------------------------------------------
-  // Canvas / DPR setup
-  // ---------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Config
+  // -----------------------------------------------------------------------
+  const CFG = {
+    pathWidth: 2.2,
+    blockDepth: 6,          // how far the path blocks extend downward
+    baseSpeed: 5.2,         // units / second at level 1
+    speedPerLevel: 0.45,
+    maxSpeed: 9.5,
+    bpm: 126,
+    minRunBeats: 2,         // segment lengths measured in beats
+    maxRunBeats: 4,
+    beatsPerLevel: 28,      // level length in beats of travel
+    perfectDist: 0.55,      // max distance from corner for PERFECT
+    goodDist: 1.25,         // max distance from corner for GOOD
+    startLives: 3,
+    fallTime: 1.1,          // seconds of falling before respawn
+    invulnTime: 1.4,
+    gridY: -3.6,
+    drawAhead: 90,          // path generated this far ahead of the head
+    keepBehind: 40,         // path kept alive this far behind the head
+  };
+
+  // Two travel directions (classic zig-zag): +X and -Z.
+  const DIR_A = new THREE.Vector3(1, 0, 0);
+  const DIR_B = new THREE.Vector3(0, 0, -1);
+  // The camera looks roughly along the diagonal between them.
+  const DIAG = new THREE.Vector3(1, 0, -1).normalize();
+
+  // Color themes — the world shifts palette on level-up, like the video:
+  // cyan world first, then violet, then sunset orange, then teal-green.
+  const THEMES = [
+    { glow: 0x4df3ff, accent: 0xffb84d, side: 0x0d2f4a, sideAccent: 0x9a2fd0,
+      bg: 0x030714, fog: 0x041022, grid1: 0x1ad0e0, grid2: 0x0a4a66,
+      debris: [0x4df3ff, 0xffa93d, 0x9a5cff] },
+    { glow: 0xc46bff, accent: 0xffc44d, side: 0x2a1150, sideAccent: 0xff4fd8,
+      bg: 0x0a0418, fog: 0x140a2e, grid1: 0xb050ff, grid2: 0x3c1470,
+      debris: [0xc46bff, 0xff8a3d, 0x4df3ff] },
+    { glow: 0xffa14d, accent: 0xff5f7a, side: 0x3a1430, sideAccent: 0xd23fd8,
+      bg: 0x140510, fog: 0x2a0a20, grid1: 0xff7ad0, grid2: 0x701c50,
+      debris: [0xffa14d, 0xff5f9a, 0xc46bff] },
+    { glow: 0x53ffd0, accent: 0xffd76e, side: 0x0c3a30, sideAccent: 0x3fa8ff,
+      bg: 0x03110d, fog: 0x06221c, grid1: 0x2ae8b8, grid2: 0x0a5a48,
+      debris: [0x53ffd0, 0xffd76e, 0x4da2ff] },
+  ];
+
+  // -----------------------------------------------------------------------
+  // Renderer / scene
+  // -----------------------------------------------------------------------
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  let W = 0, H = 0, DPR = 1;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 260);
 
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
   resize();
 
-  // ---------------------------------------------------------------------
-  // Color themes (cycle every few levels, like the reference video)
-  // ---------------------------------------------------------------------
-  const THEMES = [
-    { name: 'cyan',   glow: '#4CF3FF', glow2: '#1FA8FF', wall: '#0b3550', wallDark: '#04121e', accent: '#FFC060', sky1: '#020617', sky2: '#0a2540', text: '#eafcff' },
-    { name: 'violet', glow: '#B98CFF', glow2: '#FF6FD8', wall: '#2b1140', wallDark: '#120a22', accent: '#FFD36E', sky1: '#0a0414', sky2: '#2a0f3a', text: '#f6ecff' },
-    { name: 'sunset', glow: '#FF7A59', glow2: '#FFD24C', wall: '#3a1030', wallDark: '#170714', accent: '#7CF9FF', sky1: '#0d0510', sky2: '#3a1030', text: '#fff3ea' },
-    { name: 'lime',   glow: '#B6FF4C', glow2: '#4CFFDA', wall: '#0f3320', wallDark: '#06180f', accent: '#FF6FA5', sky1: '#020a06', sky2: '#0d3320', text: '#eafff0' },
-  ];
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const keyLight = new THREE.DirectionalLight(0xbfe8ff, 1.1);
+  keyLight.position.set(-3, 8, 4);
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0xff70d8, 0.5);
+  rimLight.position.set(6, 3, -6);
+  scene.add(rimLight);
 
-  // ---------------------------------------------------------------------
-  // Config
-  // ---------------------------------------------------------------------
-  const CFG = {
-    baseBPM: 124,
-    bpmGrowthPerLevel: 3,
-    maxBPM: 190,
-    segLen: 3.2,
-    pathWidth: 2.0,
-    wallHeight: 1.35,
-    camHeight: 1.05,
-    camBack: 3.4,
-    lookAhead: 2.2,
-    fov: 1.55,
-    drawSegments: 16,
-    beatsPerLevel: 8,
-    perfectWindow: 0.10,
-    goodWindow: 0.20,
-    startLives: 3,
-    maxLives: 3,
+  // -----------------------------------------------------------------------
+  // Shared materials (recolored on theme change)
+  // -----------------------------------------------------------------------
+  const matTop = new THREE.MeshLambertMaterial({ color: 0x05080f });
+  const matSide = new THREE.MeshLambertMaterial({ color: THEMES[0].side });
+  const matSideAccent = new THREE.MeshBasicMaterial({ color: THEMES[0].sideAccent });
+  const matGlow = new THREE.MeshBasicMaterial({ color: THEMES[0].glow });
+  const matAccent = new THREE.MeshBasicMaterial({ color: THEMES[0].accent });
+  const matTrail = new THREE.MeshBasicMaterial({ color: 0xaefcff });
+  const debrisMats = THEMES[0].debris.map(c =>
+    new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.85 }));
+  const debrisFillMat = new THREE.MeshLambertMaterial({
+    color: 0x0a1a2e, transparent: true, opacity: 0.9 });
+
+  // Radial glow texture for sprites
+  function makeGlowTexture(inner, outer) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    grad.addColorStop(0, inner);
+    grad.addColorStop(0.35, outer);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+  const glowTex = makeGlowTexture('rgba(255,255,255,0.95)', 'rgba(90,230,255,0.45)');
+
+  // -----------------------------------------------------------------------
+  // Grid floor (two layered grids, snapped to camera so they look infinite)
+  // -----------------------------------------------------------------------
+  let gridA = null, gridB = null;
+  function buildGrids(theme) {
+    if (gridA) { scene.remove(gridA); gridA.geometry.dispose(); gridA.material.dispose(); }
+    if (gridB) { scene.remove(gridB); gridB.geometry.dispose(); gridB.material.dispose(); }
+    gridA = new THREE.GridHelper(360, 120, theme.grid1, theme.grid1);
+    gridA.material.transparent = true;
+    gridA.material.opacity = 0.65;
+    gridA.position.y = CFG.gridY;
+    scene.add(gridA);
+    gridB = new THREE.GridHelper(360, 30, theme.grid2, theme.grid2);
+    gridB.material.transparent = true;
+    gridB.material.opacity = 0.85;
+    gridB.position.y = CFG.gridY - 0.02;
+    scene.add(gridB);
+  }
+
+  // -----------------------------------------------------------------------
+  // Path generation
+  // Each "run" is a straight stretch: { start, dir, len, group, corner }
+  // corner = world position of the turn at the END of the run.
+  // -----------------------------------------------------------------------
+  const runs = [];
+  let genCursor = new THREE.Vector3(0, 0, 0);
+  let genDir = DIR_B.clone();          // first run heads "into" the screen
+  let genTotal = 0;                    // total generated path length
+
+  function beatLen() {
+    return speedForLevel(state.level) * (60 / CFG.bpm);
+  }
+
+  function speedForLevel(level) {
+    return Math.min(CFG.maxSpeed, CFG.baseSpeed + (level - 1) * CFG.speedPerLevel);
+  }
+
+  function makeRun(start, dir, len) {
+    const w = CFG.pathWidth, d = CFG.blockDepth;
+    const end = start.clone().addScaledVector(dir, len);
+    const group = new THREE.Group();
+
+    // Main block: stretched along dir, extended half a width at both ends
+    // so consecutive runs join seamlessly at corners.
+    const alongX = Math.abs(dir.x) > 0.5;
+    const sx = alongX ? len + w : w;
+    const sz = alongX ? w : len + w;
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, d, sz),
+      [matSide, matSide, matTop, matSide, matSide, matSide]);
+    const mid = start.clone().add(end).multiplyScalar(0.5);
+    block.position.set(mid.x, -d / 2, mid.z);
+    group.add(block);
+
+    // Neon edge strips along the two top edges. Each strip is exactly `len`
+    // long but shifted half a path-width along the run, so the strips of
+    // consecutive runs join into one continuous outline around the zig-zag
+    // (outer edges wrap the outer corners, inner edges meet at the inner
+    // corners — no crossings on the walkable top).
+    const stripT = 0.1, stripH = 0.07;
+    const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+    for (const s of [-1, 1]) {
+      const shift = s * (w / 2) * (alongX ? 1 : -1);
+      const strip = new THREE.Mesh(
+        new THREE.BoxGeometry(alongX ? len : stripT, stripH, alongX ? stripT : len),
+        matGlow);
+      strip.position.set(
+        mid.x + perp.x * s * (w / 2 - stripT / 2) + dir.x * shift,
+        stripH / 2,
+        mid.z + perp.z * s * (w / 2 - stripT / 2) + dir.z * shift);
+      group.add(strip);
+    }
+
+    // Magenta/violet accent line lower on both side faces (same shift trick).
+    for (const s of [-1, 1]) {
+      const shift = s * (w / 2) * (alongX ? 1 : -1);
+      const acc = new THREE.Mesh(
+        new THREE.BoxGeometry(alongX ? len : 0.06, 0.1, alongX ? 0.06 : len),
+        matSideAccent);
+      acc.position.set(
+        mid.x + perp.x * s * (w / 2 + 0.03) + dir.x * shift,
+        -1.1,
+        mid.z + perp.z * s * (w / 2 + 0.03) + dir.z * shift);
+      group.add(acc);
+    }
+
+    // Orange L-bracket on the top surface hugging the outer corner of the
+    // upcoming turn (the yellow corner marks in the video).
+    const nextDir = alongX ? DIR_B : DIR_A;
+    const bl = 0.8, bt = 0.14;
+    const outer = end.clone()
+      .addScaledVector(nextDir, -w / 2)
+      .addScaledVector(dir, w / 2);
+    const inward = new THREE.Vector3().subVectors(end, outer).normalize();
+    const ic = outer.clone().addScaledVector(inward, 0.3); // L corner point
+    const armD = new THREE.Mesh(
+      new THREE.BoxGeometry(alongX ? bl : bt, 0.05, alongX ? bt : bl), matAccent);
+    armD.position.copy(ic).addScaledVector(dir, -(bl / 2 - bt / 2));
+    armD.position.y = 0.06;
+    const armN = new THREE.Mesh(
+      new THREE.BoxGeometry(alongX ? bt : bl, 0.05, alongX ? bl : bt), matAccent);
+    armN.position.copy(ic).addScaledVector(nextDir, bl / 2 - bt / 2);
+    armN.position.y = 0.06;
+    group.add(armD); group.add(armN);
+
+    scene.add(group);
+    return { start: start.clone(), dir: dir.clone(), len, group, corner: end };
+  }
+
+  function generatePath() {
+    while (genTotal < state.traveled + CFG.drawAhead) {
+      const beats = CFG.minRunBeats +
+        Math.floor(Math.random() * (CFG.maxRunBeats - CFG.minRunBeats + 1));
+      const len = Math.max(CFG.pathWidth * 1.6, beats * beatLen());
+      runs.push(makeRun(genCursor, genDir, len));
+      genCursor = genCursor.clone().addScaledVector(genDir, len);
+      genDir = (genDir === DIR_A || genDir.equals(DIR_A)) ? DIR_B.clone() : DIR_A.clone();
+      genTotal += len;
+    }
+    // Drop runs far behind the head.
+    while (runs.length > 2) {
+      const r = runs[0];
+      const behind = r.corner.clone().sub(head.pos).dot(DIAG);
+      if (behind < -CFG.keepBehind) {
+        scene.remove(r.group);
+        r.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+        runs.shift();
+      } else break;
+    }
+  }
+
+  // Is a point on the path (within any nearby run rectangle)?
+  function onPath(p) {
+    const half = CFG.pathWidth / 2 + 0.05;
+    for (let i = runs.length - 1; i >= 0; i--) {
+      const r = runs[i];
+      const rel = p.clone().sub(r.start);
+      const along = rel.dot(r.dir);
+      const perp = Math.abs(rel.x * -r.dir.z + rel.z * r.dir.x); // 2D cross
+      if (along >= -half && along <= r.len + half && perp <= half) return true;
+    }
+    return false;
+  }
+
+  // Distance from a point to the nearest corner (for turn grading).
+  function nearestCornerDist(p) {
+    let best = Infinity;
+    for (const r of runs) {
+      const d = Math.hypot(p.x - r.corner.x, p.z - r.corner.z);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  // -----------------------------------------------------------------------
+  // The line (head + trail)
+  // -----------------------------------------------------------------------
+  const head = {
+    pos: new THREE.Vector3(0, 0.14, 0),
+    dir: DIR_B.clone(),
+    vy: 0,
   };
 
-  // ---------------------------------------------------------------------
-  // Audio (fully synthesized, no external files)
-  // ---------------------------------------------------------------------
-  let actx = null;
+  const headMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.34, 0.26, 0.34), matTrail);
+  scene.add(headMesh);
+
+  // Soft glow sprite + faint bubble around the head (like the video).
+  const headGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, blending: THREE.AdditiveBlending, transparent: true,
+    depthWrite: false, opacity: 0.9 }));
+  headGlow.scale.set(2.6, 2.6, 1);
+  scene.add(headGlow);
+  const bubble = new THREE.Mesh(
+    new THREE.SphereGeometry(1.35, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0x7de8ff, transparent: true,
+      opacity: 0.07, depthWrite: false }));
+  scene.add(bubble);
+
+  // Trail: one stretched box per straight stretch.
+  const trail = [];
+  let curTrail = null;
+
+  function startTrailRun() {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), matTrail);
+    mesh.scale.set(0.26, 0.18, 0.26);
+    scene.add(mesh);
+    curTrail = { mesh, start: head.pos.clone(), dir: head.dir.clone() };
+    trail.push(curTrail);
+    while (trail.length > 26) {
+      const t = trail.shift();
+      scene.remove(t.mesh);
+      t.mesh.geometry.dispose();
+    }
+  }
+
+  function updateTrailRun() {
+    if (!curTrail) return;
+    const len = Math.max(0.26, head.pos.clone().sub(curTrail.start).dot(curTrail.dir));
+    const alongX = Math.abs(curTrail.dir.x) > 0.5;
+    curTrail.mesh.scale.set(alongX ? len : 0.26, 0.18, alongX ? 0.26 : len);
+    const mid = curTrail.start.clone().addScaledVector(curTrail.dir, len / 2);
+    curTrail.mesh.position.set(mid.x, 0.1, mid.z);
+  }
+
+  // -----------------------------------------------------------------------
+  // Sparks (little particles streaming off the head / bursting at turns)
+  // -----------------------------------------------------------------------
+  const SPARK_N = 240;
+  const sparkGeo = new THREE.BufferGeometry();
+  const sparkPos = new Float32Array(SPARK_N * 3);
+  sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+  const sparks = [];
+  for (let i = 0; i < SPARK_N; i++) sparks.push({ life: 0, vel: new THREE.Vector3() });
+  const sparkMat = new THREE.PointsMaterial({
+    color: 0x9df3ff, size: 0.09, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false });
+  scene.add(new THREE.Points(sparkGeo, sparkMat));
+  let sparkCursor = 0;
+
+  function spawnSpark(pos, spread, up) {
+    const s = sparks[sparkCursor];
+    sparkCursor = (sparkCursor + 1) % SPARK_N;
+    s.life = 0.5 + Math.random() * 0.6;
+    sparkPos[sparks.indexOf(s) * 3] = pos.x + (Math.random() - 0.5) * 0.2;
+    sparkPos[sparks.indexOf(s) * 3 + 1] = pos.y + 0.1;
+    sparkPos[sparks.indexOf(s) * 3 + 2] = pos.z + (Math.random() - 0.5) * 0.2;
+    s.vel.set((Math.random() - 0.5) * spread,
+      Math.random() * up,
+      (Math.random() - 0.5) * spread);
+  }
+
+  function updateSparks(dt) {
+    for (let i = 0; i < SPARK_N; i++) {
+      const s = sparks[i];
+      if (s.life <= 0) { sparkPos[i * 3 + 1] = -999; continue; }
+      s.life -= dt;
+      s.vel.y -= 2.2 * dt;
+      sparkPos[i * 3] += s.vel.x * dt;
+      sparkPos[i * 3 + 1] += s.vel.y * dt;
+      sparkPos[i * 3 + 2] += s.vel.z * dt;
+    }
+    sparkGeo.attributes.position.needsUpdate = true;
+  }
+
+  // -----------------------------------------------------------------------
+  // Floating debris — neon wireframe shards drifting beside the path
+  // -----------------------------------------------------------------------
+  const DEBRIS_N = 46;
+  const debris = [];
+
+  function debrisGeometry(kind) {
+    switch (kind) {
+      case 0: return new THREE.TetrahedronGeometry(0.9 + Math.random() * 1.6);
+      case 1: return new THREE.BoxGeometry(0.7 + Math.random(), 0.7 + Math.random(), 0.7 + Math.random());
+      case 2: return new THREE.TorusGeometry(0.9 + Math.random() * 0.8, 0.07, 8, 26);
+      case 3: return new THREE.CircleGeometry(0.8 + Math.random() * 0.8, 6);
+      default: return new THREE.OctahedronGeometry(0.6 + Math.random() * 1.2);
+    }
+  }
+
+  function placeDebris(d, aheadMin, aheadMax) {
+    const along = state.traveled + aheadMin + Math.random() * (aheadMax - aheadMin);
+    const side = (Math.random() < 0.5 ? -1 : 1) * (7 + Math.random() * 22);
+    const perp = new THREE.Vector3(-DIAG.z, 0, DIAG.x);
+    d.group.position.copy(DIAG.clone().multiplyScalar(along))
+      .addScaledVector(perp, side)
+      .setY(-5 + Math.random() * 13);
+    d.spin.set((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6);
+    d.drift = (Math.random() - 0.5) * 0.35;
+  }
+
+  function buildDebris() {
+    for (const d of debris) scene.remove(d.group);
+    debris.length = 0;
+    for (let i = 0; i < DEBRIS_N; i++) {
+      const kind = Math.floor(Math.random() * 5);
+      const geo = debrisGeometry(kind);
+      const group = new THREE.Group();
+      const mat = debrisMats[i % debrisMats.length];
+      if (kind !== 2) {
+        const fill = new THREE.Mesh(geo, debrisFillMat);
+        group.add(fill);
+        group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), mat));
+      } else {
+        group.add(new THREE.Mesh(geo,
+          new THREE.MeshBasicMaterial({ color: mat.color, transparent: true, opacity: 0.85 })));
+      }
+      const d = { group, spin: new THREE.Vector3(), drift: 0 };
+      placeDebris(d, -20, 110);
+      scene.add(group);
+      debris.push(d);
+    }
+  }
+
+  function updateDebris(dt) {
+    for (const d of debris) {
+      d.group.rotation.x += d.spin.x * dt;
+      d.group.rotation.y += d.spin.y * dt;
+      d.group.rotation.z += d.spin.z * dt;
+      d.group.position.y += d.drift * dt;
+      const behind = d.group.position.dot(DIAG) - state.traveled;
+      if (behind < -30) placeDebris(d, 60, 130);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Ambient dust particles
+  // -----------------------------------------------------------------------
+  const DUST_N = 200;
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPos = new Float32Array(DUST_N * 3);
+  const dustCol = new Float32Array(DUST_N * 3);
+  function seedDust(theme) {
+    const cols = theme.debris.map(c => new THREE.Color(c));
+    for (let i = 0; i < DUST_N; i++) {
+      const along = state.traveled - 20 + Math.random() * 140;
+      const perp = new THREE.Vector3(-DIAG.z, 0, DIAG.x);
+      const p = DIAG.clone().multiplyScalar(along)
+        .addScaledVector(perp, (Math.random() - 0.5) * 56);
+      dustPos[i * 3] = p.x;
+      dustPos[i * 3 + 1] = -4 + Math.random() * 14;
+      dustPos[i * 3 + 2] = p.z;
+      const c = cols[Math.floor(Math.random() * cols.length)];
+      dustCol[i * 3] = c.r; dustCol[i * 3 + 1] = c.g; dustCol[i * 3 + 2] = c.b;
+    }
+    dustGeo.attributes.position.needsUpdate = true;
+    dustGeo.attributes.color.needsUpdate = true;
+  }
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+  const dustPts = new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    size: 0.16, vertexColors: true, transparent: true, opacity: 0.8,
+    blending: THREE.AdditiveBlending, depthWrite: false }));
+  scene.add(dustPts);
+
+  function updateDust() {
+    for (let i = 0; i < DUST_N; i++) {
+      const along = dustPos[i * 3] * DIAG.x + dustPos[i * 3 + 2] * DIAG.z;
+      if (along - state.traveled < -25) {
+        const perp = new THREE.Vector3(-DIAG.z, 0, DIAG.x);
+        const p = DIAG.clone().multiplyScalar(state.traveled + 100 + Math.random() * 30)
+          .addScaledVector(perp, (Math.random() - 0.5) * 56);
+        dustPos[i * 3] = p.x;
+        dustPos[i * 3 + 1] = -4 + Math.random() * 14;
+        dustPos[i * 3 + 2] = p.z;
+      }
+    }
+    dustGeo.attributes.position.needsUpdate = true;
+  }
+
+  // -----------------------------------------------------------------------
+  // Audio — synth beat + SFX, all generated with WebAudio
+  // -----------------------------------------------------------------------
+  let actx = null, master = null, schedTimer = null, nextStep = 0, stepIdx = 0;
+
   function ensureAudio() {
     if (!actx) {
       actx = new (window.AudioContext || window.webkitAudioContext)();
+      master = actx.createGain();
+      master.gain.value = 0.42;
+      master.connect(actx.destination);
     }
     if (actx.state === 'suspended') actx.resume();
   }
 
-  function click(freq, dur, gain, type) {
-    if (!actx) return;
-    const t0 = actx.currentTime;
-    const osc = actx.createOscillator();
+  function osc(type, freq, t0, dur, vol, dest, glideTo) {
+    const o = actx.createOscillator();
     const g = actx.createGain();
-    osc.type = type || 'square';
-    osc.frequency.value = freq;
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(gain, t0 + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(actx.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.02);
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g).connect(dest || master);
+    o.start(t0); o.stop(t0 + dur + 0.02);
   }
 
-  function beatClick(strong) {
-    click(strong ? 880 : 660, 0.09, strong ? 0.09 : 0.05, 'square');
-  }
-  function sfxPerfect() {
-    click(1400, 0.12, 0.08, 'triangle');
-    setTimeout(() => click(1800, 0.1, 0.05, 'triangle'), 40);
-  }
-  function sfxGood() {
-    click(1000, 0.1, 0.06, 'triangle');
-  }
-  function sfxMiss() {
-    click(160, 0.22, 0.09, 'sawtooth');
-  }
-  function sfxLevelUp() {
-    [0, 1, 2].forEach((i) => setTimeout(() => click(660 + i * 220, 0.14, 0.07, 'triangle'), i * 70));
-  }
-  function sfxGameOver() {
-    [0, 1, 2].forEach((i) => setTimeout(() => click(300 - i * 80, 0.3, 0.08, 'sawtooth'), i * 140));
+  function noise(t0, dur, vol, hp) {
+    const len = Math.ceil(actx.sampleRate * dur);
+    const buf = actx.createBuffer(1, len, actx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    const f = actx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = hp;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(f).connect(g).connect(master);
+    src.start(t0); src.stop(t0 + dur);
   }
 
-  // ---------------------------------------------------------------------
-  // Math helpers
-  // ---------------------------------------------------------------------
-  const TAU = Math.PI * 2;
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  const BASS = [55, 55, 65.4, 49, 55, 55, 82.4, 73.4]; // A1 A1 C2 G1 A1 A1 E2 D2
 
-  // ---------------------------------------------------------------------
-  // Path generation — a chain of nodes connected by straight segments that
-  // turn left/right at (roughly) right angles, à la the reference video.
-  // ---------------------------------------------------------------------
-  const path = {
-    nodes: [{ x: 0, y: 0, z: 0, heading: 0, turn: 0 }],
-    lastSign: 1,
-  };
-
-  function genNextNode() {
-    const prev = path.nodes[path.nodes.length - 1];
-    let sign;
-    const r = Math.random();
-    if (r < 0.68) sign = -path.lastSign;       // alternate = classic zig-zag
-    else sign = path.lastSign;                  // occasional repeat = sharper turn
-    path.lastSign = sign;
-    const mag = (75 + Math.random() * 30) * (Math.PI / 180); // 75°..105°
-    const turn = sign * mag;
-    const heading = prev.heading + turn;
-    const node = {
-      x: prev.x + Math.sin(heading) * CFG.segLen,
-      y: 0,
-      z: prev.z + Math.cos(heading) * CFG.segLen,
-      heading,
-      turn,
-    };
-    path.nodes.push(node);
-  }
-  function genStraightNode() {
-    const prev = path.nodes[path.nodes.length - 1];
-    path.nodes.push({
-      x: prev.x + Math.sin(prev.heading) * CFG.segLen,
-      y: 0,
-      z: prev.z + Math.cos(prev.heading) * CFG.segLen,
-      heading: prev.heading,
-      turn: 0,
-    });
-  }
-  genStraightNode(); // gentle straight opener before the zig-zag begins
-  for (let i = 0; i < 40; i++) genNextNode();
-
-  function ensurePathAhead(idx) {
-    while (path.nodes.length < idx + CFG.drawSegments + 6) genNextNode();
+  function scheduleStep(idx, t) {
+    const inBar = idx % 8;               // 8 eighth-notes per bar
+    if (inBar % 2 === 0) osc('sine', 150, t, 0.16, 0.9, master, 48);   // kick
+    noise(t, 0.05, inBar % 2 === 1 ? 0.25 : 0.12, 6000);               // hats
+    if (inBar === 4) noise(t, 0.16, 0.3, 1600);                        // snare-ish
+    osc('sawtooth', BASS[(idx >> 1) % BASS.length], t, 0.22, 0.16);    // bassline
+    if (idx % 16 === 14)                                               // sparkle stab
+      osc('triangle', 880 + 220 * ((idx >> 4) % 3), t, 0.3, 0.12);
   }
 
-  // ---------------------------------------------------------------------
-  // Game state
-  // ---------------------------------------------------------------------
-  const state = {
-    mode: 'menu', // menu | playing | gameover
-    themeIdx: 0,
-    level: 1,
-    score: 0,
-    highScore: Number(localStorage.getItem('nbr_highscore') || 0),
-    lives: CFG.startLives,
-    combo: 0,
-    beatsThisLevel: 0,
-    bpm: CFG.baseBPM,
-    beatInterval: 60 / CFG.baseBPM,
-    epochStart: 0,       // real-clock time (audio clock) the current tempo epoch began
-    epochBeatOffset: 0,  // fractional beat-count value carried over at epoch start
-    pendingBeat: 1,       // next beat/turn event (index into path.nodes) awaiting judgement
-    camYaw: 0,
-    shake: 0,
-    flashRed: 0,
-    particles: [],
-    floaters: [], // background decor shapes
-    popups: [],   // "PERFECT!" style text popups
-    tapPulse: 0,
-    nextTapWindowOpen: false,
-  };
-
-  function theme() { return THEMES[state.themeIdx % THEMES.length]; }
-
-  function genFloaters() {
-    state.floaters = [];
-    for (let i = 0; i < 70; i++) {
-      const side = Math.random() < 0.5 ? -1 : 1;
-      state.floaters.push({
-        x: side * (4 + Math.random() * 14),
-        y: (Math.random() - 0.35) * 8,
-        z: Math.random() * 140,
-        s: 0.3 + Math.random() * 1.4,
-        rot: Math.random() * TAU,
-        kind: Math.floor(Math.random() * 3),
-        hue: Math.random(),
-      });
-    }
-  }
-  genFloaters();
-
-  function now() {
-    return actx ? actx.currentTime : performance.now() / 1000;
-  }
-
-  function resetRun() {
-    path.nodes = [{ x: 0, y: 0, z: 0, heading: 0, turn: 0 }];
-    path.lastSign = 1;
-    genStraightNode();
-    for (let i = 0; i < 40; i++) genNextNode();
-    state.level = 1;
-    state.score = 0;
-    state.lives = CFG.startLives;
-    state.combo = 0;
-    state.beatsThisLevel = 0;
-    state.themeIdx = 0;
-    state.bpm = CFG.baseBPM;
-    state.beatInterval = 60 / state.bpm;
-    state.epochStart = now() + 1.2; // small lead-in
-    state.epochBeatOffset = 0;
-    state.pendingBeat = 1;
-    state.camYaw = 0;
-    state.shake = 0;
-    state.flashRed = 0;
-    state.particles = [];
-    state.popups = [];
-    genFloaters();
-  }
-
-  function startGame() {
+  function startMusic() {
     ensureAudio();
-    resetRun();
-    state.mode = 'playing';
-  }
-
-  function endGame() {
-    state.mode = 'gameover';
-    if (state.score > state.highScore) {
-      state.highScore = state.score;
-      localStorage.setItem('nbr_highscore', String(state.highScore));
-    }
-    sfxGameOver();
-  }
-
-  // ---------------------------------------------------------------------
-  // Beat / timeline
-  // ---------------------------------------------------------------------
-  // Fractional beat-count elapsed since the game started, continuous across
-  // tempo changes (each level-up re-anchors the epoch instead of resetting it).
-  function getBeatFloat() {
-    return state.epochBeatOffset + (now() - state.epochStart) / state.beatInterval;
-  }
-
-  function timeInfo() {
-    const beatFloat = Math.max(0, getBeatFloat());
-    const beatIndex = Math.floor(beatFloat);
-    const beatFrac = beatFloat - beatIndex; // 0 = just left a node, 1 = arriving next
-    return { beatFloat, beatIndex, beatFrac };
-  }
-
-  function addPopup(text, color) {
-    state.popups.push({ text, color, t: 0, life: 0.7 });
-  }
-
-  function spawnParticles(n, x, y, z, color) {
-    for (let i = 0; i < n; i++) {
-      state.particles.push({
-        x: x + (Math.random() - 0.5) * 0.6,
-        y: y + Math.random() * 0.6,
-        z: z + (Math.random() - 0.5) * 0.6,
-        vx: (Math.random() - 0.5) * 1.5,
-        vy: Math.random() * 2,
-        vz: (Math.random() - 0.5) * 1.5,
-        life: 0.5 + Math.random() * 0.4,
-        t: 0,
-        color,
-      });
-    }
-  }
-
-  function judge(delta) {
-    const abs = Math.abs(delta);
-    if (abs <= CFG.perfectWindow) return 'perfect';
-    if (abs <= CFG.goodWindow) return 'good';
-    return 'miss';
-  }
-
-  function applyJudgement(result) {
-    const th = theme();
-    if (result === 'perfect') {
-      state.combo++;
-      const mult = 1 + Math.floor(state.combo / 10);
-      state.score += 100 * mult;
-      addPopup('PERFECT!', th.glow);
-      sfxPerfect();
-      const node = path.nodes[state.pendingBeat] || path.nodes[0];
-      spawnParticles(14, node.x, 0.4, node.z, th.glow);
-      state.tapPulse = 1;
-    } else if (result === 'good') {
-      state.combo++;
-      const mult = 1 + Math.floor(state.combo / 10);
-      state.score += 50 * mult;
-      addPopup('GOOD', th.glow2);
-      sfxGood();
-      state.tapPulse = 1;
-    } else {
-      state.combo = 0;
-      state.lives--;
-      addPopup('MISS', '#ff4d6d');
-      sfxMiss();
-      state.shake = 1;
-      state.flashRed = 1;
-      if (state.lives <= 0) {
-        setTimeout(endGame, 260);
+    stepIdx = 0;
+    nextStep = actx.currentTime + 0.1;
+    if (schedTimer) clearInterval(schedTimer);
+    schedTimer = setInterval(() => {
+      const stepDur = 60 / CFG.bpm / 2;  // eighth notes
+      while (nextStep < actx.currentTime + 0.14) {
+        scheduleStep(stepIdx, nextStep);
+        state.beatPhase = stepIdx / 2;
+        nextStep += stepDur;
+        stepIdx++;
       }
-    }
+    }, 30);
   }
 
-  // Resolves the currently-pending beat/turn event (path.nodes[state.pendingBeat])
-  // with the given judgement, then advances to the next one and handles leveling.
-  function resolveBeat(result) {
-    ensurePathAhead(state.pendingBeat + 1);
-    applyJudgement(result);
-    state.pendingBeat++;
-    state.beatsThisLevel++;
-    if (state.beatsThisLevel >= CFG.beatsPerLevel) {
-      state.beatsThisLevel = 0;
-      levelUp();
+  function stopMusic() {
+    if (schedTimer) { clearInterval(schedTimer); schedTimer = null; }
+  }
+
+  const sfx = {
+    turn() { if (actx) { osc('square', 660, actx.currentTime, 0.09, 0.2); } },
+    perfect() {
+      if (!actx) return;
+      const t = actx.currentTime;
+      osc('sine', 880, t, 0.16, 0.3);
+      osc('sine', 1318, t + 0.07, 0.22, 0.3);
+    },
+    good() { if (actx) osc('sine', 988, actx.currentTime, 0.15, 0.25); },
+    fall() {
+      if (!actx) return;
+      osc('sawtooth', 420, actx.currentTime, 0.6, 0.35, master, 60);
+      noise(actx.currentTime, 0.4, 0.25, 500);
+    },
+    levelUp() {
+      if (!actx) return;
+      const t = actx.currentTime;
+      [523, 659, 784, 1046].forEach((f, i) => osc('triangle', f, t + i * 0.09, 0.25, 0.28));
+    },
+  };
+
+  // -----------------------------------------------------------------------
+  // HUD
+  // -----------------------------------------------------------------------
+  const el = id => document.getElementById(id);
+  const hud = el('hud'), scoreEl = el('score'), levelEl = el('level');
+  const hearts = Array.from(document.querySelectorAll('#lives .heart'));
+  const progressFill = el('progressFill'), progressNotch = el('progressNotch');
+  const popup = el('popup'), levelFlash = el('levelFlash'), tapCircle = el('tapCircle');
+  const overlay = el('overlay'), title = el('title'), subtitle = el('subtitle');
+  const bigMsg = el('bigMsg'), finalScore = el('finalScore'), promptEl = el('prompt');
+
+  let shownScore = 0;
+  function updateHUD() {
+    shownScore += (state.score - shownScore) * 0.25;
+    if (Math.abs(state.score - shownScore) < 1) shownScore = state.score;
+    scoreEl.textContent = 'SCORE: ' + Math.round(shownScore).toLocaleString('en-US');
+    levelEl.textContent = 'LEVEL: ' + state.level;
+    hearts.forEach((h, i) => h.classList.toggle('lost', i >= state.lives));
+    const p = Math.min(100, state.levelProgress * 100);
+    progressFill.style.width = p + '%';
+    progressNotch.style.left = p + '%';
+  }
+
+  function showPopup(kind) {
+    popup.textContent = kind === 'perfect' ? 'PERFECT!' : 'GOOD!';
+    popup.className = '';
+    void popup.offsetWidth;               // restart CSS animation
+    popup.className = 'show ' + kind;
+  }
+
+  function showLevelFlash(text) {
+    levelFlash.textContent = text;
+    levelFlash.className = '';
+    void levelFlash.offsetWidth;
+    levelFlash.className = 'show';
+  }
+
+  function pulseTapCircle() {
+    tapCircle.classList.remove('pulse');
+    void tapCircle.offsetWidth;
+    tapCircle.classList.add('pulse');
+  }
+
+  // -----------------------------------------------------------------------
+  // Camera — per-level view mode: chase cam, high cam, top-down cam
+  // -----------------------------------------------------------------------
+  const camModes = [
+    { back: 7.5, height: 4.6, ahead: 6.5 },   // low chase (early video frames)
+    { back: 9.5, height: 7.2, ahead: 7.5 },   // higher, further back
+    { back: 2.0, height: 17.5, ahead: 2.8 },  // top-down (late video frames)
+  ];
+  const camCur = { back: 7.5, height: 4.6, ahead: 6.5 };
+  const camPos = new THREE.Vector3();
+  const camLook = new THREE.Vector3();
+  let camInit = false;
+
+  function updateCamera(dt) {
+    const mode = camModes[(state.level - 1) % camModes.length];
+    const k = Math.min(1, dt * 1.2);
+    camCur.back += (mode.back - camCur.back) * k;
+    camCur.height += (mode.height - camCur.height) * k;
+    camCur.ahead += (mode.ahead - camCur.ahead) * k;
+
+    const targetPos = head.pos.clone()
+      .addScaledVector(DIAG, -camCur.back)
+      .add(new THREE.Vector3(0, camCur.height, 0));
+    const targetLook = head.pos.clone().addScaledVector(DIAG, camCur.ahead);
+
+    if (!camInit) { camPos.copy(targetPos); camLook.copy(targetLook); camInit = true; }
+    const f = Math.min(1, dt * 4.5);
+    camPos.lerp(targetPos, f);
+    camLook.lerp(targetLook, f);
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+  }
+
+  // -----------------------------------------------------------------------
+  // Game state
+  // -----------------------------------------------------------------------
+  const state = {
+    mode: 'menu',           // menu | play | fall | over
+    score: 0,
+    lives: CFG.startLives,
+    level: 1,
+    traveled: 0,            // distance along the diagonal, used for culling
+    levelProgress: 0,
+    beatPhase: 0,
+    fallT: 0,
+    invuln: 0,
+    respawn: null,          // { pos, dir }
+    scoreTick: 0,
+  };
+
+  function applyTheme(theme) {
+    scene.background = new THREE.Color(theme.bg);
+    scene.fog = new THREE.Fog(theme.fog, 26, 150);
+    matSide.color.setHex(theme.side);
+    matSideAccent.color.setHex(theme.sideAccent);
+    matGlow.color.setHex(theme.glow);
+    matAccent.color.setHex(theme.accent);
+    debrisMats.forEach((m, i) => m.color.setHex(theme.debris[i % theme.debris.length]));
+    buildGrids(theme);
+  }
+
+  function resetGame() {
+    // Clear path + trail
+    for (const r of runs) {
+      scene.remove(r.group);
+      r.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     }
+    runs.length = 0;
+    for (const t of trail) { scene.remove(t.mesh); t.mesh.geometry.dispose(); }
+    trail.length = 0;
+    curTrail = null;
+
+    genCursor = new THREE.Vector3(0, 0, 0);
+    genDir = DIR_B.clone();
+    genTotal = 0;
+
+    head.pos.set(0, 0.14, 0);
+    head.dir = DIR_B.clone();
+    head.vy = 0;
+
+    state.score = 0;
+    shownScore = 0;
+    state.lives = CFG.startLives;
+    state.level = 1;
+    state.traveled = 0;
+    state.levelProgress = 0;
+    state.fallT = 0;
+    state.invuln = 0;
+    camInit = false;
+
+    applyTheme(THEMES[0]);
+    buildDebris();
+    seedDust(THEMES[0]);
+    generatePath();
+    startTrailRun();
+    updateHUD();
   }
 
   function levelUp() {
     state.level++;
-    state.themeIdx++;
-    // Re-anchor the tempo epoch at the current fractional beat so raising the
-    // BPM doesn't cause the runner to jump or skip a beat.
-    state.epochBeatOffset = getBeatFloat();
-    state.epochStart = now();
-    state.bpm = Math.min(CFG.maxBPM, CFG.baseBPM + (state.level - 1) * CFG.bpmGrowthPerLevel);
-    state.beatInterval = 60 / state.bpm;
-    sfxLevelUp();
-    addPopup('LEVEL ' + state.level, theme().accent);
+    state.levelProgress = 0;
+    showLevelFlash('LEVEL ' + state.level);
+    sfx.levelUp();
+    applyTheme(THEMES[(state.level - 1) % THEMES.length]);
   }
 
-  function handleTap() {
-    if (state.mode === 'menu') { startGame(); return; }
-    if (state.mode === 'gameover') { startGame(); return; }
-    if (state.mode !== 'playing') return;
-
-    const beatFloatNow = getBeatFloat();
-    if (beatFloatNow < 0) return; // still in lead-in, ignore early taps
-
-    const delta = (beatFloatNow - state.pendingBeat) * state.beatInterval;
-    if (Math.abs(delta) <= CFG.goodWindow) {
-      resolveBeat(judge(delta));
+  function loseLife() {
+    state.lives--;
+    updateHUD();
+    if (state.lives <= 0) {
+      gameOver();
+      return;
     }
-    // Otherwise it's a stray tap nowhere near the upcoming beat — ignored,
-    // the pending beat will either be hit later or auto-missed when its window closes.
-  }
-
-  // A miss (no tap before the window closes) is auto-detected every frame.
-  function autoMissCheck() {
-    if (state.mode !== 'playing') return;
-    const beatFloatNow = getBeatFloat();
-    let guard = 0;
-    while ((beatFloatNow - state.pendingBeat) * state.beatInterval > CFG.goodWindow && guard < 8) {
-      resolveBeat('miss');
-      guard++;
+    // Respawn on the run nearest to where we fell, just after its start.
+    let best = runs[0], bestD = Infinity;
+    for (const r of runs) {
+      const d = Math.hypot(head.pos.x - r.corner.x, head.pos.z - r.corner.z);
+      if (d < bestD) { bestD = d; best = r; }
     }
+    state.respawn = {
+      pos: best.start.clone().addScaledVector(best.dir, Math.min(1.2, best.len * 0.3)).setY(0.14),
+      dir: best.dir.clone(),
+    };
   }
 
-  // ---------------------------------------------------------------------
+  function doRespawn() {
+    head.pos.copy(state.respawn.pos);
+    head.dir = state.respawn.dir.clone();
+    head.vy = 0;
+    state.mode = 'play';
+    state.invuln = CFG.invulnTime;
+    startTrailRun();
+  }
+
+  function gameOver() {
+    state.mode = 'over';
+    stopMusic();
+    const best = Math.max(state.score, +(localStorage.getItem('nz_best') || 0));
+    localStorage.setItem('nz_best', best);
+    title.classList.add('hidden');
+    subtitle.classList.add('hidden');
+    bigMsg.textContent = 'GAME OVER';
+    bigMsg.classList.remove('hidden');
+    finalScore.textContent =
+      'SCORE: ' + state.score.toLocaleString('en-US') +
+      '   BEST: ' + best.toLocaleString('en-US');
+    finalScore.classList.remove('hidden');
+    promptEl.textContent = 'TAP TO RETRY';
+    overlay.classList.remove('hidden');
+  }
+
+  function startGame() {
+    overlay.classList.add('hidden');
+    hud.classList.remove('hidden');
+    resetGame();
+    state.mode = 'play';
+    startMusic();
+  }
+
+  // -----------------------------------------------------------------------
   // Input
-  // ---------------------------------------------------------------------
-  function onTapEvent(e) {
-    if (e) e.preventDefault();
-    handleTap();
-  }
-  canvas.addEventListener('pointerdown', onTapEvent, { passive: false });
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'Enter') {
-      onTapEvent(e);
-    }
-  });
+  // -----------------------------------------------------------------------
+  function turn() {
+    if (state.mode !== 'play') return;
+    // Grade the turn by distance to the nearest corner.
+    const d = nearestCornerDist(head.pos);
+    head.dir = Math.abs(head.dir.x) > 0.5 ? DIR_B.clone() : DIR_A.clone();
+    startTrailRun();
+    pulseTapCircle();
+    for (let i = 0; i < 10; i++) spawnSpark(head.pos, 2.4, 2.2);
 
-  // ---------------------------------------------------------------------
-  // Camera / projection
-  // ---------------------------------------------------------------------
-  const cam = { x: 0, y: CFG.camHeight, z: -CFG.camBack, yaw: 0 };
-
-  function focalLength() {
-    return (H / 2) / Math.tan(CFG.fov / 2);
-  }
-
-  function worldToScreen(x, y, z) {
-    // translate relative to camera
-    let dx = x - cam.x;
-    let dy = y - cam.y;
-    let dz = z - cam.z;
-    // rotate by -camYaw around Y axis
-    const s = Math.sin(-cam.yaw), c = Math.cos(-cam.yaw);
-    const rx = dx * c - dz * s;
-    const rz = dx * s + dz * c;
-    const cz = rz;
-    if (cz < 0.05) return null;
-    const f = focalLength();
-    const sx = W / 2 + (rx / cz) * f;
-    const sy = H / 2 - (dy / cz) * f + H * 0.16;
-    return { x: sx, y: sy, z: cz };
-  }
-
-  // ---------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------
-  function clear() {
-    const th = theme();
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, th.sky1);
-    g.addColorStop(1, th.sky2);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  function drawGroundGrid(baseZ) {
-    const th = theme();
-    ctx.save();
-    ctx.strokeStyle = th.wall;
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = 1;
-    const spacing = 3;
-    const range = 60;
-    const startZ = Math.floor((baseZ - 5) / spacing) * spacing;
-    for (let i = 0; i < 40; i++) {
-      const z = startZ + i * spacing;
-      const p1 = worldToScreen(-range, 0, z);
-      const p2 = worldToScreen(range, 0, z);
-      if (!p1 || !p2) continue;
-      if (p1.z > 90 && p2.z > 90) continue;
-      ctx.globalAlpha = clamp(0.55 - p1.z / 140, 0, 0.55);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    for (let i = -range; i <= range; i += spacing) {
-      const p1 = worldToScreen(i, 0, baseZ - 4);
-      const p2 = worldToScreen(i, 0, baseZ + 70);
-      if (!p1 || !p2) continue;
-      ctx.globalAlpha = 0.28;
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function drawFloaters(baseZ) {
-    const th = theme();
-    const items = state.floaters
-      .map((f) => ({ f, z: ((f.z - baseZ) % 140 + 140) % 140 + baseZ }))
-      .sort((a, b) => b.z - a.z);
-    for (const { f, z } of items) {
-      const p = worldToScreen(f.x, f.y, z);
-      if (!p || p.z > 120) continue;
-      const scr = (f.s * focalLength()) / p.z;
-      if (scr < 1) continue;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(f.rot + p.z * 0.002);
-      ctx.globalAlpha = clamp(0.5 - p.z / 200, 0, 0.5);
-      ctx.strokeStyle = f.kind === 0 ? th.glow : (f.kind === 1 ? th.glow2 : th.accent);
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      if (f.kind === 0) {
-        ctx.moveTo(0, -scr); ctx.lineTo(scr * 0.9, scr * 0.7); ctx.lineTo(-scr * 0.9, scr * 0.7); ctx.closePath();
-      } else if (f.kind === 1) {
-        ctx.rect(-scr * 0.6, -scr * 0.6, scr * 1.2, scr * 1.2);
-      } else {
-        ctx.moveTo(0, -scr); ctx.lineTo(scr, 0); ctx.lineTo(0, scr); ctx.lineTo(-scr, 0); ctx.closePath();
-      }
-      ctx.stroke();
-      ctx.restore();
+    if (d <= CFG.perfectDist) {
+      state.score += 250;
+      showPopup('perfect');
+      sfx.perfect();
+    } else if (d <= CFG.goodDist) {
+      state.score += 100;
+      showPopup('good');
+      sfx.good();
+    } else {
+      state.score += 25;
+      sfx.turn();
     }
   }
 
-  function perp(heading) {
-    return { x: Math.cos(heading), z: -Math.sin(heading) };
-  }
-
-  function drawPath(currentIdx, beatFrac) {
-    const th = theme();
-    const half = CFG.pathWidth / 2;
-    const startIdx = Math.max(0, currentIdx - 1);
-    const endIdx = Math.min(path.nodes.length - 2, currentIdx + CFG.drawSegments);
-
-    // painter's algorithm: far to near
-    for (let i = endIdx; i >= startIdx; i--) {
-      const a = path.nodes[i];
-      const b = path.nodes[i + 1];
-      if (!a || !b) continue;
-      const pa = perp(a.heading);
-      const pb = perp(b.heading);
-      const aL = { x: a.x - pa.x * half, y: 0, z: a.z - pa.z * half };
-      const aR = { x: a.x + pa.x * half, y: 0, z: a.z + pa.z * half };
-      const bL = { x: b.x - pb.x * half, y: 0, z: b.z - pb.z * half };
-      const bR = { x: b.x + pb.x * half, y: 0, z: b.z + pb.z * half };
-
-      const distFactor = clamp(1 - i / (currentIdx + CFG.drawSegments + 1), 0, 1);
-      const alpha = clamp(0.25 + distFactor * 0.9, 0.15, 1);
-
-      const sAL = worldToScreen(aL.x, aL.y, aL.z);
-      const sAR = worldToScreen(aR.x, aR.y, aR.z);
-      const sBL = worldToScreen(bL.x, bL.y, bL.z);
-      const sBR = worldToScreen(bR.x, bR.y, bR.z);
-      if (!sAL || !sAR || !sBL || !sBR) continue;
-
-      // floor
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      const grad = ctx.createLinearGradient(sAL.x, sAL.y, sBL.x, sBL.y);
-      grad.addColorStop(0, th.wallDark);
-      grad.addColorStop(1, '#000005');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(sAL.x, sAL.y); ctx.lineTo(sAR.x, sAR.y); ctx.lineTo(sBR.x, sBR.y); ctx.lineTo(sBL.x, sBL.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-
-      // walls (outer faces), height h
-      const h = CFG.wallHeight;
-      [[aL, bL, sAL, sBL, -1], [aR, bR, sAR, sBR, 1]].forEach(([wa, wb, swa, swb, side]) => {
-        const waTop = worldToScreen(wa.x, h, wa.z);
-        const wbTop = worldToScreen(wb.x, h, wb.z);
-        if (!waTop || !wbTop) return;
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.85;
-        const wg = ctx.createLinearGradient(swa.x, swa.y, swa.x, waTop.y);
-        wg.addColorStop(0, th.wall);
-        wg.addColorStop(1, th.wallDark);
-        ctx.fillStyle = wg;
-        ctx.beginPath();
-        ctx.moveTo(swa.x, swa.y); ctx.lineTo(swb.x, swb.y); ctx.lineTo(wbTop.x, wbTop.y); ctx.lineTo(waTop.x, waTop.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // glowing edge lines along the floor edges
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = clamp(3.2 * (1 - distFactor * 0.4), 1, 4);
-      ctx.strokeStyle = th.glow;
-      ctx.shadowColor = th.glow;
-      ctx.shadowBlur = 14;
-      ctx.beginPath();
-      ctx.moveTo(sAL.x, sAL.y); ctx.lineTo(sBL.x, sBL.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(sAR.x, sAR.y); ctx.lineTo(sBR.x, sBR.y);
-      ctx.stroke();
-      ctx.restore();
-
-      // corner accent bracket at node b
-      if (i === endIdx - 1 || (i % 2 === 0)) {
-        const mid = { x: (bL.x + bR.x) / 2, y: 0.02, z: (bL.z + bR.z) / 2 };
-        const sMid = worldToScreen(mid.x, mid.y, mid.z);
-        if (sMid) {
-          ctx.save();
-          ctx.globalAlpha = alpha * 0.9;
-          ctx.strokeStyle = th.accent;
-          ctx.lineWidth = 2;
-          ctx.shadowColor = th.accent;
-          ctx.shadowBlur = 8;
-          const s = clamp(10 / Math.max(sMid.z, 1) * H * 0.03, 2, 14);
-          ctx.beginPath();
-          ctx.moveTo(sMid.x - s, sMid.y - s * 1.4);
-          ctx.lineTo(sMid.x - s, sMid.y);
-          ctx.lineTo(sMid.x + s, sMid.y);
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-    }
-
-    // center light streak: brightest segment near the runner, trailing behind
-    const runnerNode = path.nodes[currentIdx];
-    const nextNode = path.nodes[currentIdx + 1];
-    if (runnerNode && nextNode) {
-      const cx = lerp(runnerNode.x, nextNode.x, beatFrac);
-      const cz = lerp(runnerNode.z, nextNode.z, beatFrac);
-      for (let i = Math.max(0, currentIdx - 4); i <= currentIdx; i++) {
-        const a = path.nodes[i], b = path.nodes[i + 1];
-        if (!a || !b) continue;
-        const sa = worldToScreen(a.x, 0.03, a.z);
-        const sb = (i === currentIdx) ? worldToScreen(cx, 0.03, cz) : worldToScreen(b.x, 0.03, b.z);
-        if (!sa || !sb) continue;
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = '#ffffff';
-        ctx.shadowColor = th.glow;
-        ctx.shadowBlur = 22;
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(sa.x, sa.y);
-        ctx.lineTo(sb.x, sb.y);
-        ctx.stroke();
-        ctx.restore();
-      }
+  function onTap(e) {
+    if (e.type === 'keydown' && e.code !== 'Space' && e.code !== 'Enter') return;
+    if (e.type === 'keydown' && e.repeat) return;
+    ensureAudio();
+    if (state.mode === 'menu' || state.mode === 'over') {
+      title.classList.remove('hidden');
+      subtitle.classList.remove('hidden');
+      bigMsg.classList.add('hidden');
+      finalScore.classList.add('hidden');
+      startGame();
+    } else if (state.mode === 'play') {
+      turn();
     }
   }
+  window.addEventListener('pointerdown', onTap);
+  window.addEventListener('keydown', onTap);
 
-  function drawParticles(dt) {
-    const th = theme();
-    for (let i = state.particles.length - 1; i >= 0; i--) {
-      const p = state.particles[i];
-      p.t += dt;
-      if (p.t > p.life) { state.particles.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-      p.vy -= 2 * dt;
-      const s = worldToScreen(p.x, p.y, p.z);
-      if (!s) continue;
-      const a = 1 - p.t / p.life;
-      ctx.save();
-      ctx.globalAlpha = a;
-      ctx.fillStyle = p.color || th.glow;
-      ctx.shadowColor = p.color || th.glow;
-      ctx.shadowBlur = 10;
-      const r = clamp(60 / Math.max(s.z, 1), 1, 6);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // HUD
-  // ---------------------------------------------------------------------
-  function roundRect(x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  function drawHUD() {
-    const th = theme();
-    ctx.save();
-    ctx.textBaseline = 'top';
-    ctx.font = `700 ${clamp(W * 0.024, 16, 26)}px Arial, sans-serif`;
-    ctx.fillStyle = th.text;
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 8;
-
-    // score
-    ctx.textAlign = 'left';
-    ctx.fillText('SCORE: ' + state.score.toLocaleString(), 18, 16);
-
-    // level
-    ctx.textAlign = 'right';
-    ctx.fillText('LEVEL: ' + state.level, W - 18, 16);
-
-    // lives (hearts)
-    ctx.textAlign = 'center';
-    const heartSize = clamp(W * 0.022, 14, 22);
-    const heartsW = CFG.maxLives * (heartSize + 6);
-    let hx = W / 2 - heartsW / 2;
-    ctx.shadowBlur = 0;
-    for (let i = 0; i < CFG.maxLives; i++) {
-      ctx.font = `${heartSize}px Arial`;
-      ctx.fillStyle = i < state.lives ? '#ff4d6d' : 'rgba(255,255,255,0.18)';
-      ctx.shadowColor = i < state.lives ? '#ff4d6d' : 'transparent';
-      ctx.shadowBlur = i < state.lives ? 10 : 0;
-      ctx.fillText('♥', hx + i * (heartSize + 6) + heartSize / 2, 40);
-    }
-    ctx.font = `700 ${clamp(W * 0.02, 13, 20)}px Arial, sans-serif`;
-    ctx.fillStyle = th.text;
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 6;
-    ctx.fillText('LIVES', W / 2, 14);
-    ctx.restore();
-
-    // progress bar (level progress)
-    const barW = clamp(W * 0.34, 160, 420);
-    const barH = 8;
-    const bx = W / 2 - barW / 2;
-    const by = 66;
-    ctx.save();
-    roundRect(bx, by, barW, barH, barH / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fill();
-    const frac = clamp(state.beatsThisLevel / CFG.beatsPerLevel, 0, 1);
-    roundRect(bx, by, barW * frac, barH, barH / 2);
-    ctx.fillStyle = th.glow;
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 10;
-    ctx.fill();
-    // marker
-    ctx.beginPath();
-    ctx.arc(bx + barW * frac, by + barH / 2, barH * 0.9, 0, TAU);
-    ctx.fillStyle = '#fff';
-    ctx.shadowBlur = 12;
-    ctx.fill();
-    ctx.restore();
-
-    // combo
-    if (state.combo > 1) {
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.font = `700 ${clamp(W * 0.02, 14, 22)}px Arial, sans-serif`;
-      ctx.fillStyle = th.accent;
-      ctx.shadowColor = th.accent;
-      ctx.shadowBlur = 10;
-      ctx.fillText('COMBO x' + state.combo, W / 2, by + 20);
-      ctx.restore();
-    }
-
-    // instructions + tap button
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.font = `700 ${clamp(W * 0.026, 16, 28)}px Arial, sans-serif`;
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 10;
-    ctx.globalAlpha = 0.92;
-    ctx.fillText('TAP THE BEAT TO TURN!', W / 2, H - 118);
-    ctx.restore();
-
-    drawTapButton();
-  }
-
-  function drawTapButton() {
-    const th = theme();
-    const cx = W / 2, cy = H - 62;
-    const baseR = clamp(W * 0.052, 34, 58);
-
-    state.tapPulse = Math.max(0, state.tapPulse - 0.06);
-    const { beatFrac } = state.mode === 'playing' ? timeInfo() : { beatFrac: 0 };
-    const beatPulse = state.mode === 'playing' ? (1 - Math.abs(0.5 - (beatFrac > 0.85 ? beatFrac - 1 : beatFrac)) * 2) : 0;
-
-    ctx.save();
-    // outer rings
-    for (let i = 0; i < 2; i++) {
-      const rr = baseR + i * 14 + state.tapPulse * 20;
-      ctx.beginPath();
-      ctx.arc(cx, cy, rr, 0, TAU);
-      ctx.strokeStyle = th.glow2;
-      ctx.globalAlpha = 0.25 - i * 0.08 + state.tapPulse * 0.2;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    // base circle
-    ctx.beginPath();
-    ctx.arc(cx, cy, baseR, 0, TAU);
-    const rg = ctx.createRadialGradient(cx, cy, baseR * 0.2, cx, cy, baseR);
-    rg.addColorStop(0, 'rgba(255,255,255,0.10)');
-    rg.addColorStop(1, 'rgba(255,255,255,0.02)');
-    ctx.fillStyle = rg;
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = th.glow;
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 14 + beatPulse * 18;
-    ctx.stroke();
-
-    // direction arrow reflecting upcoming turn
-    let arrowRot = 0;
-    if (state.mode === 'playing') {
-      const idx = clamp(state.pendingBeat, 0, path.nodes.length - 2);
-      const node = path.nodes[idx];
-      if (node) arrowRot = clamp(node.turn, -0.9, 0.9) * 0.6;
-    }
-    ctx.translate(cx, cy);
-    ctx.rotate(arrowRot);
-    ctx.beginPath();
-    const al = baseR * 0.55;
-    ctx.moveTo(0, -al);
-    ctx.lineTo(al * 0.55, al * 0.15);
-    ctx.lineTo(al * 0.22, al * 0.15);
-    ctx.lineTo(al * 0.22, al * 0.7);
-    ctx.lineTo(-al * 0.22, al * 0.7);
-    ctx.lineTo(-al * 0.22, al * 0.15);
-    ctx.lineTo(-al * 0.55, al * 0.15);
-    ctx.closePath();
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 12;
-    ctx.globalAlpha = 0.95;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawPopups(dt) {
-    const th = theme();
-    for (let i = state.popups.length - 1; i >= 0; i--) {
-      const p = state.popups[i];
-      p.t += dt;
-      if (p.t > p.life) { state.popups.splice(i, 1); continue; }
-      const a = 1 - p.t / p.life;
-      const y = H * 0.3 - p.t * 40;
-      ctx.save();
-      ctx.globalAlpha = a;
-      ctx.textAlign = 'center';
-      ctx.font = `900 ${clamp(W * 0.05, 26, 50)}px Arial, sans-serif`;
-      ctx.fillStyle = p.color || th.glow;
-      ctx.shadowColor = p.color || th.glow;
-      ctx.shadowBlur = 20;
-      ctx.fillText(p.text, W / 2, y);
-      ctx.restore();
-    }
-  }
-
-  function drawVignette() {
-    ctx.save();
-    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    if (state.flashRed > 0) {
-      ctx.fillStyle = `rgba(255,0,60,${state.flashRed * 0.28})`;
-      ctx.fillRect(0, 0, W, H);
-    }
-    ctx.restore();
-  }
-
-  function drawMenu() {
-    const th = theme();
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = th.text;
-    ctx.shadowColor = th.glow;
-    ctx.shadowBlur = 24;
-    ctx.font = `900 ${clamp(W * 0.09, 34, 72)}px Arial, sans-serif`;
-    ctx.fillText('NEON BEAT', W / 2, H * 0.32);
-    ctx.fillText('RUNNER', W / 2, H * 0.32 + clamp(W * 0.095, 40, 78));
-
-    ctx.font = `700 ${clamp(W * 0.026, 16, 24)}px Arial, sans-serif`;
-    ctx.shadowBlur = 10;
-    ctx.globalAlpha = 0.85 + Math.sin(performance.now() / 300) * 0.15;
-    ctx.fillText('TAP / CLICK / SPACE TO START', W / 2, H * 0.62);
-
-    ctx.globalAlpha = 0.7;
-    ctx.font = `600 ${clamp(W * 0.018, 12, 16)}px Arial, sans-serif`;
-    ctx.fillText('Tap in time with the pulsing beat to turn the corners.', W / 2, H * 0.68);
-    ctx.fillText('Best score: ' + state.highScore.toLocaleString(), W / 2, H * 0.73);
-    ctx.restore();
-  }
-
-  function drawGameOver() {
-    const th = theme();
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ff4d6d';
-    ctx.shadowColor = '#ff4d6d';
-    ctx.shadowBlur = 22;
-    ctx.font = `900 ${clamp(W * 0.07, 30, 60)}px Arial, sans-serif`;
-    ctx.fillText('GAME OVER', W / 2, H * 0.32);
-
-    ctx.fillStyle = th.text;
-    ctx.shadowColor = th.glow;
-    ctx.font = `700 ${clamp(W * 0.035, 18, 32)}px Arial, sans-serif`;
-    ctx.fillText('SCORE: ' + state.score.toLocaleString(), W / 2, H * 0.44);
-    ctx.font = `600 ${clamp(W * 0.022, 13, 18)}px Arial, sans-serif`;
-    ctx.fillText('BEST: ' + state.highScore.toLocaleString(), W / 2, H * 0.5);
-
-    ctx.font = `700 ${clamp(W * 0.024, 15, 22)}px Arial, sans-serif`;
-    ctx.globalAlpha = 0.85 + Math.sin(performance.now() / 300) * 0.15;
-    ctx.fillText('TAP TO RESTART', W / 2, H * 0.62);
-    ctx.restore();
-  }
-
-  // ---------------------------------------------------------------------
-  // Update / camera follow
-  // ---------------------------------------------------------------------
-  function updateCamera(dt) {
-    if (state.mode !== 'playing') return;
-    const { beatIndex, beatFrac } = timeInfo();
-    const idx = clamp(beatIndex, 0, path.nodes.length - 2);
-    ensurePathAhead(idx);
-    const a = path.nodes[idx];
-    const b = path.nodes[idx + 1];
-    if (!a || !b) return;
-
-    const runnerX = lerp(a.x, b.x, beatFrac);
-    const runnerZ = lerp(a.z, b.z, beatFrac);
-    // The runner faces the current segment's fixed heading (b.heading) for its
-    // whole traversal — the camera then smoothly swings to catch up after each turn.
-    const targetYaw = b.heading;
-
-    // smooth yaw follow (shortest angular path)
-    let diff = targetYaw - state.camYaw;
-    while (diff > Math.PI) diff -= TAU;
-    while (diff < -Math.PI) diff += TAU;
-    state.camYaw += diff * clamp(dt * 6, 0, 1);
-
-    const shakeX = (Math.random() - 0.5) * state.shake * 0.25;
-    const shakeY = (Math.random() - 0.5) * state.shake * 0.15;
-
-    cam.yaw = state.camYaw;
-    cam.x = runnerX - Math.sin(cam.yaw) * CFG.camBack + shakeX;
-    cam.z = runnerZ - Math.cos(cam.yaw) * CFG.camBack + shakeY;
-    cam.y = CFG.camHeight;
-
-    state.shake = Math.max(0, state.shake - dt * 3);
-    state.flashRed = Math.max(0, state.flashRed - dt * 2.5);
-  }
-
-  // ---------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   // Main loop
-  // ---------------------------------------------------------------------
-  let last = performance.now();
-  function frame(tms) {
-    const dt = Math.min(0.05, (tms - last) / 1000);
-    last = tms;
+  // -----------------------------------------------------------------------
+  let lastT = performance.now();
 
-    if (state.mode === 'playing') {
-      autoMissCheck();
-      updateCamera(dt);
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
 
-      // beat click sound
-      const { beatIndex, beatFrac } = timeInfo();
-      if (beatIndex >= 0 && beatIndex !== state.lastClickedBeat) {
-        state.lastClickedBeat = beatIndex;
-        beatClick(beatIndex % CFG.beatsPerLevel === 0);
+    if (state.mode === 'play') {
+      const speed = speedForLevel(state.level);
+      head.pos.addScaledVector(head.dir, speed * dt);
+      state.traveled = head.pos.dot(DIAG);
+      updateTrailRun();
+      generatePath();
+
+      // Score / progress tick with distance.
+      state.scoreTick += speed * dt;
+      const bl = beatLen();
+      while (state.scoreTick >= bl) {
+        state.scoreTick -= bl;
+        state.score += 10;
+        state.levelProgress += 1 / CFG.beatsPerLevel;
+        if (state.levelProgress >= 1) levelUp();
+      }
+
+      if (state.invuln > 0) state.invuln -= dt;
+
+      // Fell off the edge?
+      if (state.invuln <= 0 && !onPath(head.pos)) {
+        state.mode = 'fall';
+        state.fallT = 0;
+        sfx.fall();
+        for (let i = 0; i < 30; i++) spawnSpark(head.pos, 4, 3);
+      }
+
+      // Steady stream of sparks behind the head.
+      if (Math.random() < 0.5) spawnSpark(head.pos, 0.5, 0.8);
+    } else if (state.mode === 'fall') {
+      state.fallT += dt;
+      head.vy -= 22 * dt;
+      head.pos.y += head.vy * dt;
+      head.pos.addScaledVector(head.dir, speedForLevel(state.level) * 0.4 * dt);
+      if (state.fallT >= CFG.fallTime) {
+        loseLife();
+        if (state.mode !== 'over') doRespawn();
       }
     }
 
-    clear();
-    const baseIdx = state.mode === 'playing' ? clamp(timeInfo().beatIndex, 0, path.nodes.length - 2) : 0;
-    if (state.mode !== 'playing') {
-      cam.yaw = state.camYaw;
-      cam.x = 0; cam.z = -CFG.camBack; cam.y = CFG.camHeight;
-      state.camYaw += dt * 0.15;
+    // Visual bits that always animate.
+    headMesh.position.copy(head.pos);
+    headMesh.rotation.y += dt * 2;
+    headGlow.position.copy(head.pos);
+    const beatPulse = 1 + 0.12 * Math.max(0, Math.sin(state.beatPhase * Math.PI * 2));
+    headGlow.scale.set(2.6 * beatPulse, 2.6 * beatPulse, 1);
+    bubble.position.copy(head.pos);
+    bubble.scale.setScalar(1 + 0.06 * Math.sin(now / 300));
+
+    updateSparks(dt);
+    updateDebris(dt);
+    updateDust();
+    updateCamera(dt);
+
+    // Keep the grid centered under the camera (snapped so lines don't swim).
+    if (gridA) {
+      const cell = 12; // multiple of both grids' cell sizes, so lines don't swim
+      gridA.position.x = Math.round(camPos.x / cell) * cell;
+      gridA.position.z = Math.round(camPos.z / cell) * cell;
+      gridB.position.x = gridA.position.x;
+      gridB.position.z = gridA.position.z;
     }
-    drawGroundGrid(cam.z);
-    drawFloaters(cam.z);
-    if (path.nodes.length > 2) {
-      const bf = state.mode === 'playing' ? timeInfo().beatFrac : (performance.now() / 4000) % 1;
-      drawPath(baseIdx, bf);
-    }
-    drawParticles(dt);
-    drawVignette();
 
-    if (state.mode === 'menu') drawMenu();
-    else if (state.mode === 'playing') drawHUD();
-    else if (state.mode === 'gameover') { drawHUD(); drawGameOver(); }
-
-    drawPopups(dt);
-
-    requestAnimationFrame(frame);
+    if (state.mode === 'play' || state.mode === 'fall') updateHUD();
+    renderer.render(scene, camera);
   }
-  state.lastClickedBeat = -1;
+
+  // -----------------------------------------------------------------------
+  // Boot: show the menu over an idle attract scene.
+  // -----------------------------------------------------------------------
+  applyTheme(THEMES[0]);
+  buildDebris();
+  seedDust(THEMES[0]);
+  generatePath();
+  startTrailRun();
   requestAnimationFrame(frame);
+
+  // Debug hook (open the page with #debug to poke at the game from devtools).
+  if (location.hash === '#debug') {
+    window.NZ = { state, head, runs, levelUp, applyTheme, THEMES, nearestCornerDist };
+  }
 })();
