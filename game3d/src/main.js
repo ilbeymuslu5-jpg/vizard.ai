@@ -10,6 +10,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildWorld, ARENA, biomeAt, isWater, COLLIDERS } from './world.js';
 import { createWeaponModel } from './weaponModels.js';
 import { createArmorPiece } from './armorModels.js';
@@ -32,10 +37,20 @@ const glCanvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: !LOW_END, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, LOW_END ? 1.6 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+/* Filmik ton eşleme: üç ayrı dokunun (çoğu sahnedeki gibi düz sRGB yerine)
+   birlikte "sinematik" okunmasını sağlıyor — aydınlık bölgeler yumuşak
+   kırpılır, karanlıklar gürültüsüz kalır. Maliyeti ölçülemeyecek kadar düşük
+   (piksel başına tek shader hesabı), bu yüzden LOW_END'de de açık. */
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
 /* Not: gerçek gölge haritası denendi ve ölçüldü — %66 FPS bedeli getiriyor,
    buna karşılık izometrik açıda güneş yüksek olduğu için gölgeler nesnenin
    altında kalıp neredeyse görünmüyordu. Bunun yerine nesne gölgeleri zemin
-   dokusuna PİŞİRİLİYOR (world.js): çalışma anında sıfır maliyet. */
+   dokusuna PİŞİRİLİYOR (world.js): çalışma anında sıfır maliyet. Karakterler
+   (oyuncu + düşmanlar) için AYRICA dar kapsamlı dinamik gölge aşağıda var —
+   bkz. "KARAKTER GÖLGELERİ" bölümü: sadece hareketli nesneler döküyor, statik
+   dünya (ağaç/kaya vb.) gölge haritasına hiç girmediği için eski denemedeki
+   maliyetin büyük kısmından kaçınılıyor.*/
 
 const scene = new THREE.Scene();
 /* Gökyüzü: düz renk yerine dikey gradyan — ufuk çizgisi ve derinlik hissi */
@@ -66,6 +81,63 @@ scene.add(new THREE.HemisphereLight(0xdcecff, 0x6b5a48, 1.05));
 const sun = new THREE.DirectionalLight(0xfff4e2, 1.55);
 sun.position.set(30, 60, 20);
 scene.add(sun);
+// Hafif soğuk dolgu (arka/yan): tamamen düz ışıklı yüzleri biraz kırıp hacim hissi verir
+const fill = new THREE.DirectionalLight(0x6f8fff, 0.28);
+fill.position.set(-24, 18, -30);
+scene.add(fill);
+
+/* ---- KARAKTER GÖLGELERİ (dar kapsamlı dinamik gölge haritası) ----
+   Önceki deneme (bkz. yukarıdaki not) TÜM sahneyi (dünya + nesneler) gölge
+   döküm listesine koyup %66 FPS kaybediyordu. Bu sefer sadece OYUNCU ve
+   DÜŞMAN gövdeleri gölge DÖKÜYOR (world.js'teki ağaç/kaya/vb. hâlâ zemine
+   pişirilmiş gölgeyle yetiniyor, hiç döküm listesine girmiyor) — döküm
+   listesi birkaç düzine basit mesh ile sınırlı kalınca maliyet çok daha
+   düşük. Işık + hedefi her kare oyuncunun ETRAFINDA (camTarget) kalacak
+   şekilde kaydırılıyor (dar ortografik çerçeve, sadece yakın çevre). */
+const sunTarget = new THREE.Object3D();
+scene.add(sunTarget);
+sun.target = sunTarget;
+if (!LOW_END) {
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.near = 20; sun.shadow.camera.far = 100;
+  sun.shadow.camera.left = -20; sun.shadow.camera.right = 20;
+  sun.shadow.camera.top = 20; sun.shadow.camera.bottom = -20;
+  sun.shadow.bias = -0.0015;
+  sun.shadow.normalBias = 0.02;
+}
+
+/* ---- Son işleme (post-processing): gerçek bloom + hafif vinyet ----
+   Bu sahnede ışınlar/patlamalar/büyü halkaları hep AdditiveBlending ile
+   çiziliyordu ama gerçek ışık taşması (bloom) olmadan "donuk" kalıyorlardı.
+   EffectComposer tek ek geçiş (render hedefinden okuyup eşik-üstü parlaklığı
+   bulanıklaştırıp eski kareye ekliyor) — LOW_END cihazlarda tamamen atlanıp
+   doğrudan renderer.render() kullanılıyor (bkz. render()). */
+const VIGNETTE_SHADER = {
+  uniforms: { tDiffuse: { value: null }, amount: { value: 0.32 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float amount; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 d = vUv - 0.5;
+      float v = smoothstep(0.75, 0.2, dot(d, d) * 1.8);
+      c.rgb *= mix(1.0 - amount, 1.0, v);
+      gl_FragColor = c;
+    }`,
+};
+let composer = null, bloomPass = null;
+function buildComposer() {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.82);
+  composer.addPass(bloomPass);
+  composer.addPass(new ShaderPass(VIGNETTE_SHADER));
+  composer.addPass(new OutputPass());
+}
+if (!LOW_END) buildComposer();
 
 const fx2d = document.getElementById('fx');          // üst katman 2B canvas
 const ctx = fx2d.getContext('2d');
@@ -159,6 +231,7 @@ function resize() {
   VW = Math.round(innerWidth); VH = Math.round(innerHeight);
   DPR = Math.min(devicePixelRatio || 1, LOW_END ? 2 : 2.5);
   renderer.setSize(VW, VH, false);
+  if (composer) composer.setSize(VW, VH);
   // Dar ekranda (dikey telefon) biraz daha geniş göster
   VIEW_H = VH > VW ? 30 : 26;
   const aspect = VW / VH;
@@ -846,6 +919,7 @@ for (const t in ETYPES) {
   const im = new THREE.InstancedMesh(makeGeo(cfg.geo), mat, MAX_ENEMIES);
   im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   im.frustumCulled = false; im.count = 0;
+  im.castShadow = !LOW_END;
   scene.add(im); eMeshes[t] = im;
 }
 // Zemin gölgeleri (yalancı blob shadow)
@@ -938,6 +1012,7 @@ for (const id in BOSS_THEMES) buildBossTheme(id, BOSS_THEMES[id].color);
 function showBossTheme(id) {
   for (const k in bossThemeGroups) bossThemeGroups[k].visible = (k === id);
 }
+bossMesh.traverse(o => { if (o.isMesh) o.castShadow = !LOW_END; });
 bossMesh.visible = false; scene.add(bossMesh);
 
 function diff() {
@@ -2654,7 +2729,7 @@ function attachGlbArmor(slot, holder, setId, reqToken) {
   loadGlbPiece(setId, pieceName).then(src => {
     if (holder.userData.glbReq !== reqToken) return;   // bu arada eşya değişmiş
     const wrap = fitGlbPiece(src, pieceName, setId);
-    if (wrap) holder.add(wrap);
+    if (wrap) { wrap.traverse(o => { if (o.isMesh) o.castShadow = !LOW_END; }); holder.add(wrap); }
   }).catch(err => console.warn('zırh parçası yüklenemedi:', setId, pieceName, err));
 }
 let glbReqSeq = 0;
@@ -4025,6 +4100,8 @@ function initPreview() {
   pvwRenderer = new THREE.WebGLRenderer({ canvas: pvwCanvas, antialias: !LOW_END, alpha: true });
   pvwRenderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   pvwRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  pvwRenderer.toneMapping = THREE.ACESFilmicToneMapping;    // ana sahneyle aynı renk ruhu
+  pvwRenderer.toneMappingExposure = 1.08;
   pvwScene = new THREE.Scene();
   // Oyun sahnesiyle aynı ışık kurgusu — zırh malzemeleri aynı görünsün
   pvwScene.add(new THREE.HemisphereLight(0xdcecff, 0x6b5a48, 1.15));
@@ -4297,6 +4374,7 @@ function loadKnight() {
       m.traverse(o => {
         if (o.isMesh || o.isSkinnedMesh) {
           o.frustumCulled = false;
+          o.castShadow = !LOW_END;              // bkz. "KARAKTER GÖLGELERİ"
           /* Eski model gümüş zırhlıydı ve beyaza doymasın diye çelik tonuyla
              çarpılıyordu; yeni model TEN renkli olduğu için aynı ton onu
              soldurup gri gösteriyordu. Dokunun kendi rengi korunuyor. */
@@ -4413,6 +4491,11 @@ function frame(now) {
     camera.position.z += rnd(G.shake, -G.shake);
   } else G.shake = 0;
   camera.lookAt(camTarget);
+  if (sun.castShadow) {
+    // Gölge ışığının çerçevesi her kare oyuncunun etrafında kalsın diye kaydırılır
+    sun.position.set(camTarget.x + 30, camTarget.y + 60, camTarget.z + 20);
+    sunTarget.position.copy(camTarget);
+  }
 
   // Su yüzeyi yavaşça kaysın: durgun yerine akan su hissi
   if (WORLD && WORLD.waterMap) {
@@ -4420,7 +4503,7 @@ function frame(now) {
     WORLD.waterMap.offset.y = (now / 41000) % 1;
   }
   syncEnemyMeshes();
-  renderer.render(scene, camera);
+  if (composer) composer.render(); else renderer.render(scene, camera);
   renderPreview(rdt);                   // envanter açıksa karakter önizlemesi
   drawOverlay();
 }

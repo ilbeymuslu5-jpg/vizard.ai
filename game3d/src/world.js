@@ -425,6 +425,7 @@ export function buildWorld(scene, opts) {
   const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.hx * 2, ARENA.hz * 2), groundMat);
   ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;           // karakterlerin dinamik gölgesi (bkz. main.js)
   group.add(ground);
 
   // Su yüzeyi (düzensiz kıyı)

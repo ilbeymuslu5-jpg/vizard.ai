@@ -793,3 +793,45 @@ viewer'ımda hiçbiri görünmüyordu):**
 `pieces` konum tabloları da artık ÖLÜ VERİ (fitGlbPiece ölçüp otomatik
 oturtuyor, bkz. yukarıdaki "ölçüm tabanlı oturtma" bölümü); sadece setin var
 olduğunu işaretlemek için tutuluyor.
+
+## 12. Render hattı: filmik ton eşleme + gerçek bloom/vinyet + dar kapsamlı dinamik gölge
+
+Genel geri bildirim: "grafikler/dokular/efektler/gölgeler hâlâ yetersiz".
+Dört parçaya bölündü (bkz. görev listesi); bu bölüm ilkini kapsıyor.
+
+**Ton eşleme (ACESFilmic).** Önceden `renderer.outputColorSpace` dışında hiç
+renk derecelendirmesi yoktu — parlak yüzeyler (özellikle `AdditiveBlending`
+ile çizilen ışın/patlama efektleri) düz beyaza kırpılıp "plastik" duruyordu.
+`THREE.ACESFilmicToneMapping` + `toneMappingExposure=1.08` hem ana render
+hem envanter önizleme sahnesinde (`pvwRenderer`) kullanılıyor — piksel başına
+tek ek hesap, ölçülebilir maliyeti yok, bu yüzden LOW_END'de de açık.
+
+**Gerçek bloom/vinyet (EffectComposer).** Sahnede zaten bol miktarda
+`AdditiveBlending` malzeme vardı (büyü ışınları, patlama halkaları, destansı+
+zırh halesi) ama gerçek ışık taşması olmadan donuk kalıyorlardı. Artık
+`RenderPass → UnrealBloomPass(0.55, 0.5, 0.82) → vinyet ShaderPass →
+OutputPass` zinciri var. **Sadece LOW_END OLMAYAN cihazlarda** kuruluyor
+(`buildComposer()`); LOW_END'de `composer` hiç oluşmuyor, `render()`
+doğrudan `renderer.render(scene, camera)` çağırıyor — ek geçiş maliyeti
+düşük uçta hiç ödenmiyor. Ölçüm (bu konteynerin yazılım rasterizasyonunda,
+aynı sahne/aynı yöntem): 9.52 → 9.12 fps (composer açık), yani ~%4 — önceki
+tam-sahne gölge haritası denemesindeki %66 ile kıyaslanamayacak kadar ucuz.
+
+**Dar kapsamlı dinamik gölge.** Önceki oturumda gerçek gölge haritası
+TÜM sahneyi (dünya + statik nesneler + karakterler) döküm listesine koyup
+reddedilmişti. Bu sefer SADECE oyuncu + düşman gövdeleri (+ kuşanılan GLB
+zırh parçaları) `castShadow=true`; dünyadaki ağaç/kaya/vb. hâlâ zemin
+dokusuna pişirilmiş gölgeyle yetiniyor ve döküm listesine hiç girmiyor.
+Işık + hedefi (`sun`/`sunTarget`) her kare oyuncunun etrafında (`camTarget`)
+kalacak şekilde kaydırılıyor, böylece dar bir ortografik çerçeve (±20 birim,
+1024×1024 harita) yetiyor. Ölçüm: gölgeler açıkken 9.40 fps — bloom'suz/
+gölgesiz temel ölçümle (9.12-9.52 aralığı) aynı gürültü bandında, yani bu
+dar kapsamla gölge haritasının kendisi de ek maliyet getirmiyor denebilir.
+Mevcut "yalancı blob gölge" (shadowMesh) KALDIRILMADI — ayakların hemen
+altında yumuşak bir temas gölgesi/AO hissi veriyor, yeni yönlü gölge ise
+daha uzağa düşen, güneş yönüne göre kayan asıl silüeti ekliyor; ikisi
+birlikte katmanlı bir derinlik hissi veriyor.
+
+Ayrıca hafif soğuk bir dolgu ışığı (`fill`, karşı yönden, düşük şiddet)
+eklendi — önceden tek yönlü güneş + hemisferik ışıkla düz ışıklı yüzeyler
+tamamen detaysız kalıyordu, dolgu ışığı kenarlara hafif bir ayrım katıyor.
