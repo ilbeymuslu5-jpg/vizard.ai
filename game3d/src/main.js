@@ -227,6 +227,28 @@ function drawRpgBar(x, y, w, h, frac, colorKey) {
   return true;
 }
 
+/* Oyuncu/düşman başı üstü mini can çubuğu: eskiden düz dikdörtgendi, şimdi
+   yuvarlak köşe + hafif iç gradyan + ince dış çerçeve — RPG bar atlası
+   (drawRpgBar) bu boyutta okunaksız kaldığı için (küçük sprite dilimleri
+   piksel-yaymalı görünüyordu) onun yerine hafif bir canvas-çizim süsü. */
+function drawMiniBar(x, y, w, h, frac, color) {
+  const r = h / 2;
+  ctx.fillStyle = 'rgba(0,0,0,.6)';
+  ctx.beginPath(); ctx.roundRect(x - 1, y - 1, w + 2, h + 2, r + 1); ctx.fill();
+  const fw = w * clamp(frac, 0, 1);
+  if (fw > 1) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.clip();
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,.25)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, fw, h);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x, y, fw, Math.max(1, h * 0.35));
+    ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(x - 0.5, y - 0.5, w + 1, h + 1, r); ctx.stroke();
+}
+
 function resize() {
   VW = Math.round(innerWidth); VH = Math.round(innerHeight);
   DPR = Math.min(devicePixelRatio || 1, LOW_END ? 2 : 2.5);
@@ -3305,11 +3327,9 @@ function drawOverlay() {
   {
     project(P.x, 2.0, P.z);
     const sx = PX, sy = PY;
-    const w = 46, h = 5, hx = sx - w / 2, hy = sy;
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(hx - 1, hy - 1, w + 2, h + 2);
+    const w = 46, h = 6, hx = sx - w / 2, hy = sy;
     const k = clamp(P.hp / P.maxHp, 0, 1);
-    ctx.fillStyle = k > .5 ? '#4be07f' : k > .25 ? '#ffcc3d' : '#ff4d5e';
-    ctx.fillRect(hx, hy, w * k, h);
+    drawMiniBar(hx, hy, w, h, k, k > .5 ? '#4be07f' : k > .25 ? '#ffcc3d' : '#ff4d5e');
   }
   // düşman can barları (sadece hasar almış, ekranda olanlar)
   A = enemies.active;
@@ -3321,10 +3341,8 @@ function drawOverlay() {
     project(e.x, (e.cfg.h * e.scale) + 0.35, e.z);
     const sx = PX, sy = PY;
     if (sx < 0 || sx > VW || sy < 0 || sy > VH) continue;
-    const w = 22 * e.scale, h = 3;
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(sx - w / 2, sy, w, h);
-    ctx.fillStyle = e.elite ? '#ffd23f' : '#ff5566';
-    ctx.fillRect(sx - w / 2, sy, w * clamp(e.hp / e.maxHp, 0, 1), h);
+    const w = 24 * e.scale, h = 4;
+    drawMiniBar(sx - w / 2, sy, w, h, clamp(e.hp / e.maxHp, 0, 1), e.elite ? '#ffd23f' : '#ff5566');
   }
 
   if (G.flashRed > 0) {

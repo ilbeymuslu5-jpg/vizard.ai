@@ -882,3 +882,17 @@ dizinden (depo kökü yerine `game3d/` içinden) başlatılmış olmasıydı (ko
 `game3d/assets/armor_packs/...` göreli yolunu depo KÖKÜNE göre kuruyor).
 Ders: yerel doğrulama sunucusu gerçek dağıtım kök dizinini birebir
 yansıtmıyorsa "sıfır hata" sonucu yanıltıcı olabilir.
+
+## 14. HUD: baş-üstü can çubukları düz dikdörtgenden süslüye
+
+Oyuncu/düşman baş-üstü can çubukları (XP/boss çubuklarının aksine) hâlâ
+`ctx.fillRect` ile düz renkti — `drawMiniBar()` ile yuvarlak köşe + hafif
+dikey gradyan + üstte ince parlak şerit + ince dış çerçeve eklendi (RPG
+atlas sprite'ı bu küçük boyutta piksel-yaymalı/okunaksız kaldığı için o
+yerine hafif bir canvas-çizim süsü tercih edildi). Maliyeti ölçülemeyecek
+kadar düşük (birkaç ek `roundRect`/gradyan çağrısı, aynı karmaşıklık
+sınıfında) — ölçülen FPS önceki taramalarla aynı gürültü bandında kaldı.
+
+Diğer HUD/overlay ekranları (seviye atlama kartları, menü, envanter)
+zaten Kenney RPG Pack sprite'larıyla iyi durumda bulundu; kapsamlı bir
+yeniden tasarıma gerek görülmedi.
