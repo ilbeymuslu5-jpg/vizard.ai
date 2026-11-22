@@ -10,6 +10,7 @@
     "@gltf-transform/core": "^4",
     "@gltf-transform/extensions": "^4",
     "@gltf-transform/functions": "^4",
+    "draco3dgltf": "^1.5.9",
     "esbuild": "^0.28",
     "meshoptimizer": "^0.25",
     "sharp": "^0.34",

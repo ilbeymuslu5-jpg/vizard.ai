@@ -835,3 +835,50 @@ birlikte katmanlı bir derinlik hissi veriyor.
 Ayrıca hafif soğuk bir dolgu ışığı (`fill`, karşı yönden, düşük şiddet)
 eklendi — önceden tek yönlü güneş + hemisferik ışıkla düz ışıklı yüzeyler
 tamamen detaysız kalıyordu, dolgu ışığı kenarlara hafif bir ayrım katıyor.
+
+## 13. İlk 10 Meshy zırh setinde AYNI doku bozulması — yeniden çıkarma
+
+"Kaplamalar çok kötü" şikâyeti templar'a özel değilmiş: ilk 10 set de AYNI
+`decimateGrid` basitleştirmesiyle (bkz. "Meshy AI zırh setleri" bölümü,
+madde 2) işlenmişti — ızgara hücresi başına rastgele TEK temsilci nokta
+seçilip UV'ler atılıyordu. Gerçek oyundan bir örnek çekilip bakıldığında
+sonuç templar'dakinden de kötüydü: doku tam anlamıyla ÜÇGEN ÜÇGEN PARÇALANMIŞ/
+KAYMIŞ görünüyordu (bkz. git geçmişi öncesi `aqua_helm.glb` — düz mavi-yeşil
+jöle yerine kırık-cam gibi parçalı bir desen). Aynı düzeltme (weld+simplify)
+tüm 10 sete uygulandı.
+
+**Bu sefer çıkarma ÇOK daha basitti** — tam-karakter kaynaşık modelden farklı
+olarak bu setler zaten ARALARINDA BOŞLUKLA ayrılmış 6 parça halinde (bkz.
+madde "Meshy AI zırh setleri"), yani bağlı-bileşen/kemik-yerel kırpma gibi
+karmaşık bir şey gerekmedi. `_summary.json`'daki (önceki ayrıştırmadan kalma)
+her parçanın bbox X-aralığı incelenince 10 setin TAMAMINDA aynı düzen ortaya
+çıktı: X ekseninde sırayla miğfer → göğüslük → eldiven-çifti → bot-çifti,
+aralarında her zaman rahat bir boşluk (en dar: boneguard bot çiftinde 0.004
+birim, yine de sıfırdan büyük). Bu yüzden union-find/k-means yeniden
+YAZILMADI — kaynak Draco mesh'i (Node'da `draco3dgltf` ile, tarayıcı/
+Playwright GEREKMEDEN çözülüp) doğrudan bu X-bantlarına göre üçgen bazında
+kırpıldı; 10 setin 6'şar parçasının toplam üçgen sayısı kırpma sonrası kaynak
+toplamına TAM eşit çıktı (sızıntı/çakışma yok) — güçlü bir doğrulama sinyali.
+
+**Basitleştirme hedefi tam tutmadı, ama sonuç yine de daha iyi.** Eski
+bütçeyle (parça başı ~9-11K üçgen) aynı sayıya inmeyi hedefledim, ama
+meshoptimizer'ın `simplify`i UV dikişlerini (bu "texture-optimized" ihracın
+doğası gereği zaten parçalı bir UV atlası var) doku bozulmasın diye sabit
+sınır sayıyor — hata toleransı 0.015'ten 0.2'ye çıkarılsa bile üçgen sayısı
+hep aynı doğal tabanda kalıyordu (ölçüldü). Pratik çözüm: çok küçük bir
+hedef oran (0.01) verilip simplifier'ın kendi doğal tabanına inmesine izin
+verildi. Sonuç setler arası tutarsız ama genel olarak İYİ: 9 setin 6'şar
+parçası eskisinden daha AZ üçgene indi (ör. aqua miğfer 10254→2612), sadece
+`amethyst` (kristal/faceted estetiği yüzünden doğal olarak çok daha fazla
+sert kenar/UV dikişi içeriyor) beklenenden yüksek kaldı (miğfer 8942→34232).
+Toplamda `assets/armor_packs/` boyutu bile KÜÇÜLDÜ (22.9MB → 20.4MB,
+templar hariç) — kalite belirgin şekilde arttı ama bütçe büyümedi.
+
+Doğrulama: 4 sınıf × 11 set (10 + templar) tam donanım kuşanma taraması
+(`window.__game.equipItem` ile doğrudan, kasa beklemeden) — sıfır konsol
+hatası. **Bir test-altyapısı tuzağı**: ilk taramada tüm zırh fetch'leri 404
+veriyordu — sebebi gerçek bir regresyon değil, yerel test sunucusunun yanlış
+dizinden (depo kökü yerine `game3d/` içinden) başlatılmış olmasıydı (kod
+`game3d/assets/armor_packs/...` göreli yolunu depo KÖKÜNE göre kuruyor).
+Ders: yerel doğrulama sunucusu gerçek dağıtım kök dizinini birebir
+yansıtmıyorsa "sıfır hata" sonucu yanıltıcı olabilir.
