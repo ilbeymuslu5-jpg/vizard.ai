@@ -1162,6 +1162,7 @@ function separate() {
 }
 // Instanced matrisleri her karede doldur
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v3 = new THREE.Vector3(), _s3 = new THREE.Vector3();
+const _swingQ = new THREE.Quaternion();
 const _col = new THREE.Color();
 const _AXIS_X = new THREE.Vector3(1, 0, 0), _AXIS_Y = new THREE.Vector3(0, 1, 0);
 function syncEnemyMeshes() {
@@ -2365,7 +2366,33 @@ function attachNode(root, boneName, pos, rot) {
 // silah kimlikleri (bolt/guardian/rocket/laser/kunai) sword/bow/staff/axe
 // kategorisine birebir denk düşmüyor — sınıf ikonuna göre eşleniyor.
 const CLASS_WEAPON_TYPE = { paladin: 'sword', ranger: 'bow', mage: 'staff', berserker: 'axe' };
-let weaponHolder = null, heldWeaponKey = '';
+let weaponHolder = null, heldWeaponKey = '', weaponHolderBaseQ = null;
+/* Silah sallama: önceden eldeki silah ateşlendiğinde hiç hareket etmiyordu —
+   sadece mermi/efekt çıkıyordu, karakterin kendisi vuruyormuş hissi yoktu.
+   Yeni iskelet klibi EKLEMEDEN (yalnızca Walking/Running var), weaponHolder'ın
+   yerel dönüşüne her ateşte kısa bir prosedürel "vuruş" eğrisi bindiriliyor —
+   kemiğin kendi animasyonunun (yürüme/koşma) ÜSTÜNE, çünkü holder zaten
+   RightHand kemiğinin çocuğu. */
+const SWING_AXIS = { sword: 'x', axe: 'x', bow: 'y', staff: 'x' };
+const SWING_PEAK = { sword: 1.1, axe: 1.35, bow: 0.4, staff: 0.4 };
+const SWING_DUR = 0.22;
+let swingT = 0, swingType = 'sword';
+function triggerSwing() {
+  const cls = CLASSES[P.classId] || CLASSES[META.classId] || CLASSES.paladin;
+  swingType = CLASS_WEAPON_TYPE[cls.id] || 'sword';
+  swingT = SWING_DUR;
+}
+function updateSwing(dt) {
+  if (!weaponHolder || !weaponHolderBaseQ) return;
+  if (swingT <= 0) return;
+  swingT = Math.max(0, swingT - dt);
+  const k = 1 - swingT / SWING_DUR;              // 0 -> 1
+  const curve = Math.sin(k * Math.PI);           // 0 -> tepe -> 0, tek "vuruş" eğrisi
+  const peak = SWING_PEAK[swingType] || 1;
+  const ax = SWING_AXIS[swingType] === 'y' ? _AXIS_Y : _AXIS_X;
+  _swingQ.setFromAxisAngle(ax, curve * peak * (swingType === 'bow' ? -1 : 1));
+  weaponHolder.quaternion.copy(weaponHolderBaseQ).multiply(_swingQ);
+}
 function refreshHeldWeapon() {
   if (!weaponHolder) return;
   const cls = CLASSES[P.classId] || CLASSES[META.classId] || CLASSES.paladin;
@@ -2407,6 +2434,7 @@ function initGearNodes(root) {
   outfitNodes = [];
   // Elde taşınan silah: sağ ele bağlı, sınıfın silah tipine göre kurulur
   weaponHolder = attachNode(root, 'RightHand', [0.03, 0.06, -0.14], [0, 0.2, 0]);
+  weaponHolderBaseQ = weaponHolder ? weaponHolder.quaternion.clone() : null;
   heldWeaponKey = '';
   refreshHeldWeapon();
   refreshOutfitVisuals();
@@ -2851,9 +2879,10 @@ function updateWeapons(dt) {
       continue;
     }
     w.timer -= dt;
-    if (w.timer <= 0) { w.timer = Math.max(0.05, s.cd / P.st.atkSpeed); def.fire(w, s); }
+    if (w.timer <= 0) { w.timer = Math.max(0.05, s.cd / P.st.atkSpeed); def.fire(w, s); triggerSwing(); }
   }
   for (let i = bi; i < bladeMeshes.length; i++) bladeMeshes[i].visible = false;
+  updateSwing(dt);
 }
 function beamHit(x, z, a, len, w, dmg, colorHex, big) {
   const b = beams.get();

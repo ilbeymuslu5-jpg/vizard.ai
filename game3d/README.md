@@ -896,3 +896,35 @@ sınıfında) — ölçülen FPS önceki taramalarla aynı gürültü bandında 
 Diğer HUD/overlay ekranları (seviye atlama kartları, menü, envanter)
 zaten Kenney RPG Pack sprite'larıyla iyi durumda bulundu; kapsamlı bir
 yeniden tasarıma gerek görülmedi.
+
+## 15. Animasyon: elde taşınan silah ateş ederken hiç hareket etmiyordu
+
+İskelet yalnızca Walking/Running klipleri içeriyor (bkz. "Karakter modeli
+değişti" bölümü) — saldırı/vuruş animasyonu hiç yok, silah modeli
+(`weaponHolder`) sadece statik bir süs olarak ele bağlıydı. Vuruş/ölüm/kritik
+geri bildirimi zaten zengindi (ekran sallantısı, hit-stop, parçacık patlaması,
+hasar sayıları — bkz. `hitEnemy`/`killEnemy`) ama karakterin KENDİSİ hiç
+vuruyormuş gibi görünmüyordu; bu, "animasyonlar eksik" şikâyetinin en somut
+karşılığıydı.
+
+Yeni iskelet klibi EKLEMEDEN (üretim boru hattı/kaynak model değişmeden)
+çözüldü: `weaponHolder` zaten `RightHand` kemiğinin çocuğu olarak takılı
+(bkz. `attachNode`) — kemiğin kendi animasyonunun (yürüme/koşma) ÜSTÜNE,
+her silah ateşlendiğinde (`updateWeapons`'taki `def.fire()` çağrısından
+hemen sonra) kısa bir prosedürel "vuruş" eğrisi (`triggerSwing`/`updateSwing`)
+bindiriliyor: `sin(π·k)` ile 0→tepe→0 tek darbelik bir dönüş, silah tipine
+göre eksen/genlik farklı (kılıç/balta: X ekseninde geniş kesme hareketi;
+yay: Y ekseninde çekiş; asa: X ekseninde küçük bir itiş). Süre 0.22sn —
+`SWING_DUR` sabiti.
+
+**Not**: Paladin'in başlangıç silahı (`guardian`, "Döner Bıçaklar") `orbit`
+tipinde — `updateWeapons` bu tip için `def.fire()`'ı hiç çağırmıyor (sürekli
+döner, ayrık "atış" anı yok), dolayısıyla sallanma yalnızca ATEŞLİ (fire-type)
+bir silah edinildiğinde (kademe atlayınca veya diğer sınıflarda) devreye
+giriyor — bu kasıtlı: orbit silahların zaten sürekli kendi dönüş animasyonu
+var, ayrıca sallanmaları anlamsız olurdu.
+
+Doğrulama: `weaponHolder.quaternion`'ı 60ms aralıklarla örnekleyip ateş
+anında tabandan sapıp tam olarak tabana (`weaponHolderBaseQ`) geri döndüğü
+doğrulandı; 4 sınıf × 11 set tam kuşanma taraması + FPS ölçümü (önceki
+taramalarla aynı gürültü bandında) — sıfır konsol hatası.
